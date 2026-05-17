@@ -3,8 +3,9 @@
 #
 # KEINE Mend.io-App, kein gehosteter Dienst: Renovate läuft hier als
 # `renovatebot/github-action` auf GitHub-Actions-Runnern, getriggert per
-# Cron + manuell. Authentifizierung NUR über das eingebaute `GITHUB_TOKEN`
-# — kein PAT, keine GitHub-App, kein org-übergreifender Zugriff.
+# Cron + manuell. Authentifizierung über ein Repo-scoped PAT-Secret
+# `RENOVATE_TOKEN` (Fallback `GITHUB_TOKEN`, solange das Secret fehlt) —
+# self-hosted, kein Mend, keine GitHub-App, kein org-übergreifender Zugriff.
 #
 # Bei plugwerk ist diese Logik auf ein org-weites Reusable-Workflow
 # (plugwerk/.github) + einen per-Repo-Stub aufgeteilt. findsl ist ein
@@ -17,13 +18,17 @@
 # `gh workflow run renovate.yml`); dann wird der schedule-Filter via
 # RENOVATE_FORCE übersteuert, sodass PRs sofort geöffnet werden.
 #
-# HINWEIS: Mit `GITHUB_TOKEN` erstellte PRs lösen KEINE Folge-Workflows
-# aus (GitHub-Schutz gegen Workflow-Rekursion). Da das main-Ruleset
-# `build` + `cla-check` als Pflicht-Checks verlangt, müssen diese auf
-# Renovate-PRs angestoßen werden (PR schließen+wieder öffnen oder
-# Maintainer-„Re-run"). `cla-check` selbst greift dank Allowlist-Eintrag
-# `*[bot]` automatisch grün. Actions-SHA-Pins werden von Renovate selbst
-# gepflegt (Gruppe „GitHub Actions").
+# HINWEIS: Renovate nutzt das PAT-Secret `RENOVATE_TOKEN`. Mit einem PAT
+# erstellte PRs lösen — anders als mit `GITHUB_TOKEN` — Folge-Workflows
+# aus, sodass die main-Ruleset-Pflicht-Checks `build` + `cla-check`
+# automatisch laufen. Fehlt das Secret, fällt der Workflow auf
+# `GITHUB_TOKEN` zurück; dann müssen die Checks pro Renovate-PR manuell
+# angestoßen werden (leerer Commit / close+reopen). `cla-check` greift
+# dank Allowlist-Eintrag `*[bot]` automatisch grün. PAT-Scope: classic
+# `repo` + `workflow` (workflow nötig, da Renovate Actions-SHA-Pins in
+# .github/workflows/* aktualisiert), oder fine-grained mit Contents/
+# Pull requests/Workflows/Issues = RW, Metadata = RO. Actions-SHA-Pins
+# pflegt Renovate selbst (Gruppe „GitHub Actions").
 # ---------------------------------------------------------------------------
 name: Renovate
 
@@ -66,7 +71,13 @@ jobs:
         uses: renovatebot/github-action@79dc0ba74dc3de28db0a7aeb1d0b95d5bf5fde2a # v46.1.13
         with:
           configurationFile: .github/renovate.json
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # RENOVATE_TOKEN = Repo-scoped PAT (Secret, vom Maintainer
+          # angelegt). PAT-erstellte PRs triggern — anders als
+          # GITHUB_TOKEN — Folge-Workflows, also die Pflicht-Checks
+          # build/cla-check. Fallback auf GITHUB_TOKEN, solange das
+          # Secret fehlt → Renovate läuft weiter (PRs dann ungeprüft,
+          # bis das Secret gesetzt ist).
+          token: ${{ secrets.RENOVATE_TOKEN || secrets.GITHUB_TOKEN }}
         env:
           LOG_LEVEL: ${{ env.RENOVATE_LOG_LEVEL }}
           # renovatebot/github-action v46 leitet das Ziel-Repo nicht mehr

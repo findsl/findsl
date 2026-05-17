@@ -1,0 +1,81 @@
+name: Feature-Vorschlag
+description: Ein neues Feature oder eine Erweiterung vorschlagen.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke für den Vorschlag.
+
+        Vor dem Absenden bitte [bestehende Issues](https://github.com/findsl/findsl/issues) durchsuchen — die Idee ist evtl. schon in Arbeit.
+
+        Für unausgegorene Ideen ohne konkreten Anwendungsfall bitte zuerst per E-Mail (contact@devtank42.de) abstimmen statt eine Issue zu eröffnen.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Zusammenfassung
+      description: Das vorgeschlagene Feature in einem Satz.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Betroffener Bereich
+      options:
+        - Sprachdesign / Grammatik (SPEC.md)
+        - Type-Checker
+        - Interpreter
+        - Validator
+        - LSP-Provider
+        - Formatter
+        - Doc-Generator
+        - Codegen (Java/TS/JS)
+        - CLI
+        - VS-Code-Extension
+        - Build / Tooling / CI
+        - Sonstiges (in Motivation angeben)
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Welches Problem wird gelöst? Wer profitiert, und wie häufig tritt der zugrunde liegende Bedarf auf? Konkrete Anwendungsfälle helfen bei der Priorisierung.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Lösungsvorschlag
+      description: Wie soll es funktionieren? API/Syntax/Workflow so konkret wie möglich skizzieren — bei Sprach-Beispielen gern als `findsl`-Snippet.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Erwogene Alternativen
+      description: Andere Ansätze, die du abgewogen hast, und warum sie nicht ausreichen.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: language-change
+    attributes:
+      label: Sprachänderung?
+      description: Betrifft der Vorschlag die Sprache selbst (Grammatik/Syntax/Typsystem)?
+      options:
+        - label: "Mir ist bewusst: Sprachänderungen erfordern den synchronen Pflege-Roundtrip der Grammatik-Trias (SPEC.md · grammar/findsl.ebnf · packages/core/src/language/findsl.langium) plus langium:generate + build + bundle + test."
+          required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Weiterer Kontext
+      description: Links zu Vordiskussionen, verwandten Issues, Mockups oder externen Referenzen (z. B. Gesetzesfundstelle).
+    validations:
+      required: false

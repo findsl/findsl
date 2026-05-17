@@ -1,0 +1,461 @@
+--
+# Kraftfahrzeugsteuer — Tarif Nutzfahrzeuge (§ 9 Abs. 1 Nr. 3/4/5)
+
+Konstanten **und** Tarif-Funktionen für andere Kfz ≤ 3.500 kg (Nr. 3),
+Kfz > 3.500 kg (Nr. 4 Buchst. a/b/c/d — progressive 200-kg-Stufen mit
+Höchstbetrag) und Kraftfahrzeuganhänger (Nr. 5) — aus
+`kraftstg-steuer` herausgelöst. Konstanten und Logik liegen bewusst
+zusammen.
+
+Einstiegsfunktionen `steuerNr3`, `steuerNr4`, `steuerAnhaenger`
+wählt der Orchestrator `kraftstg-steuer` nach Fahrzeugart aus.
+--
+
+verwende {
+    NfzKlasse,
+    Einheiten,
+    Begrenze,
+    MindestensS2,
+    S1,
+    G1,
+    NfzSonst,
+} aus "./kraftstg-typen"
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 3 — andere Kfz ≤ 3.500 kg (je 200 kg, progressiv)
+// ===========================================================================
+
+-- Nr. 3: bis 2.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 3 KraftStG")
+konst NR3_BIS_2000: EuroCent = 11,25
+-- Nr. 3: über 2.000 bis 3.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 3 KraftStG")
+konst NR3_2000_3000: EuroCent = 12,02
+-- Nr. 3: über 3.000 bis 3.500 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 3 KraftStG")
+konst NR3_3000_3500: EuroCent = 12,78
+-- Nr. 3: kumulierter Betrag bei genau 2.000 kg (10 Stufen × Satz). --
+@Quelle("§ 9 Absatz 1 Nummer 3 KraftStG")
+konst NR3_KUM_2000: EuroCent = NR3_BIS_2000 * 10
+-- Nr. 3: kumulierter Betrag bei genau 3.000 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 3 KraftStG")
+konst NR3_KUM_3000: EuroCent = NR3_KUM_2000 + NR3_2000_3000 * 5
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 4 — Kfz > 3.500 kg (je 200 kg, progressiv, mit Höchstbetrag)
+//   a) ≥ S2  b) S1  c) G1  d) sonst  — 1.000-kg-Stufen = je 5 × 200 kg
+// ===========================================================================
+
+-- Nr. 4a (≥ S2): Stufensätze je 200 kg, Gewichtsspannen 2.000…> 12.000 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_1: EuroCent = 6,42
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_2: EuroCent = 6,88
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_3: EuroCent = 7,31
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_4: EuroCent = 7,75
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_5: EuroCent = 8,18
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_6: EuroCent = 8,62
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_7: EuroCent = 9,36
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_8: EuroCent = 10,07
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_9: EuroCent = 10,97
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_10: EuroCent = 11,84
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_11: EuroCent = 13,01
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_12: EuroCent = 14,32
+-- Nr. 4a: Höchstbetrag. --
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_MAX: EuroCent = 556,00
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_2000: EuroCent = NR4A_1 * 10
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_3000: EuroCent = NR4A_KUM_2000 + NR4A_2 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_4000: EuroCent = NR4A_KUM_3000 + NR4A_3 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_5000: EuroCent = NR4A_KUM_4000 + NR4A_4 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_6000: EuroCent = NR4A_KUM_5000 + NR4A_5 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_7000: EuroCent = NR4A_KUM_6000 + NR4A_6 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_8000: EuroCent = NR4A_KUM_7000 + NR4A_7 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_9000: EuroCent = NR4A_KUM_8000 + NR4A_8 * 5
+
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_10000: EuroCent = NR4A_KUM_9000 + NR4A_9 * 5
+
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_11000: EuroCent = NR4A_KUM_10000 + NR4A_10 * 5
+
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+konst NR4A_KUM_12000: EuroCent = NR4A_KUM_11000 + NR4A_11 * 5
+
+-- Nr. 4d (Voraussetzungen a/b/c nicht erfüllt): Stufensätze je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_1: EuroCent = 11,25
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_2: EuroCent = 12,02
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_3: EuroCent = 12,78
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_4: EuroCent = 13,55
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_5: EuroCent = 14,32
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_6: EuroCent = 15,08
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_7: EuroCent = 16,36
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_8: EuroCent = 17,64
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_9: EuroCent = 19,17
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_10: EuroCent = 20,71
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_11: EuroCent = 22,75
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_12: EuroCent = 25,05
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_13: EuroCent = 27,61
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_14: EuroCent = 45,50
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_15: EuroCent = 63,40
+-- Nr. 4d: Höchstbetrag. --
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_MAX: EuroCent = 1.681,00
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_2000: EuroCent = NR4D_1 * 10
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_3000: EuroCent = NR4D_KUM_2000 + NR4D_2 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_4000: EuroCent = NR4D_KUM_3000 + NR4D_3 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_5000: EuroCent = NR4D_KUM_4000 + NR4D_4 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_6000: EuroCent = NR4D_KUM_5000 + NR4D_5 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_7000: EuroCent = NR4D_KUM_6000 + NR4D_6 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_8000: EuroCent = NR4D_KUM_7000 + NR4D_7 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_9000: EuroCent = NR4D_KUM_8000 + NR4D_8 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_10000: EuroCent = NR4D_KUM_9000 + NR4D_9 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_11000: EuroCent = NR4D_KUM_10000 + NR4D_10 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_12000: EuroCent = NR4D_KUM_11000 + NR4D_11 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_13000: EuroCent = NR4D_KUM_12000 + NR4D_12 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_14000: EuroCent = NR4D_KUM_13000 + NR4D_13 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+konst NR4D_KUM_15000: EuroCent = NR4D_KUM_14000 + NR4D_14 * 5
+
+-- Nr. 4b (Schadstoffklasse S1): Stufensätze je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_1: EuroCent = 6,42
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_2: EuroCent = 6,88
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_3: EuroCent = 7,31
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_4: EuroCent = 7,75
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_5: EuroCent = 8,18
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_6: EuroCent = 8,62
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_7: EuroCent = 9,36
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_8: EuroCent = 10,07
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_9: EuroCent = 10,97
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_10: EuroCent = 11,84
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_11: EuroCent = 13,01
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_12: EuroCent = 14,32
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_13: EuroCent = 15,77
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_14: EuroCent = 26,00
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_15: EuroCent = 36,23
+-- Nr. 4b: Höchstbetrag. --
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_MAX: EuroCent = 914,00
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_2000: EuroCent = NR4B_1 * 10
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_3000: EuroCent = NR4B_KUM_2000 + NR4B_2 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_4000: EuroCent = NR4B_KUM_3000 + NR4B_3 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_5000: EuroCent = NR4B_KUM_4000 + NR4B_4 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_6000: EuroCent = NR4B_KUM_5000 + NR4B_5 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_7000: EuroCent = NR4B_KUM_6000 + NR4B_6 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_8000: EuroCent = NR4B_KUM_7000 + NR4B_7 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_9000: EuroCent = NR4B_KUM_8000 + NR4B_8 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_10000: EuroCent = NR4B_KUM_9000 + NR4B_9 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_11000: EuroCent = NR4B_KUM_10000 + NR4B_10 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_12000: EuroCent = NR4B_KUM_11000 + NR4B_11 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_13000: EuroCent = NR4B_KUM_12000 + NR4B_12 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_14000: EuroCent = NR4B_KUM_13000 + NR4B_13 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+konst NR4B_KUM_15000: EuroCent = NR4B_KUM_14000 + NR4B_14 * 5
+
+-- Nr. 4c (Geräuschklasse G1): Stufensätze je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_1: EuroCent = 9,64
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_2: EuroCent = 10,30
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_3: EuroCent = 10,97
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_4: EuroCent = 11,61
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_5: EuroCent = 12,27
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_6: EuroCent = 12,94
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_7: EuroCent = 14,03
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_8: EuroCent = 15,11
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_9: EuroCent = 16,44
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_10: EuroCent = 17,74
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_11: EuroCent = 19,51
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_12: EuroCent = 21,47
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_13: EuroCent = 23,67
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_14: EuroCent = 39,01
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_15: EuroCent = 54,35
+-- Nr. 4c: Höchstbetrag. --
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_MAX: EuroCent = 1.425,00
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_2000: EuroCent = NR4C_1 * 10
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_3000: EuroCent = NR4C_KUM_2000 + NR4C_2 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_4000: EuroCent = NR4C_KUM_3000 + NR4C_3 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_5000: EuroCent = NR4C_KUM_4000 + NR4C_4 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_6000: EuroCent = NR4C_KUM_5000 + NR4C_5 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_7000: EuroCent = NR4C_KUM_6000 + NR4C_6 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_8000: EuroCent = NR4C_KUM_7000 + NR4C_7 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_9000: EuroCent = NR4C_KUM_8000 + NR4C_8 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_10000: EuroCent = NR4C_KUM_9000 + NR4C_9 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_11000: EuroCent = NR4C_KUM_10000 + NR4C_10 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_12000: EuroCent = NR4C_KUM_11000 + NR4C_11 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_13000: EuroCent = NR4C_KUM_12000 + NR4C_12 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_14000: EuroCent = NR4C_KUM_13000 + NR4C_13 * 5
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+konst NR4C_KUM_15000: EuroCent = NR4C_KUM_14000 + NR4C_14 * 5
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 5 — Kraftfahrzeuganhänger
+// ===========================================================================
+
+-- Anhänger: je angefangene 200 kg Gesamtgewicht 7,46 €. --
+@Quelle("§ 9 Absatz 1 Nummer 5 KraftStG")
+konst ANH_JE_200KG: EuroCent = 7,46
+-- Anhänger: Höchstbetrag. --
+@Quelle("§ 9 Absatz 1 Nummer 5 KraftStG")
+konst ANH_MAX: EuroCent = 373,24
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 3 — andere Kfz ≤ 3.500 kg
+// ===========================================================================
+
+--
+Andere Kraftfahrzeuge bis 3.500 kg (§ 9 Abs. 1 Nr. 3 KraftStG):
+je angefangene 200 kg, progressiv nach Gewichtsspanne (kein
+Höchstbetrag).
+
+@param g Gesamtgewicht (kg).
+@rückgabe  Jahressteuer.
+--
+@Quelle("§ 9 Absatz 1 Nummer 3 KraftStG")
+fn SteuerNr3(g: Ganzzahl): EuroCent = wähle {
+    falls g <= 2000 -> NR3_BIS_2000 * Einheiten(g, 200)
+    falls g <= 3000 -> NR3_KUM_2000 + NR3_2000_3000 * Einheiten(g - 2000, 200)
+    sonst -> NR3_KUM_3000 + NR3_3000_3500 * Einheiten(g - 3000, 200)
+}
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 4 — Kfz > 3.500 kg
+// ===========================================================================
+
+--
+Kfz über 3.500 kg (§ 9 Abs. 1 Nr. 4 KraftStG): je angefangene 200 kg,
+progressiv in 1.000-kg-Spannen, nach Schadstoff-/Geräuschklasse, mit
+jeweils eigenem Höchstbetrag. Alle vier Buchstaben sind eigenständig
+modelliert: a (≥ S2, Spannen bis > 12.000 kg, max 556 €), b (S1,
+max 914 €), c (G1, max 1.425 €), d (sonst, max 1.681 €).
+
+@param g       Gesamtgewicht (kg).
+@param klasse  Schadstoff-/Geräuschklasse.
+@rückgabe  Jahressteuer.
+--
+@Quelle("§ 9 Absatz 1 Nummer 4 KraftStG")
+fn SteuerNr4(g: Ganzzahl, klasse: NfzKlasse): EuroCent = wähle (klasse) {
+    falls MindestensS2 -> Begrenze(_Nr4a(g), NR4A_MAX)
+    falls S1 -> Begrenze(_Nr4b(g), NR4B_MAX)
+    falls G1 -> Begrenze(_Nr4c(g), NR4C_MAX)
+    falls NfzSonst -> Begrenze(_Nr4d(g), NR4D_MAX)
+}
+
+--
+Progressiver Stufentarif Buchst. a (≥ S2), je 200 kg, Spannen
+2.000…> 12.000 kg (§ 9 Abs. 1 Nr. 4 Buchst. a KraftStG).
+
+@param g Gesamtgewicht (kg).
+@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+--
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
+fn _Nr4a(g: Ganzzahl): EuroCent = wähle {
+    falls g <= 2000 -> NR4A_1 * Einheiten(g, 200)
+    falls g <= 3000 -> NR4A_KUM_2000 + NR4A_2 * Einheiten(g - 2000, 200)
+    falls g <= 4000 -> NR4A_KUM_3000 + NR4A_3 * Einheiten(g - 3000, 200)
+    falls g <= 5000 -> NR4A_KUM_4000 + NR4A_4 * Einheiten(g - 4000, 200)
+    falls g <= 6000 -> NR4A_KUM_5000 + NR4A_5 * Einheiten(g - 5000, 200)
+    falls g <= 7000 -> NR4A_KUM_6000 + NR4A_6 * Einheiten(g - 6000, 200)
+    falls g <= 8000 -> NR4A_KUM_7000 + NR4A_7 * Einheiten(g - 7000, 200)
+    falls g <= 9000 -> NR4A_KUM_8000 + NR4A_8 * Einheiten(g - 8000, 200)
+    falls g <= 10000 -> NR4A_KUM_9000 + NR4A_9 * Einheiten(g - 9000, 200)
+    falls g <= 11000 -> NR4A_KUM_10000 + NR4A_10 * Einheiten(g - 10000, 200)
+    falls g <= 12000 -> NR4A_KUM_11000 + NR4A_11 * Einheiten(g - 11000, 200)
+    sonst -> NR4A_KUM_12000 + NR4A_12 * Einheiten(g - 12000, 200)
+}
+
+--
+Progressiver Stufentarif Buchst. d (Voraussetzungen a/b/c nicht
+erfüllt), je 200 kg, Spannen 2.000…> 15.000 kg
+(§ 9 Abs. 1 Nr. 4 Buchst. d KraftStG).
+
+@param g Gesamtgewicht (kg).
+@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+--
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
+fn _Nr4d(g: Ganzzahl): EuroCent = wähle {
+    falls g <= 2000 -> NR4D_1 * Einheiten(g, 200)
+    falls g <= 3000 -> NR4D_KUM_2000 + NR4D_2 * Einheiten(g - 2000, 200)
+    falls g <= 4000 -> NR4D_KUM_3000 + NR4D_3 * Einheiten(g - 3000, 200)
+    falls g <= 5000 -> NR4D_KUM_4000 + NR4D_4 * Einheiten(g - 4000, 200)
+    falls g <= 6000 -> NR4D_KUM_5000 + NR4D_5 * Einheiten(g - 5000, 200)
+    falls g <= 7000 -> NR4D_KUM_6000 + NR4D_6 * Einheiten(g - 6000, 200)
+    falls g <= 8000 -> NR4D_KUM_7000 + NR4D_7 * Einheiten(g - 7000, 200)
+    falls g <= 9000 -> NR4D_KUM_8000 + NR4D_8 * Einheiten(g - 8000, 200)
+    falls g <= 10000 -> NR4D_KUM_9000 + NR4D_9 * Einheiten(g - 9000, 200)
+    falls g <= 11000 -> NR4D_KUM_10000 + NR4D_10 * Einheiten(g - 10000, 200)
+    falls g <= 12000 -> NR4D_KUM_11000 + NR4D_11 * Einheiten(g - 11000, 200)
+    falls g <= 13000 -> NR4D_KUM_12000 + NR4D_12 * Einheiten(g - 12000, 200)
+    falls g <= 14000 -> NR4D_KUM_13000 + NR4D_13 * Einheiten(g - 13000, 200)
+    falls g <= 15000 -> NR4D_KUM_14000 + NR4D_14 * Einheiten(g - 14000, 200)
+    sonst -> NR4D_KUM_15000 + NR4D_15 * Einheiten(g - 15000, 200)
+}
+
+--
+Progressiver Stufentarif Buchst. b (Schadstoffklasse S 1), je 200 kg,
+Spannen 2.000…> 15.000 kg (§ 9 Abs. 1 Nr. 4 Buchst. b KraftStG).
+
+@param g Gesamtgewicht (kg).
+@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+--
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
+fn _Nr4b(g: Ganzzahl): EuroCent = wähle {
+    falls g <= 2000 -> NR4B_1 * Einheiten(g, 200)
+    falls g <= 3000 -> NR4B_KUM_2000 + NR4B_2 * Einheiten(g - 2000, 200)
+    falls g <= 4000 -> NR4B_KUM_3000 + NR4B_3 * Einheiten(g - 3000, 200)
+    falls g <= 5000 -> NR4B_KUM_4000 + NR4B_4 * Einheiten(g - 4000, 200)
+    falls g <= 6000 -> NR4B_KUM_5000 + NR4B_5 * Einheiten(g - 5000, 200)
+    falls g <= 7000 -> NR4B_KUM_6000 + NR4B_6 * Einheiten(g - 6000, 200)
+    falls g <= 8000 -> NR4B_KUM_7000 + NR4B_7 * Einheiten(g - 7000, 200)
+    falls g <= 9000 -> NR4B_KUM_8000 + NR4B_8 * Einheiten(g - 8000, 200)
+    falls g <= 10000 -> NR4B_KUM_9000 + NR4B_9 * Einheiten(g - 9000, 200)
+    falls g <= 11000 -> NR4B_KUM_10000 + NR4B_10 * Einheiten(g - 10000, 200)
+    falls g <= 12000 -> NR4B_KUM_11000 + NR4B_11 * Einheiten(g - 11000, 200)
+    falls g <= 13000 -> NR4B_KUM_12000 + NR4B_12 * Einheiten(g - 12000, 200)
+    falls g <= 14000 -> NR4B_KUM_13000 + NR4B_13 * Einheiten(g - 13000, 200)
+    falls g <= 15000 -> NR4B_KUM_14000 + NR4B_14 * Einheiten(g - 14000, 200)
+    sonst -> NR4B_KUM_15000 + NR4B_15 * Einheiten(g - 15000, 200)
+}
+
+--
+Progressiver Stufentarif Buchst. c (Geräuschklasse G 1), je 200 kg,
+Spannen 2.000…> 15.000 kg (§ 9 Abs. 1 Nr. 4 Buchst. c KraftStG).
+
+@param g Gesamtgewicht (kg).
+@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+--
+@Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
+fn _Nr4c(g: Ganzzahl): EuroCent = wähle {
+    falls g <= 2000 -> NR4C_1 * Einheiten(g, 200)
+    falls g <= 3000 -> NR4C_KUM_2000 + NR4C_2 * Einheiten(g - 2000, 200)
+    falls g <= 4000 -> NR4C_KUM_3000 + NR4C_3 * Einheiten(g - 3000, 200)
+    falls g <= 5000 -> NR4C_KUM_4000 + NR4C_4 * Einheiten(g - 4000, 200)
+    falls g <= 6000 -> NR4C_KUM_5000 + NR4C_5 * Einheiten(g - 5000, 200)
+    falls g <= 7000 -> NR4C_KUM_6000 + NR4C_6 * Einheiten(g - 6000, 200)
+    falls g <= 8000 -> NR4C_KUM_7000 + NR4C_7 * Einheiten(g - 7000, 200)
+    falls g <= 9000 -> NR4C_KUM_8000 + NR4C_8 * Einheiten(g - 8000, 200)
+    falls g <= 10000 -> NR4C_KUM_9000 + NR4C_9 * Einheiten(g - 9000, 200)
+    falls g <= 11000 -> NR4C_KUM_10000 + NR4C_10 * Einheiten(g - 10000, 200)
+    falls g <= 12000 -> NR4C_KUM_11000 + NR4C_11 * Einheiten(g - 11000, 200)
+    falls g <= 13000 -> NR4C_KUM_12000 + NR4C_12 * Einheiten(g - 12000, 200)
+    falls g <= 14000 -> NR4C_KUM_13000 + NR4C_13 * Einheiten(g - 13000, 200)
+    falls g <= 15000 -> NR4C_KUM_14000 + NR4C_14 * Einheiten(g - 14000, 200)
+    sonst -> NR4C_KUM_15000 + NR4C_15 * Einheiten(g - 15000, 200)
+}
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 5 — Anhänger
+// ===========================================================================
+
+--
+Kraftfahrzeuganhänger (§ 9 Abs. 1 Nr. 5 KraftStG): je angefangene
+200 kg Gesamtgewicht 7,46 €, höchstens 373,24 €.
+
+@param gesamtgewichtKg Gesamtgewicht (kg).
+@rückgabe  Jahressteuer des Anhängers.
+--
+@Quelle("§ 9 Absatz 1 Nummer 5 KraftStG")
+fn SteuerAnhaenger(gesamtgewichtKg: Ganzzahl): EuroCent =
+    Begrenze(ANH_JE_200KG * Einheiten(gesamtgewichtKg, 200), ANH_MAX)
+

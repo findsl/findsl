@@ -1,0 +1,597 @@
+--
+# Einkommensteuer — Veranlagungsschema § 2 EStG + Tarif § 32a EStG (VZ 2026)
+
+Bildet die **Einkommensteuer-Kaskade** nach § 2 EStG ab, schließt mit
+dem tariflichen Einkommensteuerbetrag (§ 32a) und der festzusetzenden
+Einkommensteuer (§ 2 Abs. 6). Maßgebliche Quelle:
+`examples/est/estg.xml` (juris-Stand 2026-05-06), § 32a/§ 32 Abs. 6 in
+der konsolidierten Fassung „ab Veranlagungszeitraum 2026".
+
+Gesetzliche Reihenfolge (jede Stufe = eigene Funktion, auditierbar):
+Summe der Einkünfte (§ 2 Abs. 1–3) → Gesamtbetrag der Einkünfte
+(§ 2 Abs. 3) → Einkommen (§ 2 Abs. 4) → zu versteuerndes Einkommen
+(§ 2 Abs. 5) → tarifliche Einkommensteuer (§ 32a) → festzusetzende
+Einkommensteuer (§ 2 Abs. 6).
+
+**Echte Rechenvorschrift (modelliert) — auch mehr-entitätig:**
+- **§ 32 Abs. 6 Kinderfreibetrag/BEA je Kind** über `Liste<Kind>`
+  (3.414 € + 1.464 € je Kind, Verdopplung Satz 2/3 per Faktor,
+  Zwölftelung Satz 5, Auslands­kürzung Satz 4) → aggregiert.
+- **§ 33 Abs. 1/3 außergewöhnliche Belastungen**: Summe der
+  zwangsläufigen Aufwendungen abzüglich der **zumutbaren Belastung**
+  (§ 33 Abs. 3, **staffelweise** über die drei GdE-Stufen × vier
+  Personengruppen).
+- **§ 10b Abs. 1 Spenden**: abziehbar bis zum Höchstbetrag
+  max(20 % GdE; 4 ‰ (Umsätze + Löhne)).
+- Die gesamte § 2-Verknüpfungs-Arithmetik + § 32a-Tarif + § 2 Abs. 6.
+
+**Geprüfte Eingabe, weil anderes Recht / Verfahren (nicht Tooling-
+Grenze):**
+- **Ermittlung der sieben Einkunftsarten** je Art (Gewinn §§ 4–7k/13a,
+  Überschuss §§ 8–9a, § 20 Abs. 9, AfA § 7 mehrperiodig) — saldierter
+  Betrag je Art als Eingabe.
+- **§ 24a / § 24b / § 13 Abs. 3** — Beträge als Eingabe (eigene §§).
+- **Übrige Sonderausgaben §§ 10–10c** außer § 10b (Vorsorge­aufwen-
+  dungen mit eigenen Höchstbeträgen/Günstigerprüfung) — Aggregat-
+  Eingabe `sonstigeSonderausgaben`.
+- **Verlustabzug § 10d** (mehrperiodig) — negatives zvE → 0 tariflich,
+  Verlustabzug selbst nicht modelliert.
+- **Sachverhalte je Kind** (Kindschaftsverhältnis → `faktor`,
+  Auslands-Ländergruppe → `auslandsfaktor`, Berücksichtigungs­monate)
+  und die § 33-Zwangsläufigkeit/Angemessenheit (§ 33 Abs. 2),
+  § 10b-Empfänger-Voraussetzungen (§ 10b Abs. 2) — Sachverhalt.
+- **§ 32a Abs. 6** Witwen-/Gnadensplitting; **§ 2 Abs. 6-Komponenten**
+  (§§ 34c/35/35a/32d Abs. 3/4 …) als zwei gerichtete Aggregat-Eingaben;
+  Annexsteuern (SolZ, KiSt). Verfahren/eigene Gesetze.
+
+**Modellierungs-Entscheidung (Statut schweigt):** jede listen-
+abgeleitete Kategorie-Abzugssumme (Kinderfreibetrag, abziehbare agB,
+abziehbare Spenden) wird auf **volle Euro abgerundet** (`abrundenEuro`),
+bevor sie in die Euro-Kaskade eingeht — deterministisch, konsistent mit
+§ 32a Abs. 1 Satz 1 (zvE auf volle Euro), fiskuskonservativ.
+--
+
+// ===========================================================================
+// Konstanten — § 32a Absatz 1 EStG (Fassung ab VZ 2026)
+// ===========================================================================
+
+--
+Grundfreibetrag — bis zu diesem zu versteuernden Einkommen beträgt die
+tarifliche Einkommensteuer 0 (§ 32a Absatz 1 Satz 2 Nummer 1).
+--
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 1 EStG")
+konst GFB: Euro = 12.348
+
+-- Obere Grenze der Eingangs-Progressionszone (Zone 2). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 2 EStG")
+konst ZONE_2_OBERGRENZE: Euro = 17.799
+
+-- Obere Grenze der Hauptprogressionszone (Zone 3). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 3 EStG")
+konst ZONE_3_OBERGRENZE: Euro = 69.878
+
+-- Obere Grenze der ersten Proportionalzone (Zone 4); darüber Zone 5. --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 4 EStG")
+konst ZONE_4_OBERGRENZE: Euro = 277.825
+
+--
+Teiler für die Größen „y" und „z": ein Zehntausendstel des den
+jeweiligen Sockel übersteigenden, auf vollen Euro abgerundeten zvE
+(§ 32a Absatz 1 Satz 3 und 4).
+--
+@Quelle("§ 32a Absatz 1 Satz 3 und 4 EStG")
+konst ZEHNTAUSEND: Ganzzahl = 10.000
+
+-- Progressionskoeffizient der Zone 2 (Faktor vor y²). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 2 EStG")
+konst ZONE_2_PROGRESSION: Dezimal = 914,51
+
+-- Linearer Koeffizient der Zone 2 (Faktor vor y). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 2 EStG")
+konst ZONE_2_LINEAR: Dezimal = 1.400
+
+-- Progressionskoeffizient der Zone 3 (Faktor vor z²). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 3 EStG")
+konst ZONE_3_PROGRESSION: Dezimal = 173,10
+
+-- Linearer Koeffizient der Zone 3 (Faktor vor z). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 3 EStG")
+konst ZONE_3_LINEAR: Dezimal = 2.397
+
+-- Konstanter Summand der Zone 3 (Anschluss an Zone 2). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 3 EStG")
+konst ZONE_3_KONSTANTE: Dezimal = 1.034,87
+
+-- Grenzsteuersatz der Proportionalzone 4 (Spitzensteuersatz). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 4 EStG")
+konst ZONE_4_SATZ: Prozent = 42%
+
+-- Abzugsbetrag der Zone 4 (0,42 · x − ZONE_4_ABZUG). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 4 EStG")
+konst ZONE_4_ABZUG: EuroCent = 11.135,63
+
+-- Grenzsteuersatz der Proportionalzone 5 („Reichensteuer"). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 5 EStG")
+konst ZONE_5_SATZ: Prozent = 45%
+
+-- Abzugsbetrag der Zone 5 (0,45 · x − ZONE_5_ABZUG). --
+@Quelle("§ 32a Absatz 1 Satz 2 Nummer 5 EStG")
+konst ZONE_5_ABZUG: EuroCent = 19.470,38
+
+// ===========================================================================
+// Konstanten — § 32 Abs. 6 (Kinderfreibetrag), § 33 Abs. 3, § 10b
+// ===========================================================================
+
+-- Kinderfreibetrag (sächliches Existenzminimum) je Kind. --
+@Quelle("§ 32 Absatz 6 Satz 1 EStG")
+konst KINDERFREIBETRAG: Euro = 3.414
+
+-- Freibetrag Betreuungs-/Erziehungs-/Ausbildungsbedarf (BEA) je Kind. --
+@Quelle("§ 32 Absatz 6 Satz 1 EStG")
+konst BEA_FREIBETRAG: Euro = 1.464
+
+-- Teiler für die Zwölftelung je nicht erfüllten Kalendermonat. --
+@Quelle("§ 32 Absatz 6 Satz 5 EStG")
+konst ZWOELF: Ganzzahl = 12
+
+-- Erste GdE-Stufe der zumutbaren Belastung (§ 33 Abs. 3). --
+@Quelle("§ 33 Absatz 3 EStG")
+konst ZMB_STUFE_1: Euro = 15.340
+
+-- Zweite GdE-Stufe der zumutbaren Belastung (§ 33 Abs. 3). --
+@Quelle("§ 33 Absatz 3 EStG")
+konst ZMB_STUFE_2: Euro = 51.130
+
+-- Zumutbare Belastung — keine Kinder, Grundtarif (§ 32a Abs. 1): Stufe 1/2/3. --
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 1 Buchstabe a EStG")
+konst ZMB_OHNE_KIND_GRUND_1: Prozent = 5%
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 1 Buchstabe a EStG")
+konst ZMB_OHNE_KIND_GRUND_2: Prozent = 6%
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 1 Buchstabe a EStG")
+konst ZMB_OHNE_KIND_GRUND_3: Prozent = 7%
+
+-- Zumutbare Belastung — keine Kinder, Splitting (§ 32a Abs. 5/6): Stufe 1/2/3. --
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 1 Buchstabe b EStG")
+konst ZMB_OHNE_KIND_SPLIT_1: Prozent = 4%
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 1 Buchstabe b EStG")
+konst ZMB_OHNE_KIND_SPLIT_2: Prozent = 5%
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 1 Buchstabe b EStG")
+konst ZMB_OHNE_KIND_SPLIT_3: Prozent = 6%
+
+-- Zumutbare Belastung — ein oder zwei Kinder: Stufe 1/2/3. --
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 2 Buchstabe a EStG")
+konst ZMB_1_2_KINDER_1: Prozent = 2%
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 2 Buchstabe a EStG")
+konst ZMB_1_2_KINDER_2: Prozent = 3%
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 2 Buchstabe a EStG")
+konst ZMB_1_2_KINDER_3: Prozent = 4%
+
+-- Zumutbare Belastung — drei oder mehr Kinder: Stufe 1/2/3. --
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 2 Buchstabe b EStG")
+konst ZMB_AB_3_KINDER_1: Prozent = 1%
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 2 Buchstabe b EStG")
+konst ZMB_AB_3_KINDER_2: Prozent = 1%
+@Quelle("§ 33 Absatz 3 Satz 1 Nummer 2 Buchstabe b EStG")
+konst ZMB_AB_3_KINDER_3: Prozent = 2%
+
+-- Spenden-Höchstbetrag Variante 1: Anteil des Gesamtbetrags der Einkünfte. --
+@Quelle("§ 10b Absatz 1 Satz 1 Nummer 1 EStG")
+konst SPENDEN_HB_GDE: Prozent = 20%
+
+-- Spenden-Höchstbetrag Variante 2: Promille der Umsätze + Löhne (4 ‰). --
+@Quelle("§ 10b Absatz 1 Satz 1 Nummer 2 EStG")
+konst SPENDEN_HB_UMSATZ: Prozent = 0,4%
+
+// ===========================================================================
+// Tarifformel — § 32a Absatz 1 EStG
+// ===========================================================================
+
+--
+Tariflicher Einkommensteuerbetrag nach dem Grundtarif (§ 32a Absatz 1
+EStG). Das zu versteuernde Einkommen ist nach Satz 1 auf volle Euro
+abgerundet zu verstehen (durch den `Euro`-Typ bereits ganzzahlig). Der
+sich ergebende Steuerbetrag wird nach Satz 6 auf den nächsten vollen
+Euro abgerundet.
+
+@param zve zu versteuerndes Einkommen in vollen Euro (geprüfte
+           Eingabe, ≥ 0; negativ → `abbruch`)
+@rückgabe  tarifliche Einkommensteuer in vollen Euro (Grundtarif)
+--
+@Quelle("§ 32a Absatz 1 EStG")
+fn EstGrundtarif(zve: Euro): Euro = wähle {
+    falls zve < 0 als Euro            -> abbruch("§ 32a Absatz 1 EStG: zu versteuerndes Einkommen darf nicht negativ sein (zvE=${zve})")
+    falls zve < GFB + 1               -> 0
+    falls zve < ZONE_2_OBERGRENZE + 1 -> {
+        var y: Dezimal = (zve - GFB) / ZEHNTAUSEND
+        abrunden((ZONE_2_PROGRESSION * y + ZONE_2_LINEAR) * y) als Euro
+    }
+    falls zve < ZONE_3_OBERGRENZE + 1 -> {
+        var z: Dezimal = (zve - ZONE_2_OBERGRENZE) / ZEHNTAUSEND
+        abrunden((ZONE_3_PROGRESSION * z + ZONE_3_LINEAR) * z + ZONE_3_KONSTANTE) als Euro
+    }
+    falls zve < ZONE_4_OBERGRENZE + 1 -> abrundenEuro(ZONE_4_SATZ * zve - ZONE_4_ABZUG)
+    sonst                             -> abrundenEuro(ZONE_5_SATZ * zve - ZONE_5_ABZUG)
+}
+
+--
+Tariflicher Einkommensteuerbetrag nach dem Splitting-Verfahren für
+zusammen veranlagte Ehegatten (§ 32a Absatz 5 EStG): das Zweifache des
+Steuerbetrags, der sich für die Hälfte des gemeinsam zu versteuernden
+Einkommens nach Absatz 1 ergibt. Die Hälfte wird nach Absatz 1 Satz 1
+auf volle Euro abgerundet.
+
+@param zve gemeinsam zu versteuerndes Einkommen der Ehegatten in vollen
+           Euro (geprüfte Eingabe, ≥ 0; negativ → `abbruch`)
+@rückgabe  tarifliche Einkommensteuer in vollen Euro (Splitting)
+--
+@Quelle("§ 32a Absatz 5 EStG")
+fn EstSplitting(zve: Euro): Euro = wähle {
+    falls zve < 0 als Euro -> abbruch("§ 32a Absatz 5 EStG: gemeinsam zu versteuerndes Einkommen darf nicht negativ sein (zvE=${zve})")
+    sonst                  -> {
+        var halbesZve: Euro = abrunden(zve / 2) als Euro
+        2 * EstGrundtarif(halbesZve)
+    }
+}
+
+// ===========================================================================
+// Allgemeine Helfer (modul-intern)
+// ===========================================================================
+
+-- Begrenzt einen Euro-Betrag nach unten auf 0. --
+fn _NichtNegativ(betrag: Euro): Euro = wähle {
+    falls betrag < 0 als Euro -> 0
+    sonst                     -> betrag
+}
+
+-- Kleineres zweier Euro-Beträge (Höchstbetrags-Kappung). --
+fn _Hoechstens(betrag: Euro, grenze: Euro): Euro = wähle {
+    falls betrag < grenze -> betrag
+    sonst                 -> grenze
+}
+
+-- Größeres zweier Euro-Beträge. --
+fn _Groesseres(a: Euro, b: Euro): Euro = wähle {
+    falls a < b -> b
+    sonst       -> a
+}
+
+-- Anteil eines Euro-Betrags in der Staffel-Spanne [von, obereGrenze]. --
+fn _Spanne(betrag: Euro, von: Euro, obereGrenze: Euro): Euro =
+    _NichtNegativ(_Hoechstens(betrag, obereGrenze) - von)
+
+// ===========================================================================
+// Veranlagungsschema — § 2 EStG (Kaskade zu versteuerndes Einkommen)
+// ===========================================================================
+//
+// Veranlagungsform = EINGEBAUTE Aufzählung `Tarifart`
+// (`Grundtarif`/`Splitting`, SPEC § 8.5) — global, kein Import.
+
+--
+Sachverhalte je Kind (§ 32 Abs. 6). Die Beträge sind Gesetz; diese
+Felder sind die Sachverhalts-Eingaben je Kind.
+
+@param faktor                1 = einfacher Freibetrag; 2 = verdoppelt
+                             (§ 32 Abs. 6 Satz 2/3 — Kind zu beiden
+                             Ehegatten bzw. Satz-3-Fälle)
+@param berücksichtigteMonate Monate mit erfüllten Voraussetzungen
+                             (§ 32 Abs. 6 Satz 5: je fehlendem Monat 1/12)
+@param auslandsfaktor        Ländergruppen-Anteil für Auslandskinder
+                             (§ 32 Abs. 6 Satz 4; 100 % = Inlandskind)
+--
+@Quelle("§ 32 Absatz 6 EStG")
+datensatz Kind(
+    faktor:                Ganzzahl = 1,       // § 32 Abs. 6 Satz 2/3
+    berücksichtigteMonate: Ganzzahl = 12,     // § 32 Abs. 6 Satz 5
+    auslandsfaktor:        Prozent = 100%,     // § 32 Abs. 6 Satz 4
+)
+
+--
+Eingaben für die Einkommensteuer-Veranlagung.
+
+@param einkuenfteLandUndForstwirtschaft   Einkünfte § 2 Abs. 1 Nr. 1 (§§ 13–14)
+@param einkuenfteGewerbebetrieb           Einkünfte § 2 Abs. 1 Nr. 2 (§§ 15–17)
+@param einkuenfteSelbstaendigeArbeit      Einkünfte § 2 Abs. 1 Nr. 3 (§ 18)
+@param einkuenfteNichtselbstaendigeArbeit Einkünfte § 2 Abs. 1 Nr. 4 (§ 19)
+@param einkuenfteKapitalvermoegen         veranlagte Einkünfte § 2 Abs. 1 Nr. 5 (§ 20)
+@param einkuenfteVermietungVerpachtung    Einkünfte § 2 Abs. 1 Nr. 6 (§ 21)
+@param sonstigeEinkuenfte                 sonstige Einkünfte § 2 Abs. 1 Nr. 7 (§ 22)
+@param altersentlastungsbetrag            Altersentlastungsbetrag (§ 24a)
+@param entlastungsbetragAlleinerziehende  Entlastungsbetrag Alleinerziehende (§ 24b)
+@param freibetragLandUndForstwirtschaft   Abzug nach § 13 Absatz 3
+@param sonstigeSonderausgaben             Sonderausgaben §§ 10–10c ohne § 10b
+                                          (Vorsorge u. a. — anderes Recht)
+@param spenden                            abziehbare Zuwendungen § 10b Abs. 1
+                                          (Voraussetzungen Abs. 2 = Sachverhalt)
+@param umsaetzeUndLoehne                  Basis der 4-‰-Höchstbetrags-
+                                          Variante (§ 10b Abs. 1 Satz 1 Nr. 2)
+@param aussergewoehnlicheAufwendungen     zwangsläufige Aufwendungen § 33
+                                          (Abs. 2 = Sachverhalt), vor
+                                          zumutbarer Belastung
+@param kinder                             zu berücksichtigende Kinder (§ 32 Abs. 6)
+@param sonstigeAbzuegeVomEinkommen        sonstige vom Einkommen abzuziehende
+                                          Beträge (§ 2 Abs. 5 Satz 1)
+@param tarifart                           Grund- oder Splittingtarif (§§ 26, 26b)
+@param anrechnungenUndErmaessigungen      § 2 Abs. 6 „vermindert um"
+@param hinzurechnungen                    § 2 Abs. 6 „vermehrt um" (S. 1–3)
+--
+@Quelle("§ 2 EStG")
+datensatz EinkommensteuerFall(
+    einkuenfteLandUndForstwirtschaft:   Euro = 0,            // § 2 Abs. 1 Nr. 1
+    einkuenfteGewerbebetrieb:           Euro = 0,            // § 2 Abs. 1 Nr. 2
+    einkuenfteSelbstaendigeArbeit:      Euro = 0,            // § 2 Abs. 1 Nr. 3
+    einkuenfteNichtselbstaendigeArbeit: Euro = 0,            // § 2 Abs. 1 Nr. 4
+    einkuenfteKapitalvermoegen:         Euro = 0,            // § 2 Abs. 1 Nr. 5
+    einkuenfteVermietungVerpachtung:    Euro = 0,            // § 2 Abs. 1 Nr. 6
+    sonstigeEinkuenfte:                 Euro = 0,            // § 2 Abs. 1 Nr. 7
+    altersentlastungsbetrag:            Euro = 0,            // § 24a
+    entlastungsbetragAlleinerziehende:  Euro = 0,            // § 24b
+    freibetragLandUndForstwirtschaft:   Euro = 0,            // § 13 Abs. 3
+    sonstigeSonderausgaben:             Euro = 0,            // §§ 10–10c o. § 10b
+    spenden:                            Liste<Euro> = []<Euro>,   // § 10b Abs. 1
+    umsaetzeUndLoehne:                  Euro = 0,            // § 10b Abs. 1 S. 1 Nr. 2
+    aussergewoehnlicheAufwendungen:     Liste<Euro> = []<Euro>,   // § 33
+    kinder:                             Liste<Kind> = []<Kind>,   // § 32 Abs. 6
+    sonstigeAbzuegeVomEinkommen:        Euro = 0,            // § 2 Abs. 5 S. 1
+    tarifart:                           Tarifart = Grundtarif,    // §§ 26, 26b
+    anrechnungenUndErmaessigungen:      Euro = 0,            // § 2 Abs. 6 S. 1
+    hinzurechnungen:                    Euro = 0,            // § 2 Abs. 6 S. 1–3
+)
+
+--
+Ergebnis der Veranlagung — jede Zwischengröße der gesetzlichen
+Reihenfolge des § 2 EStG als eigenes Feld (Schritt-für-Schritt-Audit).
+
+@param summeDerEinkuenfte                      Summe der Einkünfte (§ 2 Abs. 1–3)
+@param gesamtbetragDerEinkuenfte               Gesamtbetrag der Einkünfte (§ 2 Abs. 3)
+@param kinderfreibetraege                      Freibeträge § 32 Abs. 6 (aggregiert)
+@param abziehbareAussergewoehnlicheBelastungen § 33 nach zumutbarer Belastung
+@param einkommen                               Einkommen (§ 2 Abs. 4)
+@param zuVersteuerndesEinkommen                zu versteuerndes Einkommen (§ 2 Abs. 5)
+@param tariflicheEinkommensteuer               tarifliche Einkommensteuer (§ 32a)
+@param festzusetzendeEinkommensteuer           festzusetzende Einkommensteuer (§ 2 Abs. 6)
+--
+@Quelle("§ 2 EStG")
+datensatz EinkommensteuerErgebnis(
+    summeDerEinkuenfte:                      Euro,   // § 2 Abs. 1–3
+    gesamtbetragDerEinkuenfte:               Euro,   // § 2 Abs. 3
+    kinderfreibetraege:                      Euro,   // § 32 Abs. 6
+    abziehbareAussergewoehnlicheBelastungen: Euro,   // § 33
+    einkommen:                               Euro,   // § 2 Abs. 4
+    zuVersteuerndesEinkommen:                Euro,   // § 2 Abs. 5
+    tariflicheEinkommensteuer:               Euro,   // § 32a
+    festzusetzendeEinkommensteuer:           Euro,   // § 2 Abs. 6
+)
+
+--
+Summe der Einkünfte (§ 2 Absatz 1 und 2 EStG): Summe der sieben
+Einkunftsarten. Negative Einkünfte einzelner Arten mindern die Summe
+(einkunftsartübergreifende Verlustverrechnungs­beschränkungen sind
+anderes Recht und in den Eingaben bereits berücksichtigt).
+
+@param fall die Veranlagungseingaben
+@rückgabe   Summe der Einkünfte in vollen Euro
+--
+@Quelle("§ 2 Absatz 1 und 2 EStG")
+fn SummeDerEinkuenfte(fall: EinkommensteuerFall): Euro =
+    fall.einkuenfteLandUndForstwirtschaft
+    + fall.einkuenfteGewerbebetrieb
+    + fall.einkuenfteSelbstaendigeArbeit
+    + fall.einkuenfteNichtselbstaendigeArbeit
+    + fall.einkuenfteKapitalvermoegen
+    + fall.einkuenfteVermietungVerpachtung
+    + fall.sonstigeEinkuenfte
+
+--
+Gesamtbetrag der Einkünfte (§ 2 Absatz 3 EStG): Summe der Einkünfte
+vermindert um Altersentlastungsbetrag (§ 24a), Entlastungsbetrag für
+Alleinerziehende (§ 24b) und Abzug nach § 13 Absatz 3.
+
+@param summe Summe der Einkünfte (Stufe zuvor)
+@param fall  die Veranlagungseingaben
+@rückgabe    Gesamtbetrag der Einkünfte in vollen Euro
+--
+@Quelle("§ 2 Absatz 3 EStG")
+fn GesamtbetragDerEinkuenfte(summe: Euro, fall: EinkommensteuerFall): Euro =
+    summe
+    - fall.altersentlastungsbetrag
+    - fall.entlastungsbetragAlleinerziehende
+    - fall.freibetragLandUndForstwirtschaft
+
+--
+Kinderfreibetrag + BEA-Freibetrag, aggregiert über alle Kinder
+(§ 32 Absatz 6 EStG): je Kind `(3.414 + 1.464) · faktor ·
+berücksichtigteMonate/12 · auslandsfaktor`; die Summe wird auf volle
+Euro abgerundet (Modellierungs-Entscheidung, s. Datei-Doc).
+
+@param kinder die zu berücksichtigenden Kinder
+@rückgabe     Gesamt-Freibetrag in vollen Euro
+--
+@Quelle("§ 32 Absatz 6 EStG")
+fn KinderfreibetragGesamt(kinder: Liste<Kind>): Euro =
+    abrundenEuro(
+    kinder.zuordnen( {
+            k ->
+            (KINDERFREIBETRAG + BEA_FREIBETRAG)
+                * k.faktor
+                * (k.berücksichtigteMonate / ZWOELF)
+                * k.auslandsfaktor
+        }
+    ).summe(),
+)
+
+--
+Zumutbare Belastung (§ 33 Absatz 3 EStG) — **staffelweise** über die
+drei GdE-Stufen (bis 15.340 / bis 51.130 / darüber), mit den
+Prozentsätzen der vier Personengruppen (keine Kinder Grund/Splitting,
+1–2 Kinder, ≥ 3 Kinder). „Kinder" sind die mit Freibetrag § 32 Abs. 6
+oder Kindergeld-Anspruch (§ 33 Abs. 3 Satz 2 — hier `kinderzahl`).
+
+@param gde        Gesamtbetrag der Einkünfte
+@param kinderzahl Zahl der zu berücksichtigenden Kinder
+@param tarifart   Grund- oder Splittingtarif (nur bei 0 Kindern relevant)
+@rückgabe         zumutbare Belastung (EuroCent-genau)
+--
+@Quelle("§ 33 Absatz 3 EStG")
+fn ZumutbareBelastung(gde: Euro, kinderzahl: Ganzzahl, tarifart: Tarifart): EuroCent =
+    _ZmbSatz(1, kinderzahl, tarifart)
+    * _Spanne(gde, 0, ZMB_STUFE_1)
+    + _ZmbSatz(2, kinderzahl, tarifart)
+    * _Spanne(gde, ZMB_STUFE_1, ZMB_STUFE_2)
+    + _ZmbSatz(3, kinderzahl, tarifart)
+    * _NichtNegativ(gde - ZMB_STUFE_2)
+
+-- Prozentsatz der zumutbaren Belastung für GdE-Stufe (1/2/3). --
+@Quelle("§ 33 Absatz 3 Satz 1 EStG")
+fn _ZmbSatz(stufe: Ganzzahl, kinderzahl: Ganzzahl, tarifart: Tarifart): Prozent = wähle {
+    falls kinderzahl < 1 -> wähle (tarifart) {
+        falls Grundtarif -> wähle {
+            falls stufe < 2 -> ZMB_OHNE_KIND_GRUND_1
+            falls stufe < 3 -> ZMB_OHNE_KIND_GRUND_2
+            sonst           -> ZMB_OHNE_KIND_GRUND_3
+        }
+        falls Splitting  -> wähle {
+            falls stufe < 2 -> ZMB_OHNE_KIND_SPLIT_1
+            falls stufe < 3 -> ZMB_OHNE_KIND_SPLIT_2
+            sonst           -> ZMB_OHNE_KIND_SPLIT_3
+        }
+    }
+    falls kinderzahl < 3 -> wähle {
+        falls stufe < 2 -> ZMB_1_2_KINDER_1
+        falls stufe < 3 -> ZMB_1_2_KINDER_2
+        sonst           -> ZMB_1_2_KINDER_3
+    }
+    sonst                -> wähle {
+        falls stufe < 2 -> ZMB_AB_3_KINDER_1
+        falls stufe < 3 -> ZMB_AB_3_KINDER_2
+        sonst           -> ZMB_AB_3_KINDER_3
+    }
+}
+
+--
+Abziehbare außergewöhnliche Belastungen (§ 33 Absatz 1 EStG): Summe der
+zwangsläufigen Aufwendungen, soweit sie die zumutbare Belastung
+(§ 33 Abs. 3) übersteigt; nie negativ, auf volle Euro abgerundet.
+
+@param fall die Veranlagungseingaben
+@param gde  Gesamtbetrag der Einkünfte (Bezugsgröße der zumutbaren Belastung)
+@rückgabe   abziehbarer Betrag in vollen Euro
+--
+@Quelle("§ 33 Absatz 1 EStG")
+fn AbziehbareAussergewoehnlicheBelastungen(fall: EinkommensteuerFall, gde: Euro): Euro =
+    _NichtNegativ(
+    abrundenEuro(
+        (fall.aussergewoehnlicheAufwendungen.summe() als EuroCent)
+            - ZumutbareBelastung(gde, fall.kinder.länge, fall.tarifart),
+    ),
+)
+
+--
+Abziehbare Spenden (§ 10b Absatz 1 EStG): Summe der Zuwendungen,
+gedeckelt auf den Höchstbetrag = größerer Wert aus 20 % des
+Gesamtbetrags der Einkünfte und 4 ‰ der Umsätze + Löhne; auf volle
+Euro abgerundet.
+
+@param fall die Veranlagungseingaben
+@param gde  Gesamtbetrag der Einkünfte (Bezugsgröße Variante 1)
+@rückgabe   abziehbare Spenden in vollen Euro
+--
+@Quelle("§ 10b Absatz 1 EStG")
+fn AbziehbareSpenden(fall: EinkommensteuerFall, gde: Euro): Euro = {
+    var hoechstbetrag: Euro = _Groesseres(
+        abrundenEuro(SPENDEN_HB_GDE * gde),
+        abrundenEuro(SPENDEN_HB_UMSATZ * fall.umsaetzeUndLoehne),
+    )
+    _Hoechstens(fall.spenden.summe(), hoechstbetrag)
+}
+
+--
+Einkommen (§ 2 Absatz 4 EStG): Gesamtbetrag der Einkünfte vermindert
+um die Sonderausgaben (sonstige + abziehbare Spenden § 10b) und die
+abziehbaren außergewöhnlichen Belastungen (§ 33).
+
+@param gesamtbetrag Gesamtbetrag der Einkünfte (Stufe zuvor)
+@param fall         die Veranlagungseingaben
+@rückgabe           Einkommen in vollen Euro
+--
+@Quelle("§ 2 Absatz 4 EStG")
+fn Einkommen(gesamtbetrag: Euro, fall: EinkommensteuerFall): Euro =
+    gesamtbetrag
+    - fall.sonstigeSonderausgaben
+    - AbziehbareSpenden(fall, gesamtbetrag)
+    - AbziehbareAussergewoehnlicheBelastungen(fall, gesamtbetrag)
+
+--
+Zu versteuerndes Einkommen (§ 2 Absatz 5 Satz 1 EStG): Einkommen
+vermindert um die Freibeträge nach § 32 Absatz 6 (Kinder) und die
+sonstigen vom Einkommen abzuziehenden Beträge.
+
+@param einkommen Einkommen (Stufe zuvor)
+@param fall      die Veranlagungseingaben
+@rückgabe        zu versteuerndes Einkommen in vollen Euro (kann bei
+                 Verlusten negativ sein — § 10d nicht modelliert)
+--
+@Quelle("§ 2 Absatz 5 Satz 1 EStG")
+fn ZuVersteuerndesEinkommen(einkommen: Euro, fall: EinkommensteuerFall): Euro =
+    einkommen
+    - KinderfreibetragGesamt(fall.kinder)
+    - fall.sonstigeAbzuegeVomEinkommen
+
+--
+Tarifliche Einkommensteuer (§ 32a EStG): Grund- oder Splittingtarif.
+Negatives zvE → 0 (§ 32a für negatives zvE nicht definiert; § 10d
+Verlustabzug ist Verfahren, nicht modelliert).
+
+@param zve      zu versteuerndes Einkommen in vollen Euro
+@param tarifart Grund- oder Splittingtarif
+@rückgabe       tarifliche Einkommensteuer in vollen Euro
+--
+@Quelle("§ 32a Absatz 1 und 5 EStG")
+fn TariflicheEinkommensteuer(zve: Euro, tarifart: Tarifart): Euro = wähle (tarifart) {
+    falls Grundtarif -> EstGrundtarif(_NichtNegativ(zve))
+    falls Splitting  -> EstSplitting(_NichtNegativ(zve))
+}
+
+--
+Festzusetzende Einkommensteuer (§ 2 Absatz 6 EStG): tarifliche Steuer
+vermindert um Anrechnungen/Steuerermäßigungen, vermehrt um
+Hinzurechnungen (Komponenten + Kappungen = anderes Recht/Eingabe;
+keine Untergrenze — der Wortlaut sieht keine vor).
+
+@param tariflich tarifliche Einkommensteuer (Stufe zuvor)
+@param fall      die Veranlagungseingaben
+@rückgabe        festzusetzende Einkommensteuer in vollen Euro
+--
+@Quelle("§ 2 Absatz 6 EStG")
+fn FestzusetzendeEinkommensteuer(tariflich: Euro, fall: EinkommensteuerFall): Euro =
+    tariflich
+    - fall.anrechnungenUndErmaessigungen
+    + fall.hinzurechnungen
+
+--
+Orchestrator — vollständige Veranlagung in gesetzlicher Reihenfolge
+(§ 2 EStG). Füllt jede Zwischengröße ins Ergebnis-Datensatz.
+
+@param fall die Veranlagungseingaben
+@rückgabe   das Veranlagungsergebnis mit allen Zwischengrößen
+--
+@Quelle("§ 2 EStG, § 32a EStG")
+fn BerechneEinkommensteuer(fall: EinkommensteuerFall): EinkommensteuerErgebnis = {
+    var sde: Euro = SummeDerEinkuenfte(fall)
+    var gde: Euro = GesamtbetragDerEinkuenfte(sde, fall)
+    var kfb: Euro = KinderfreibetragGesamt(fall.kinder)
+    var agb: Euro = AbziehbareAussergewoehnlicheBelastungen(fall, gde)
+    var ein: Euro = Einkommen(gde, fall)
+    var zve: Euro = ZuVersteuerndesEinkommen(ein, fall)
+    var tariflich: Euro = TariflicheEinkommensteuer(zve, fall.tarifart)
+    var fest: Euro = FestzusetzendeEinkommensteuer(tariflich, fall)
+    EinkommensteuerErgebnis(
+        summeDerEinkuenfte                      = sde,
+        gesamtbetragDerEinkuenfte               = gde,
+        kinderfreibetraege                      = kfb,
+        abziehbareAussergewoehnlicheBelastungen = agb,
+        einkommen                               = ein,
+        zuVersteuerndesEinkommen                = zve,
+        tariflicheEinkommensteuer               = tariflich,
+        festzusetzendeEinkommensteuer           = fest,
+    )
+}

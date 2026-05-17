@@ -1,0 +1,158 @@
+{
+  "name": "findsl",
+  "scopeName": "source.findsl",
+  "fileTypes": [
+    ".findsl"
+  ],
+  "patterns": [
+    {
+      "include": "#docComments"
+    },
+    {
+      "include": "#comments"
+    },
+    {
+      "name": "keyword.control.findsl",
+      "match": "\\b(abbruch|als|aufzählung|aus|ausgabe|bis|datensatz|erwartet|falls|falsch|fn|für|ist|jede|jeden|konst|nicht|nichts|oder|prüfe|schritt|sonst|testfall|und|unter|var|verwende|wahr|wenn|wähle)\\b"
+    },
+    {
+      "name": "string.quoted.triple.findsl",
+      "begin": "\"\"\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.findsl"
+        }
+      },
+      "end": "\"\"\"",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.findsl"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#stringInterpolation"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.double.findsl",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "include": "#stringInterpolation"
+        },
+        {
+          "include": "#string-character-escape"
+        }
+      ]
+    },
+    {
+      "name": "entity.name.tag.annotation.findsl",
+      "match": "@[A-Za-zäöüÄÖÜß_][A-Za-z0-9äöüÄÖÜß_]*"
+    },
+    {
+      "name": "constant.numeric.findsl",
+      "match": "\\b\\d[\\d_]*(?:\\.\\d[\\d_]*)?%?"
+    },
+    {
+      "name": "meta.declaration.findsl",
+      "match": "\\b(fn|konst|datensatz|aufzählung)\\s+([A-Za-zäöüÄÖÜß_][A-Za-z0-9äöüÄÖÜß_]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.findsl"
+        },
+        "2": {
+          "name": "entity.name.function.findsl"
+        }
+      }
+    },
+    {
+      "name": "support.function.builtin.findsl",
+      "match": "\\b(abrundenEuro|aufrundenEuro|abrundenCent|aufrundenCent|aufrunden|abrunden)\\b(?=\\s*\\()"
+    },
+    {
+      "name": "support.type.builtin.findsl",
+      "match": "\\b(Euro|Cent|EuroCent|Ganzzahl|Dezimal|Prozent|Wahrheit|Wahrheitswert|Text|Liste|Bereich|Tarifart|Steuerklasse|Lohnzahlungszeitraum)\\b"
+    },
+    {
+      "name": "support.constant.builtin.findsl",
+      "match": "\\b(Grundtarif|Splitting|I|II|III|IV|V|VI|Jahr|Monat|Woche|Tag)\\b"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "begin": "//",
+          "beginCaptures": {
+            "1": {
+              "name": "punctuation.whitespace.comment.leading.findsl"
+            }
+          },
+          "end": "(?=$)",
+          "name": "comment.line.findsl"
+        },
+        {
+          "name": "comment.block.findsl",
+          "begin": "/\\*",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.findsl"
+            }
+          },
+          "end": "\\*/",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.findsl"
+            }
+          }
+        }
+      ]
+    },
+    "string-character-escape": {
+      "name": "constant.character.escape.findsl",
+      "match": "\\\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|u\\{[0-9A-Fa-f]+\\}|[0-2][0-7]{0,2}|3[0-6][0-7]?|37[0-7]?|[4-7][0-7]?|.|$)"
+    },
+    "stringInterpolation": {
+      "name": "meta.embedded.expression.findsl",
+      "begin": "\\$\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.begin.findsl"
+        }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.embedded.end.findsl"
+        }
+      },
+      "contentName": "meta.embedded.line.findsl",
+      "patterns": [
+        {
+          "name": "variable.other.findsl",
+          "match": "[a-zA-ZäöüÄÖÜß_][a-zA-Z0-9äöüÄÖÜß_]*"
+        },
+        {
+          "name": "punctuation.accessor.findsl",
+          "match": "\\."
+        }
+      ]
+    },
+    "docComments": {
+      "patterns": [
+        {
+          "name": "comment.block.documentation.findsl",
+          "begin": "(?<=^|\\s)--\\s*$",
+          "end": "^\\s*--(?=\\s|$)"
+        },
+        {
+          "name": "comment.block.documentation.findsl",
+          "match": "(?<=^|\\s)--\\s+[^\\r\\n]+?\\s+--(?=\\s|$)"
+        }
+      ]
+    }
+  }
+}

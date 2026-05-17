@@ -1,0 +1,152 @@
+--
+# Akzeptanztests — Körperschaftsteuer (§§ 7, 23, 24 KStG)
+
+`prüfe`-Blöcke zur Datei `koerperschaftsteuer`. Alle Sollwerte sind von
+Hand aus dem Gesetzeswortlaut gerechnet (KStG 1977, Stand 4.2.2026):
+
+- § 23 Abs. 1 KStG: 2027 → 15 %, 2028 → 14 %, … , ab 2032 → 10 %.
+- § 24 KStG: 5.000 €, höchstens i.H.d. Einkommens; Ausschluss → 0.
+- § 7 Abs. 2 KStG: zvE = Einkommen − § 24 − § 25.
+- § 23 Abs. 1 × § 31 S. 2: KSt = abrunden(zvE × Satz).
+
+Diese Datei enthält ausschließlich die `prüfe`-Blöcke.
+--
+
+verwende {
+    KstSatz,
+    FreibetragNach24,
+    ZuVersteuerndesEinkommen,
+    KörperschaftsteuerBetrag,
+    Anwenden23Abs2,
+    BerechneKörperschaftsteuer,
+    KörperschaftsteuerFall,
+    KörperschaftsteuerErgebnis,
+    Freibetragsausschluss,
+    Keiner,
+    Nr1KapitalLeistungen,
+} aus "./kst"
+
+prüfe "§ 23 Absatz 1 KStG — gestaffelter Steuersatz" {
+    testfall "Veranlagungszeiträume bis 2027 → 15 % (Nr. 1)" {
+        KstSatz(2010) == 15% und KstSatz(2025) == 15% und KstSatz(2027) == 15%
+    }
+    testfall "VZ 2028 → 14 % (Nr. 2)" {
+        KstSatz(2028) == 14%
+    }
+    testfall "VZ 2029 → 13 % (Nr. 3)" {
+        KstSatz(2029) == 13%
+    }
+    testfall "VZ 2030 → 12 % (Nr. 4)" {
+        KstSatz(2030) == 12%
+    }
+    testfall "VZ 2031 → 11 % (Nr. 5)" {
+        KstSatz(2031) == 11%
+    }
+    testfall "Veranlagungszeiträume ab 2032 → 10 % (Nr. 6)" {
+        KstSatz(2032) == 10% und KstSatz(2050) == 10%
+    }
+}
+
+prüfe "§ 24 KStG — Freibetrag" {
+    testfall "voller Freibetrag 5.000 € bei hohem Einkommen, kein Ausschluss" {
+        FreibetragNach24(100.000, Keiner) == 5.000
+    }
+    testfall "höchstens in Höhe des Einkommens (Einkommen < 5.000 €)" {
+        FreibetragNach24(3.000, Keiner) == 3.000
+    }
+    testfall "Einkommen genau 5.000 € → 5.000 € Freibetrag" {
+        FreibetragNach24(5.000, Keiner) == 5.000
+    }
+    testfall "Einkommen 0 € → kein Freibetrag (darf keinen Verlust schaffen)" {
+        FreibetragNach24(0, Keiner) == 0
+    }
+    testfall "§ 24 Satz 2 Nr. 1 (Kapitalgesellschaft) → Freibetrag entfällt" {
+        FreibetragNach24(100.000, Nr1KapitalLeistungen) == 0
+    }
+}
+
+prüfe "§ 7 Absatz 2 KStG — zu versteuerndes Einkommen" {
+    testfall "Einkommen − § 24 − § 25" {
+        ZuVersteuerndesEinkommen(100.000, 5.000, 0) == 95.000
+    }
+    testfall "mit § 25-Freibetrag" {
+        ZuVersteuerndesEinkommen(100.000, 5.000, 10.000) == 85.000
+    }
+}
+
+prüfe "§ 23 Abs. 1 × § 31 Satz 2 KStG — Steuerbetrag und Rundung" {
+    testfall "95.000 € × 15 % (VZ 2025) = 14.250 €" {
+        KörperschaftsteuerBetrag(95.000, 2025) == 14.250
+    }
+    testfall "§ 31 S. 2: 12.345 € × 15 % = 1.851,75 € → abgerundet 1.851 €" {
+        KörperschaftsteuerBetrag(12.345, 2025) == 1.851
+    }
+    testfall "1.000.000 € × 14 % (VZ 2028) = 140.000 €" {
+        KörperschaftsteuerBetrag(1.000.000, 2028) == 140.000
+    }
+    testfall "zu versteuerndes Einkommen 0 → keine Steuer" {
+        KörperschaftsteuerBetrag(0, 2025) == 0
+    }
+}
+
+prüfe "§ 23 Absatz 2 KStG — Anpassung" {
+    testfall "Anpassungssatz 0 % → unverändert" {
+        Anwenden23Abs2(10.000, 0%) == 10.000
+    }
+    testfall "Anpassung +10 % → 11.000 €" {
+        Anwenden23Abs2(10.000, 10%) == 11.000
+    }
+}
+
+prüfe "Gesamtberechnung (§§ 24 → 7 → 23 → 31 KStG)" {
+    testfall "Verein ohne Ausschluss, VZ 2025, Einkommen 100.000 €" {
+        var e: KörperschaftsteuerErgebnis = BerechneKörperschaftsteuer(
+            KörperschaftsteuerFall(
+                einkommenNach8Abs1    = 100.000,
+                veranlagungszeitraum  = 2025,
+                freibetragsausschluss = Keiner,
+            ),
+        )
+        e.freibetragNach24 == 5.000
+            und e.zuVersteuerndesEinkommen == 95.000
+            und e.steuersatz == 15%
+            und e.körperschaftsteuer == 14.250
+    }
+    testfall "Kapitalgesellschaft (§ 24 Satz 2 Nr. 1), VZ 2028, 1.000.000 €" {
+        var e: KörperschaftsteuerErgebnis = BerechneKörperschaftsteuer(
+            KörperschaftsteuerFall(
+                einkommenNach8Abs1    = 1.000.000,
+                veranlagungszeitraum  = 2028,
+                freibetragsausschluss = Nr1KapitalLeistungen,
+            ),
+        )
+        e.freibetragNach24 == 0
+            und e.zuVersteuerndesEinkommen == 1.000.000
+            und e.steuersatz == 14%
+            und e.körperschaftsteuer == 140.000
+    }
+    testfall "kleines Einkommen 3.000 €, VZ 2032 → zvE 0, keine Steuer" {
+        var e: KörperschaftsteuerErgebnis = BerechneKörperschaftsteuer(
+            KörperschaftsteuerFall(
+                einkommenNach8Abs1    = 3.000,
+                veranlagungszeitraum  = 2032,
+                freibetragsausschluss = Keiner,
+            ),
+        )
+        e.freibetragNach24 == 3.000
+            und e.zuVersteuerndesEinkommen == 0
+            und e.körperschaftsteuer == 0
+    }
+    testfall "mit § 25-Freibetrag 10.000 €, VZ 2025, Einkommen 100.000 €" {
+        var e: KörperschaftsteuerErgebnis = BerechneKörperschaftsteuer(
+            KörperschaftsteuerFall(
+                einkommenNach8Abs1    = 100.000,
+                veranlagungszeitraum  = 2025,
+                freibetragsausschluss = Keiner,
+                freibetragNach25      = 10.000,
+            ),
+        )
+        e.zuVersteuerndesEinkommen == 85.000
+            und e.körperschaftsteuer == 12.750
+    }
+}

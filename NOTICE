@@ -1,0 +1,47 @@
+FinDSL — Domänenspezifische Sprache für die deutsche steuerliche
+Finanzverwaltung.
+
+Copyright (C) 2026 devtank42 GmbH
+Licensed under the EUPL
+
+-------------------------------------------------------------------------------
+
+Dieses Werk ("FinDSL", einschließlich Sprachkern, Interpreter, LSP-Server,
+CLI, VS-Code-Extension, Dokumentationsgenerator und sämtlicher Quelltexte
+in packages/ und apps/) ist urheberrechtlich geschützt.
+
+Alleinige Rechteinhaberin: devtank42 GmbH.
+
+FinDSL wird unter einem DUAL-LIZENZ-Modell bereitgestellt:
+
+  (1) European Union Public Licence v. 1.2 (EUPL-1.2) — der vollständige
+      Lizenztext liegt in der Datei LICENSE. Diese Open-Source-Lizenz
+      gilt für jede Nutzung, die deren Reziprozitäts-(Copyleft-)Pflichten
+      einhält.
+
+  (2) Eine separate kommerzielle Lizenz für Parteien, die FinDSL nutzen,
+      einbetten oder weiterverteilen möchten, ohne den Copyleft-Pflichten
+      der EUPL-1.2 zu unterliegen. Konditionen und Kontakt:
+      siehe LICENSE-COMMERCIAL.md — Kontakt: contact@devtank42.de
+
+Die Wahl einer der beiden Lizenzen liegt bei der nutzenden Partei. Solange
+keine schriftliche kommerzielle Lizenzvereinbarung mit der devtank42 GmbH
+besteht, gilt ausschließlich die EUPL-1.2.
+
+-------------------------------------------------------------------------------
+
+Quelltext-Bezugsstelle (EUPL-1.2 Art. 3): Wird FinDSL als ausführbares
+Artefakt verteilt (z. B. CLI-Bundle, natives Binary, .vsix), ist der
+zugehörige Quelltext im offiziellen Repository der devtank42 GmbH frei
+und maschinenlesbar verfügbar.
+
+Marken: "FinDSL" und "devtank42" sind Kennzeichen der devtank42 GmbH. Die
+EUPL-1.2 gewährt keine Markenrechte (EUPL-1.2 Art. 5, "Legal Protection").
+Nur von der devtank42 GmbH freigegebene Builds dürfen als "offiziell" oder
+"zertifiziert" bezeichnet werden.
+
+Eingebettete Inhalte: Gesetzeswortlaute und steuerliche Berechnungsregeln
+sind amtliche Werke (§ 5 UrhG) und als solche gemeinfrei. Der
+urheberrechtliche Schutz dieses Werks erstreckt sich auf Sprachdesign,
+Implementierung, Toolchain und Dokumentationsgenerator — nicht auf den
+kodifizierten Normtext selbst.

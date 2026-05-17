@@ -1,0 +1,429 @@
+--
+# Kraftfahrzeugsteuer — Tarif leichte Fahrzeuge (§ 9 Abs. 1 Nr. 1/2/2a/2b)
+
+Konstanten **und** Tarif-Funktionen für Krafträder (Nr. 1),
+Personenkraftwagen (Nr. 2 Buchst. a/b/c), Wohnmobile (Nr. 2a) und
+dreirädrige/leichte vierrädrige Kfz (Nr. 2b) — aus `kraftstg-steuer`
+herausgelöst. Konstanten und Logik liegen bewusst zusammen (ein
+Rechtsbereich = eine Datei, minimale modulübergreifende Importe).
+
+Einstiegsfunktionen `steuerKraftrad`, `steuerPkw`, `steuerWohnmobil`,
+`steuerDreiLeichtvier` wählt der Orchestrator `kraftstg-steuer`
+nach Fahrzeugart (§ 8 KraftStG) aus.
+--
+
+verwende {
+    Fahrzeug,
+    Antrieb,
+    PkwSchadstoffstufe,
+    WohnmobilKlasse,
+    Einheiten,
+    Begrenze,
+    Fremdzuendung,
+    Selbstzuendung,
+    Elektro,
+    BisJuni2009,
+    JuliBisDez2020,
+    AbJan2021,
+    Aa,
+    Bb,
+    Cc,
+    Dd,
+    Ee,
+    MindestensS4,
+    S1bisS3,
+    WomoSonst,
+} aus "./kraftstg-typen"
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 1 — Krafträder
+// ===========================================================================
+
+-- Kraftrad: je angefangene 25 cm³ Hubraum 1,84 € (§ 9 Abs. 1 Nr. 1 KraftStG). --
+@Quelle("§ 9 Absatz 1 Nummer 1 KraftStG")
+konst KRAD_JE_25CCM: EuroCent = 1,84
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 2 — Personenkraftwagen
+// ===========================================================================
+
+-- PKW Nr. 2c (Erstzulassung ab 1.1.2021): Sockel je 100 cm³, Fremdzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_HUBRAUM_OTTO: EuroCent = 2,00
+
+-- PKW Nr. 2c: Sockel je 100 cm³, Selbstzündung (Diesel). --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_HUBRAUM_DIESEL: EuroCent = 9,50
+
+-- PKW Nr. 2c: CO₂-Aufschlag je g/km, Spanne über 95 bis 115 g/km. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_CO2_95_115: EuroCent = 2,00
+
+-- PKW Nr. 2c: CO₂-Aufschlag je g/km, Spanne über 115 bis 135 g/km. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_CO2_115_135: EuroCent = 2,20
+
+-- PKW Nr. 2c: CO₂-Aufschlag je g/km, Spanne über 135 bis 155 g/km. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_CO2_135_155: EuroCent = 2,50
+
+-- PKW Nr. 2c: CO₂-Aufschlag je g/km, Spanne über 155 bis 175 g/km. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_CO2_155_175: EuroCent = 2,90
+
+-- PKW Nr. 2c: CO₂-Aufschlag je g/km, Spanne über 175 bis 195 g/km. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_CO2_175_195: EuroCent = 3,40
+
+-- PKW Nr. 2c: CO₂-Aufschlag je g/km, Spanne über 195 g/km. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_CO2_UEBER_195: EuroCent = 4,00
+
+-- CO₂-Freibetrag: erst Emissionen ÜBER 95 g/km sind aufschlagspflichtig (Nr. 2c). --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+konst PKW_C_CO2_FREI: Ganzzahl = 95
+
+-- PKW Nr. 2b (Erstzulassung 1.7.2009–31.12.2020): Sockel je 100 cm³ Fremdzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe b KraftStG")
+konst PKW_B_HUBRAUM_OTTO: EuroCent = 2,00
+
+-- PKW Nr. 2b: Sockel je 100 cm³ Selbstzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe b KraftStG")
+konst PKW_B_HUBRAUM_DIESEL: EuroCent = 9,50
+
+-- PKW Nr. 2b: CO₂-Aufschlag je g/km über der (datumsabhängigen) Freigrenze. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe b KraftStG")
+konst PKW_B_CO2_JE_GRAMM: EuroCent = 2,00
+
+-- PKW Nr. 2a (Erstzulassung bis 30.6.2009), je 100 cm³, Stufe aa — Fremdzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe aa KraftStG")
+konst PKW_A_AA_OTTO: EuroCent = 6,75
+-- Stufe aa — Selbstzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe aa KraftStG")
+konst PKW_A_AA_DIESEL: EuroCent = 15,44
+-- Stufe bb — Fremdzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe bb KraftStG")
+konst PKW_A_BB_OTTO: EuroCent = 7,36
+-- Stufe bb — Selbstzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe bb KraftStG")
+konst PKW_A_BB_DIESEL: EuroCent = 16,05
+-- Stufe cc — Fremdzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe cc KraftStG")
+konst PKW_A_CC_OTTO: EuroCent = 15,13
+-- Stufe cc — Selbstzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe cc KraftStG")
+konst PKW_A_CC_DIESEL: EuroCent = 27,35
+-- Stufe dd — Fremdzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe dd KraftStG")
+konst PKW_A_DD_OTTO: EuroCent = 21,07
+-- Stufe dd — Selbstzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe dd KraftStG")
+konst PKW_A_DD_DIESEL: EuroCent = 33,29
+-- Stufe ee (höchste, keine Voraussetzungen erfüllt) — Fremdzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe ee KraftStG")
+konst PKW_A_EE_OTTO: EuroCent = 25,36
+-- Stufe ee — Selbstzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a Doppelbuchstabe ee KraftStG")
+konst PKW_A_EE_DIESEL: EuroCent = 37,58
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 2b — dreirädrige / leichte vierrädrige Kraftfahrzeuge
+// ===========================================================================
+
+-- Dreirad/leichtes Vierrad, Grenzwerte eingehalten, Fremdzündung (je 100 cm³). --
+@Quelle("§ 9 Absatz 1 Nummer 2b Buchstabe a KraftStG")
+konst DREIRAD_GW_OTTO: EuroCent = 21,07
+-- Grenzwerte eingehalten, Selbstzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2b Buchstabe a KraftStG")
+konst DREIRAD_GW_DIESEL: EuroCent = 33,29
+-- Grenzwerte nicht eingehalten, Fremdzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2b Buchstabe b KraftStG")
+konst DREIRAD_SONST_OTTO: EuroCent = 25,36
+-- Grenzwerte nicht eingehalten, Selbstzündung. --
+@Quelle("§ 9 Absatz 1 Nummer 2b Buchstabe b KraftStG")
+konst DREIRAD_SONST_DIESEL: EuroCent = 37,58
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 2a — Wohnmobile (je angefangene 200 kg Gesamtgewicht)
+// ===========================================================================
+
+-- Wohnmobil ≥ Schadstoffklasse S4: bis 2.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe a KraftStG")
+konst WOMO_S4_BIS_2000: EuroCent = 16,00
+-- Wohnmobil ≥ S4: über 2.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe a KraftStG")
+konst WOMO_S4_UEBER_2000: EuroCent = 10,00
+-- Wohnmobil ≥ S4: Höchstbetrag. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe a KraftStG")
+konst WOMO_S4_MAX: EuroCent = 800,00
+-- Wohnmobil S3/S2/S1: bis 2.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe b KraftStG")
+konst WOMO_S1_BIS_2000: EuroCent = 24,00
+-- Wohnmobil S3/S2/S1: über 2.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe b KraftStG")
+konst WOMO_S1_UEBER_2000: EuroCent = 10,00
+-- Wohnmobil S3/S2/S1: Höchstbetrag. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe b KraftStG")
+konst WOMO_S1_MAX: EuroCent = 1.000,00
+-- Wohnmobil sonst: bis 2.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe c KraftStG")
+konst WOMO_SONST_BIS_2000: EuroCent = 40,00
+-- Wohnmobil sonst: über 2.000 bis 5.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe c KraftStG")
+konst WOMO_SONST_2000_5000: EuroCent = 10,00
+-- Wohnmobil sonst: über 5.000 bis 12.000 kg je 200 kg. --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe c KraftStG")
+konst WOMO_SONST_5000_12000: EuroCent = 15,00
+-- Wohnmobil sonst: über 12.000 kg je 200 kg (kein Höchstbetrag). --
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe c KraftStG")
+konst WOMO_SONST_UEBER_12000: EuroCent = 25,00
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 1 — Krafträder
+// ===========================================================================
+
+--
+Jahressteuer für Krafträder: je angefangene 25 cm³ Hubraum 1,84 €
+(§ 9 Abs. 1 Nr. 1 KraftStG).
+
+@param hubraumCcm Hubraum in cm³.
+@rückgabe  Jahressteuer des Kraftrads.
+--
+@Quelle("§ 9 Absatz 1 Nummer 1 KraftStG")
+fn SteuerKraftrad(hubraumCcm: Ganzzahl): EuroCent =
+    KRAD_JE_25CCM * Einheiten(hubraumCcm, 25)
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 2 Buchst. c — PKW Erstzulassung ab 1.1.2021
+// ===========================================================================
+
+--
+Progressiver CO₂-Aufschlag für PKW nach § 9 Abs. 1 Nr. 2 Buchst. c
+KraftStG: für jedes Gramm CO₂/km über 95 g/km, gestaffelt nach dem
+Emissionswert (marginal je Spanne).
+
+@param co2 CO₂-Emission in g/km.
+@rückgabe  CO₂-Aufschlag (0, wenn ≤ 95 g/km).
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+fn _Co2AufschlagNr2c(co2: Ganzzahl): EuroCent = wähle {
+    falls co2 <= 95  -> 0,00
+    falls co2 <= 115 -> PKW_C_CO2_95_115 * (co2 - 95)
+    falls co2 <= 135 -> PKW_C_CO2_95_115 * 20
+                      + PKW_C_CO2_115_135 * (co2 - 115)
+    falls co2 <= 155 -> PKW_C_CO2_95_115 * 20 + PKW_C_CO2_115_135 * 20
+                      + PKW_C_CO2_135_155 * (co2 - 135)
+    falls co2 <= 175 -> PKW_C_CO2_95_115 * 20 + PKW_C_CO2_115_135 * 20
+                      + PKW_C_CO2_135_155 * 20
+                      + PKW_C_CO2_155_175 * (co2 - 155)
+    falls co2 <= 195 -> PKW_C_CO2_95_115 * 20 + PKW_C_CO2_115_135 * 20
+                      + PKW_C_CO2_135_155 * 20 + PKW_C_CO2_155_175 * 20
+                      + PKW_C_CO2_175_195 * (co2 - 175)
+    sonst            -> PKW_C_CO2_95_115 * 20 + PKW_C_CO2_115_135 * 20
+                      + PKW_C_CO2_135_155 * 20 + PKW_C_CO2_155_175 * 20
+                      + PKW_C_CO2_175_195 * 20
+                      + PKW_C_CO2_UEBER_195 * (co2 - 195)
+}
+
+--
+PKW-Hubraum-Sockel nach Antrieb (§ 9 Abs. 1 Nr. 2 Buchst. b/c
+KraftStG): je angefangene 100 cm³ 2,00 € (Fremdzündung) bzw. 9,50 €
+(Selbstzündung).
+
+@param hubraumCcm Hubraum in cm³.
+@param antrieb    Antriebsart.
+@rückgabe  Hubraum-Sockelbetrag.
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+fn _PkwHubraumSockel(hubraumCcm: Ganzzahl, antrieb: Antrieb): EuroCent =
+    wähle (antrieb) {
+        falls Selbstzuendung      -> PKW_C_HUBRAUM_DIESEL * Einheiten(hubraumCcm, 100)
+        falls Fremdzuendung, Elektro -> PKW_C_HUBRAUM_OTTO * Einheiten(hubraumCcm, 100)
+    }
+
+--
+PKW Nr. 2 Buchst. c (Erstzulassung ab 1.1.2021): Hubraum-Sockel
+zuzüglich progressivem CO₂-Aufschlag (§ 9 Abs. 1 Nr. 2 Buchst. c
+KraftStG).
+
+@param hubraumCcm Hubraum in cm³.
+@param co2        CO₂-Emission in g/km.
+@param antrieb    Antriebsart.
+@rückgabe  Jahressteuer des PKW (Buchst. c).
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe c KraftStG")
+fn _SteuerPkwC(hubraumCcm: Ganzzahl, co2: Ganzzahl, antrieb: Antrieb): EuroCent =
+    _PkwHubraumSockel(hubraumCcm, antrieb) + _Co2AufschlagNr2c(co2)
+
+--
+PKW Nr. 2 Buchst. b (Erstzulassung 1.7.2009–31.12.2020):
+Hubraum-Sockel zuzüglich 2,00 € je g/km CO₂ über der
+datumsabhängigen Freigrenze (120 / 110 / 95 g/km).
+
+@param hubraumCcm   Hubraum in cm³.
+@param co2          CO₂-Emission in g/km.
+@param freigrenze   maßgebliche CO₂-Freigrenze (g/km).
+@param antrieb      Antriebsart.
+@rückgabe  Jahressteuer des PKW (Buchst. b).
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe b KraftStG")
+fn _SteuerPkwB(
+    hubraumCcm: Ganzzahl,
+    co2: Ganzzahl,
+    freigrenze: Ganzzahl,
+    antrieb: Antrieb,
+): EuroCent =
+    _PkwHubraumSockel(hubraumCcm, antrieb)
+    + wähle {
+        falls co2 <= freigrenze -> 0,00
+        sonst                   -> PKW_B_CO2_JE_GRAMM * (co2 - freigrenze)
+    }
+
+--
+PKW Nr. 2 Buchst. a (Erstzulassung bis 30.6.2009): je angefangene
+100 cm³ ein nach Schadstoffstufe (aa–ee) und Antrieb gestaffelter
+Satz (§ 9 Abs. 1 Nr. 2 Buchst. a KraftStG).
+
+@param hubraumCcm Hubraum in cm³.
+@param stufe      Schadstoffstufe aa–ee.
+@param antrieb    Antriebsart.
+@rückgabe  Jahressteuer des PKW (Buchst. a).
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a KraftStG")
+fn _SteuerPkwA(hubraumCcm: Ganzzahl, stufe: PkwSchadstoffstufe, antrieb: Antrieb): EuroCent =
+    _SatzPkwA(stufe, antrieb) * Einheiten(hubraumCcm, 100)
+
+--
+Stufensatz je 100 cm³ für PKW Nr. 2 Buchst. a nach Schadstoffstufe
+und Antrieb. (Elektro wird wie Fremdzündung behandelt — relevant
+wird der Wert für reine E-PKW ohnehin nicht, da diese nach § 3d
+befreit sind.)
+
+@param stufe   Schadstoffstufe aa–ee.
+@param antrieb Antriebsart.
+@rückgabe  Satz je angefangene 100 cm³.
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a KraftStG")
+fn _SatzPkwA(stufe: PkwSchadstoffstufe, antrieb: Antrieb): EuroCent =
+    wähle (antrieb) {
+        falls Selbstzuendung -> wähle (stufe) {
+            falls Aa -> PKW_A_AA_DIESEL
+            falls Bb -> PKW_A_BB_DIESEL
+            falls Cc -> PKW_A_CC_DIESEL
+            falls Dd -> PKW_A_DD_DIESEL
+            falls Ee -> PKW_A_EE_DIESEL
+        }
+        falls Fremdzuendung, Elektro -> wähle (stufe) {
+            falls Aa -> PKW_A_AA_OTTO
+            falls Bb -> PKW_A_BB_OTTO
+            falls Cc -> PKW_A_CC_OTTO
+            falls Dd -> PKW_A_DD_OTTO
+            falls Ee -> PKW_A_EE_OTTO
+        }
+    }
+
+--
+Personenkraftwagen nach § 9 Abs. 1 Nr. 2 KraftStG: wählt anhand des
+Erstzulassungs-Regimes Buchst. a, b oder c.
+
+@param f Fahrzeug-Eingaben.
+@rückgabe  Jahressteuer des PKW.
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 KraftStG")
+fn SteuerPkw(f: Fahrzeug): EuroCent = wähle (f.erstzulassung) {
+    falls BisJuni2009    -> _SteuerPkwA(f.hubraumCcm, f.pkwStufe, f.antrieb)
+    falls JuliBisDez2020 -> _SteuerPkwB(f.hubraumCcm, f.co2GrammProKm, f.co2FreigrenzeNr2b, f.antrieb)
+    falls AbJan2021      -> _SteuerPkwC(f.hubraumCcm, f.co2GrammProKm, f.antrieb)
+}
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 2b — dreirädrige / leichte vierrädrige Kraftfahrzeuge
+// ===========================================================================
+
+--
+Dreirädrige und leichte vierrädrige Kraftfahrzeuge
+(§ 9 Abs. 1 Nr. 2b KraftStG): je angefangene 100 cm³ ein nach
+Grenzwert-Einhaltung und Antrieb gestaffelter Satz.
+
+@param hubraumCcm  Hubraum in cm³.
+@param grenzwerte  Grenzwerte (RL 97/24/EG Zeile A 2003) eingehalten?
+@param antrieb     Antriebsart.
+@rückgabe  Jahressteuer des Fahrzeugs.
+--
+@Quelle("§ 9 Absatz 1 Nummer 2b KraftStG")
+fn SteuerDreiLeichtvier(hubraumCcm: Ganzzahl, grenzwerte: Wahrheitswert, antrieb: Antrieb): EuroCent =
+    _SatzDreiLeichtvier(grenzwerte, antrieb) * Einheiten(hubraumCcm, 100)
+
+--
+Stufensatz je 100 cm³ für § 9 Abs. 1 Nr. 2b KraftStG.
+
+@param grenzwerte Grenzwerte eingehalten?
+@param antrieb    Antriebsart.
+@rückgabe  Satz je angefangene 100 cm³.
+--
+@Quelle("§ 9 Absatz 1 Nummer 2b KraftStG")
+fn _SatzDreiLeichtvier(grenzwerte: Wahrheitswert, antrieb: Antrieb): EuroCent =
+    wähle {
+        falls grenzwerte und antrieb == Selbstzuendung      -> DREIRAD_GW_DIESEL
+        falls grenzwerte                                     -> DREIRAD_GW_OTTO
+        falls antrieb == Selbstzuendung                      -> DREIRAD_SONST_DIESEL
+        sonst                                                -> DREIRAD_SONST_OTTO
+    }
+
+// ===========================================================================
+// § 9 Abs. 1 Nr. 2a — Wohnmobile
+// ===========================================================================
+
+--
+Wohnmobil nach § 9 Abs. 1 Nr. 2a KraftStG: je angefangene 200 kg
+Gesamtgewicht, progressiv nach Gewichtsspanne und Schadstoffklasse,
+mit Höchstbetrag (Buchst. a/b) bzw. ohne (Buchst. c).
+
+@param gesamtgewichtKg verkehrsrechtlich zulässiges Gesamtgewicht (kg).
+@param klasse          Schadstoffklasse des Wohnmobils.
+@rückgabe  Jahressteuer des Wohnmobils.
+--
+@Quelle("§ 9 Absatz 1 Nummer 2a KraftStG")
+fn SteuerWohnmobil(gesamtgewichtKg: Ganzzahl, klasse: WohnmobilKlasse): EuroCent =
+    wähle (klasse) {
+        falls MindestensS4 -> Begrenze(_WomoZweiStufen(gesamtgewichtKg, WOMO_S4_BIS_2000, WOMO_S4_UEBER_2000), WOMO_S4_MAX)
+        falls S1bisS3      -> Begrenze(_WomoZweiStufen(gesamtgewichtKg, WOMO_S1_BIS_2000, WOMO_S1_UEBER_2000), WOMO_S1_MAX)
+        falls WomoSonst    -> _SteuerWohnmobilSonst(gesamtgewichtKg)
+    }
+
+--
+Zwei-Stufen-Wohnmobiltarif (Buchst. a/b): bis 2.000 kg `satzBis`,
+darüber `satzUeber`, je angefangene 200 kg.
+
+@param g        Gesamtgewicht (kg).
+@param satzBis  Satz je 200 kg bis 2.000 kg.
+@param satzUeber Satz je 200 kg über 2.000 kg.
+@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+--
+@Quelle("§ 9 Absatz 1 Nummer 2a KraftStG")
+fn _WomoZweiStufen(g: Ganzzahl, satzBis: EuroCent, satzUeber: EuroCent): EuroCent =
+    wähle {
+        falls g <= 2000 -> satzBis * Einheiten(g, 200)
+        sonst            -> satzBis * 10 + satzUeber * Einheiten(g - 2000, 200)
+    }
+
+--
+Wohnmobil Buchst. c (Voraussetzungen a/b nicht erfüllt, kein
+Höchstbetrag): bis 2.000 kg 40 €, über 2.000–5.000 kg 10 €, über
+5.000–12.000 kg 15 €, über 12.000 kg 25 € — je angefangene 200 kg.
+
+@param g Gesamtgewicht (kg).
+@rückgabe  Jahressteuer des Wohnmobils (Buchst. c).
+--
+@Quelle("§ 9 Absatz 1 Nummer 2a Buchstabe c KraftStG")
+fn _SteuerWohnmobilSonst(g: Ganzzahl): EuroCent = wähle {
+    falls g <= 2000  -> WOMO_SONST_BIS_2000 * Einheiten(g, 200)
+    falls g <= 5000  -> WOMO_SONST_BIS_2000 * 10
+                      + WOMO_SONST_2000_5000 * Einheiten(g - 2000, 200)
+    falls g <= 12000 -> WOMO_SONST_BIS_2000 * 10 + WOMO_SONST_2000_5000 * 15
+                      + WOMO_SONST_5000_12000 * Einheiten(g - 5000, 200)
+    sonst            -> WOMO_SONST_BIS_2000 * 10 + WOMO_SONST_2000_5000 * 15
+                      + WOMO_SONST_5000_12000 * 35
+                      + WOMO_SONST_UEBER_12000 * Einheiten(g - 12000, 200)
+}
+

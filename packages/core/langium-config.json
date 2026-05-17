@@ -1,0 +1,14 @@
+{
+    "projectName": "Findsl",
+    "languages": [
+        {
+            "id": "findsl",
+            "grammar": "src/language/findsl.langium",
+            "fileExtensions": [".findsl"],
+            "textMate": {
+                "out": "syntaxes/findsl.tmLanguage.json"
+            }
+        }
+    ],
+    "out": "src/language/generated"
+}

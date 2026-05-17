@@ -1,0 +1,305 @@
+--
+# Akzeptanztests — Kraftfahrzeugsteuer (§§ 8, 9 KraftStG)
+
+`prüfe`-Blöcke zur Datei `kraftstg-steuer`. Alle Sollwerte sind
+unabhängig aus dem Gesetzeswortlaut gerechnet (KraftStG 2002,
+i.d.g.F.): „je angefangene Einheit" = Aufrundung; progressive
+Gewichts-/CO₂-Tarife stufenweise summiert; Höchstbeträge gedeckelt.
+
+Diese Datei enthält ausschließlich die `prüfe`-Blöcke.
+--
+
+// Importe nach Quelldatei gruppiert (Modul auf mehrere Dateien
+// aufgeteilt): Typen/Helfer/Aufzählungswerte aus kraftstg-typen, die
+// Kraftrad-Einstiegsfunktion aus kraftstg-tarif-leicht, die öffentlichen
+// Orchestrator-Funktionen aus kraftstg-steuer.
+verwende {
+    Einheiten,
+    Fahrzeug,
+    KraftfahrzeugsteuerErgebnis,
+    Kraftrad,
+    Pkw,
+    Wohnmobil,
+    AndereBis3500,
+    AndereUeber3500,
+    Anhaenger,
+    Fremdzuendung,
+    Selbstzuendung,
+    Elektro,
+    BisJuni2009,
+    JuliBisDez2020,
+    AbJan2021,
+    Aa,
+    Ee,
+    MindestensS4,
+    S1bisS3,
+    WomoSonst,
+    MindestensS2,
+    G1,
+    NfzSonst,
+    Befreit3aAbs1,
+    Ermaessigt3aAbs2,
+} aus "./kraftstg-typen"
+
+verwende {
+    SteuerKraftrad,
+} aus "./kraftstg-tarif-leicht"
+
+verwende {
+    TarifNach9Abs1,
+    BerechneKraftfahrzeugsteuer,
+} aus "./kraftst"
+
+prüfe "Helfer: angefangene Einheiten (§ 9 — oder einen Teil davon)" {
+    testfall "exakt teilbar" { Einheiten(2000, 200) == 10 }
+    testfall "Teil davon rundet auf" { Einheiten(1598, 100) == 16 }
+    testfall "knapp über Grenze" { Einheiten(601, 25) == 25 }
+    testfall "0 oder negativ → 0" { Einheiten(0, 200) == 0 }
+}
+
+prüfe "§ 9 Abs. 1 Nr. 1 — Krafträder (1,84 € je 25 cm³)" {
+    testfall "125 cm³ → 5 × 1,84 = 9,20 €" {
+        SteuerKraftrad(125) == 9,20
+    }
+    testfall "600 cm³ → 24 × 1,84 = 44,16 €" {
+        SteuerKraftrad(600) == 44,16
+    }
+    testfall "601 cm³ → 25 × 1,84 = 46,00 €" {
+        SteuerKraftrad(601) == 46,00
+    }
+}
+
+prüfe "§ 9 Abs. 1 Nr. 2 Buchst. c — PKW ab 1.1.2021 (Hubraum + CO₂)" {
+    testfall "Benziner 1.598 cm³, 120 g/km → 32,00 + 51,00 = 83,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Pkw, antrieb = Fremdzuendung,
+            hubraumCcm = 1598, co2GrammProKm = 120,
+            erstzulassung = AbJan2021,
+        )
+        TarifNach9Abs1(f) == 83,00
+    }
+    testfall "Diesel 1.968 cm³, 150 g/km → 190,00 + 121,50 = 311,50 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Pkw, antrieb = Selbstzuendung,
+            hubraumCcm = 1968, co2GrammProKm = 150,
+            erstzulassung = AbJan2021,
+        )
+        TarifNach9Abs1(f) == 311,50
+    }
+    testfall "CO₂ genau 95 g/km → kein Aufschlag (nur Hubraum 20,00 €)" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Pkw, antrieb = Fremdzuendung,
+            hubraumCcm = 999, co2GrammProKm = 95,
+            erstzulassung = AbJan2021,
+        )
+        TarifNach9Abs1(f) == 20,00
+    }
+    testfall "alle CO₂-Bänder: 1.000 cm³, 200 g/km → 20,00 + 280,00 = 300,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Pkw, antrieb = Fremdzuendung,
+            hubraumCcm = 1000, co2GrammProKm = 200,
+            erstzulassung = AbJan2021,
+        )
+        TarifNach9Abs1(f) == 300,00
+    }
+}
+
+prüfe "§ 9 Abs. 1 Nr. 2 Buchst. b — PKW 1.7.2009–31.12.2020" {
+    testfall "Benziner 1.390 cm³, 130 g/km, Freigrenze 110 → 28,00 + 40,00 = 68,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Pkw, antrieb = Fremdzuendung,
+            hubraumCcm = 1390, co2GrammProKm = 130,
+            erstzulassung = JuliBisDez2020, co2FreigrenzeNr2b = 110,
+        )
+        TarifNach9Abs1(f) == 68,00
+    }
+}
+
+prüfe "§ 9 Abs. 1 Nr. 2 Buchst. a — PKW bis 30.6.2009 (Schadstoffstufe)" {
+    testfall "Benziner Stufe ee, 1.600 cm³ → 16 × 25,36 = 405,76 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Pkw, antrieb = Fremdzuendung,
+            hubraumCcm = 1600,
+            erstzulassung = BisJuni2009, pkwStufe = Ee,
+        )
+        TarifNach9Abs1(f) == 405,76
+    }
+    testfall "Diesel Stufe aa, 1.900 cm³ → 19 × 15,44 = 293,36 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Pkw, antrieb = Selbstzuendung,
+            hubraumCcm = 1900,
+            erstzulassung = BisJuni2009, pkwStufe = Aa,
+        )
+        TarifNach9Abs1(f) == 293,36
+    }
+}
+
+prüfe "§ 9 Abs. 1 Nr. 2a — Wohnmobile (progressiv, gedeckelt)" {
+    testfall "≥ S4, 3.000 kg → 160,00 + 50,00 = 210,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Wohnmobil, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 3000, wohnmobilklasse = MindestensS4,
+        )
+        TarifNach9Abs1(f) == 210,00
+    }
+    testfall "≥ S4, sehr schwer → Höchstbetrag 800,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Wohnmobil, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 20000, wohnmobilklasse = MindestensS4,
+        )
+        TarifNach9Abs1(f) == 800,00
+    }
+    testfall "S3–S1, 3.000 kg → 240,00 + 50,00 = 290,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Wohnmobil, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 3000, wohnmobilklasse = S1bisS3,
+        )
+        TarifNach9Abs1(f) == 290,00
+    }
+    testfall "sonst, 6.000 kg → 400,00 + 150,00 + 75,00 = 625,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Wohnmobil, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 6000, wohnmobilklasse = WomoSonst,
+        )
+        TarifNach9Abs1(f) == 625,00
+    }
+}
+
+prüfe "§ 9 Abs. 1 Nr. 3 — andere Kfz ≤ 3.500 kg (progressiv)" {
+    testfall "2.800 kg → 112,50 + 48,08 = 160,58 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = AndereBis3500, antrieb = Selbstzuendung, gesamtgewichtKg = 2800,
+        )
+        TarifNach9Abs1(f) == 160,58
+    }
+    testfall "3.500 kg → 112,50 + 60,10 + 38,34 = 210,94 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = AndereBis3500, antrieb = Selbstzuendung, gesamtgewichtKg = 3500,
+        )
+        TarifNach9Abs1(f) == 210,94
+    }
+}
+
+prüfe "§ 9 Abs. 1 Nr. 4 — Kfz > 3.500 kg (a/b/c/d, gedeckelt)" {
+    testfall "Buchst. a (≥ S2), 5.000 kg → 173,90 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = AndereUeber3500, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 5000, nfzklasse = MindestensS2,
+        )
+        TarifNach9Abs1(f) == 173,90
+    }
+    testfall "Buchst. a, sehr schwer → Höchstbetrag 556,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = AndereUeber3500, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 20000, nfzklasse = MindestensS2,
+        )
+        TarifNach9Abs1(f) == 556,00
+    }
+    testfall "Buchst. c (G1), 5.000 kg → 260,80 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = AndereUeber3500, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 5000, nfzklasse = G1,
+        )
+        TarifNach9Abs1(f) == 260,80
+    }
+    testfall "Buchst. d (sonst), 5.000 kg → 304,25 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = AndereUeber3500, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 5000, nfzklasse = NfzSonst,
+        )
+        TarifNach9Abs1(f) == 304,25
+    }
+    testfall "Buchst. d, sehr schwer → Höchstbetrag 1.681,00 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = AndereUeber3500, antrieb = Selbstzuendung,
+            gesamtgewichtKg = 40000, nfzklasse = NfzSonst,
+        )
+        TarifNach9Abs1(f) == 1.681,00
+    }
+}
+
+prüfe "§ 9 Abs. 1 Nr. 5 — Anhänger (7,46 € je 200 kg, max 373,24 €)" {
+    testfall "2.000 kg → 10 × 7,46 = 74,60 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Anhaenger, antrieb = Fremdzuendung, gesamtgewichtKg = 2000,
+        )
+        TarifNach9Abs1(f) == 74,60
+    }
+    testfall "schwer → Höchstbetrag 373,24 €" {
+        var f: Fahrzeug = Fahrzeug(
+            art = Anhaenger, antrieb = Fremdzuendung, gesamtgewichtKg = 20000,
+        )
+        TarifNach9Abs1(f) == 373,24
+    }
+}
+
+prüfe "§ 9 Abs. 2 — Elektro-Ermäßigung 50 % (nur Nr. 3 / Nr. 4a)" {
+    testfall "E-Kfz Nr. 3, 3.000 kg → 172,60 / 2 = 86,30 €" {
+        var e: KraftfahrzeugsteuerErgebnis = BerechneKraftfahrzeugsteuer(
+            Fahrzeug(art = AndereBis3500, antrieb = Elektro, gesamtgewichtKg = 3000),
+        )
+        e.tarifbetrag == 172,60 und e.nachElektro == 86,30 und e.jahressteuer == 86,30
+    }
+    testfall "E-Kfz Nr. 4a, 5.000 kg → 173,90 / 2 = 86,95 €" {
+        var e: KraftfahrzeugsteuerErgebnis = BerechneKraftfahrzeugsteuer(
+            Fahrzeug(
+                art = AndereUeber3500, antrieb = Elektro,
+                gesamtgewichtKg = 5000, nfzklasse = MindestensS2,
+            ),
+        )
+        e.nachElektro == 86,95
+    }
+    testfall "E-Kfz Nr. 4d → KEINE 50 %-Ermäßigung (nur a)" {
+        var e: KraftfahrzeugsteuerErgebnis = BerechneKraftfahrzeugsteuer(
+            Fahrzeug(
+                art = AndereUeber3500, antrieb = Elektro,
+                gesamtgewichtKg = 5000, nfzklasse = NfzSonst,
+            ),
+        )
+        e.nachElektro == 304,25
+    }
+}
+
+prüfe "§ 3a / § 3d — Vergünstigungen / Befreiungen" {
+    testfall "§ 3a Abs. 1 (H/Bl/aG) → volle Befreiung 0,00 €" {
+        var e: KraftfahrzeugsteuerErgebnis = BerechneKraftfahrzeugsteuer(
+            Fahrzeug(
+                art = Kraftrad, antrieb = Fremdzuendung,
+                hubraumCcm = 125, behinderung = Befreit3aAbs1,
+            ),
+        )
+        e.jahressteuer == 0,00
+    }
+    testfall "§ 3a Abs. 2 → 50 % (9,20 / 2 = 4,60 €)" {
+        var e: KraftfahrzeugsteuerErgebnis = BerechneKraftfahrzeugsteuer(
+            Fahrzeug(
+                art = Kraftrad, antrieb = Fremdzuendung,
+                hubraumCcm = 125, behinderung = Ermaessigt3aAbs2,
+            ),
+        )
+        e.tarifbetrag == 9,20 und e.jahressteuer == 4,60
+    }
+    testfall "§ 3d E-Befreiung aktiv → 0,00 € (trotz Tarifbetrag)" {
+        var e: KraftfahrzeugsteuerErgebnis = BerechneKraftfahrzeugsteuer(
+            Fahrzeug(
+                art = Pkw, antrieb = Elektro,
+                hubraumCcm = 0, co2GrammProKm = 0,
+                erstzulassung = AbJan2021, elektroBefreitNach3d = wahr,
+            ),
+        )
+        e.jahressteuer == 0,00
+    }
+}
+
+prüfe "Gesamtberechnung — vollständiges Ergebnis" {
+    testfall "Benziner-PKW ab 2021, 1.598 cm³, 120 g/km" {
+        var e: KraftfahrzeugsteuerErgebnis = BerechneKraftfahrzeugsteuer(
+            Fahrzeug(
+                art = Pkw, antrieb = Fremdzuendung,
+                hubraumCcm = 1598, co2GrammProKm = 120,
+                erstzulassung = AbJan2021,
+            ),
+        )
+        e.tarifbetrag == 83,00 und e.nachElektro == 83,00 und e.jahressteuer == 83,00
+    }
+}

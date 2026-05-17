@@ -1,0 +1,323 @@
+--
+# Akzeptanztests — Gewerbesteuer (§§ 7–11, 16 GewStG)
+
+`prüfe`-Blöcke zur Datei `gewerbesteuer`. Alle Sollwerte sind von Hand
+aus dem Gesetzeswortlaut gerechnet (GewStG, Fassung ab EZ 2025):
+
+- § 8 Nr. 1: ¼ der Summe (a–c 100 %, d 1/5, e 1/2, f 1/4), soweit
+  über 200.000 €.
+- § 9 Nr. 1: Grundsteuer bzw. erweiterte Kürzung (Antrag, alternativ);
+  Nr. 5: Spenden ≤ max(20 % Gewinn; 4 ‰ (Umsatz + Lohn)).
+- § 10a: bis 1 Mio. € voll, darüber 60 % (Mindestbesteuerung).
+- § 11: Abrundung auf 100 €, Freibetrag 24.500/5.000/0 €,
+  Messzahl 3,5 % (Hausgewerbe 1,96 %).
+- § 16: Hebesatz, mindestens 200 %.
+
+Diese Datei enthält ausschließlich die `prüfe`-Blöcke.
+--
+
+verwende {
+    Hinzurechnung8Nr1,
+    SummeHinzurechnungen8,
+    SpendenHoechstbetrag9Nr5,
+    Kuerzung9Nr5,
+    Kuerzung9Nr1,
+    Gewerbeertrag,
+    VerlustVerrechnungsobergrenze10a,
+    Verlustabzug10a,
+    GewerbeertragNachVerlust,
+    AbrundenAuf100,
+    FreibetragRoh11,
+    Freibetrag11,
+    Steuermesszahl11,
+    Steuermessbetrag11,
+    AngewandterHebesatz16,
+    Gewerbesteuer16,
+    BerechneGewerbesteuer,
+    Hinzurechnungen8,
+    Kuerzungen9,
+    Gewerbebetrieb,
+    GewerbesteuerErgebnis,
+    NatuerlichePersonPersonengesellschaft,
+    Kapitalgesellschaft,
+    VereinJuristischePersonOerR,
+    Keine,
+    Hausgewerbetreibender,
+} aus "./gewst"
+
+prüfe "§ 8 Nr. 1 GewStG — Finanzierungs-Hinzurechnung (¼ über 200.000 €)" {
+    testfall "Summe ≤ 200.000 € → keine Hinzurechnung" {
+        Hinzurechnung8Nr1(Hinzurechnungen8(entgelteSchulden = 100.000,00)) == 0,00
+    }
+    testfall "Summe genau 200.000 € → 0 (nur der übersteigende Teil zählt)" {
+        Hinzurechnung8Nr1(Hinzurechnungen8(entgelteSchulden = 200.000,00)) == 0,00
+    }
+    testfall "Buchst. a + e: 1.000.000 + ½·400.000 = 1.200.000; ¼·(1.200.000−200.000) = 250.000" {
+        Hinzurechnung8Nr1(Hinzurechnungen8(
+            entgelteSchulden      = 1.000.000,00,
+            mietePachtUnbeweglich = 400.000,00,
+        )) == 250.000,00
+    }
+    testfall "Buchst. d (bewegliche WG, 1/5): 1/5·1.500.000 = 300.000; ¼·(300.000−200.000) = 25.000" {
+        Hinzurechnung8Nr1(Hinzurechnungen8(mietePachtBeweglich = 1.500.000,00)) == 25.000,00
+    }
+    testfall "Buchst. f (Rechte, 1/4): 1/4·1.000.000 = 250.000; ¼·(250.000−200.000) = 12.500" {
+        Hinzurechnung8Nr1(Hinzurechnungen8(aufwendungenRechteUeberlassung = 1.000.000,00)) == 12.500,00
+    }
+}
+
+prüfe "§ 8 GewStG — Summe der Hinzurechnungen (Nr. 1 + Nr. 4/5/8/9/10/12)" {
+    testfall "Nr. 1 (¼·800.000 = 200.000) + Nr. 4 (50.000) + Nr. 5 (30.000) = 280.000" {
+        SummeHinzurechnungen8(Hinzurechnungen8(
+            entgelteSchulden     = 1.000.000,00,
+            gewinnanteilePhgKgaa = 50.000,00,
+            steuerfreieDividenden = 30.000,00,
+        )) == 280.000,00
+    }
+    testfall "leere Hinzurechnungen → 0" {
+        SummeHinzurechnungen8(Hinzurechnungen8()) == 0,00
+    }
+}
+
+prüfe "§ 9 Nr. 5 GewStG — Spendenhöchstbetrag (max aus 20 % und 4 ‰)" {
+    testfall "20 %·500.000 = 100.000 > 4 ‰·12.000.000 = 48.000 → 100.000" {
+        SpendenHoechstbetrag9Nr5(500.000,00, 0,00, 10.000.000,00, 2.000.000,00) == 100.000,00
+    }
+    testfall "kein Gewinn, 4 ‰·60.000.000 = 240.000 → 240.000" {
+        SpendenHoechstbetrag9Nr5(0,00, 0,00, 50.000.000,00, 10.000.000,00) == 240.000,00
+    }
+    testfall "§ 8 Nr. 9 erhöht die 20-%-Bemessung: 20 %·(400.000+100.000) = 100.000" {
+        SpendenHoechstbetrag9Nr5(400.000,00, 100.000,00, 1.000.000,00, 0,00) == 100.000,00
+    }
+    testfall "Spenden-Kürzung = min(geleistet, Höchstbetrag): 120.000 gedeckelt auf 100.000" {
+        Kuerzung9Nr5(
+            Kuerzungen9(
+                geleisteteSpenden  = 120.000,00,
+                umsaetze           = 10.000.000,00,
+                loehneUndGehaelter = 2.000.000,00,
+            ),
+            500.000,00, 0,00,
+        ) == 100.000,00
+    }
+    testfall "Spenden unter Höchstbetrag bleiben voll: 30.000" {
+        Kuerzung9Nr5(
+            Kuerzungen9(
+                geleisteteSpenden  = 30.000,00,
+                umsaetze           = 10.000.000,00,
+                loehneUndGehaelter = 2.000.000,00,
+            ),
+            500.000,00, 0,00,
+        ) == 30.000,00
+    }
+}
+
+prüfe "§ 9 Nr. 1 GewStG — Grundbesitzkürzung (einfach vs. erweitert)" {
+    testfall "Satz 1: als Betriebsausgabe erfasste Grundsteuer" {
+        Kuerzung9Nr1(Kuerzungen9(grundsteuerBetriebsgrundbesitz = 3.000,00)) == 3.000,00
+    }
+    testfall "Satz 2: erweiterte Kürzung auf Antrag tritt an die Stelle von Satz 1" {
+        Kuerzung9Nr1(Kuerzungen9(
+            grundsteuerBetriebsgrundbesitz      = 3.000,00,
+            erweiterteKuerzungBeantragt         = wahr,
+            erweiterteKuerzungGrundbesitzertrag = 50.000,00,
+        )) == 50.000,00
+    }
+}
+
+prüfe "§ 7/§ 10 GewStG — Gewerbeertrag (Gewinn + § 8 − § 9)" {
+    testfall "800.000 + 75.000 (§ 8 Nr. 1) − 35.000 (§ 9) = 840.000" {
+        Gewerbeertrag(
+            800.000,00,
+            Hinzurechnungen8(entgelteSchulden = 500.000,00),
+            Kuerzungen9(
+                grundsteuerBetriebsgrundbesitz = 5.000,00,
+                schachteldividendenInland      = 30.000,00,
+            ),
+        ) == 840.000,00
+    }
+}
+
+prüfe "§ 10a GewStG — Gewerbeverlust (Mindestbesteuerung 1 Mio. + 60 %)" {
+    testfall "GE 3 Mio., Obergrenze = 1 Mio. + 60 %·2 Mio. = 2,2 Mio." {
+        VerlustVerrechnungsobergrenze10a(3.000.000,00) == 2.200.000,00
+    }
+    testfall "GE ≤ 1 Mio.: voll verrechenbar (Obergrenze = GE)" {
+        VerlustVerrechnungsobergrenze10a(800.000,00) == 800.000,00
+    }
+    testfall "GE ≤ 0: kein Verlustabzug" {
+        VerlustVerrechnungsobergrenze10a(-50.000,00) == 0,00
+    }
+    testfall "GE 3 Mio., Fehlbetrag 5 Mio. → Abzug 2,2 Mio., danach 800.000" {
+        GewerbeertragNachVerlust(3.000.000,00, 5.000.000,00) == 800.000,00
+    }
+    testfall "GE 500.000, Fehlbetrag 200.000 → Abzug 200.000, danach 300.000" {
+        Verlustabzug10a(500.000,00, 200.000,00) == 200.000,00
+            und GewerbeertragNachVerlust(500.000,00, 200.000,00) == 300.000,00
+    }
+    testfall "GE 800.000 (≤ 1 Mio.), Fehlbetrag 5 Mio. → Abzug nur 800.000, danach 0" {
+        GewerbeertragNachVerlust(800.000,00, 5.000.000,00) == 0,00
+    }
+}
+
+prüfe "§ 11 Abs. 1 Satz 3 GewStG — Abrundung auf volle 100 €" {
+    testfall "12.345,67 → 12.300" {
+        AbrundenAuf100(12.345,67) == 12.300,00
+    }
+    testfall "exakt 12.300,00 bleibt 12.300" {
+        AbrundenAuf100(12.300,00) == 12.300,00
+    }
+    testfall "99,99 → 0" {
+        AbrundenAuf100(99,99) == 0,00
+    }
+    testfall "250.099,00 → 250.000" {
+        AbrundenAuf100(250.099,00) == 250.000,00
+    }
+}
+
+prüfe "§ 11 Abs. 1 Satz 3 GewStG — Freibetrag je Rechtsform" {
+    testfall "natürliche Person/Personengesellschaft → 24.500 €" {
+        FreibetragRoh11(NatuerlichePersonPersonengesellschaft) == 24.500,00
+    }
+    testfall "Verein/jur. Person öR → 5.000 €" {
+        FreibetragRoh11(VereinJuristischePersonOerR) == 5.000,00
+    }
+    testfall "Kapitalgesellschaft → kein Freibetrag" {
+        FreibetragRoh11(Kapitalgesellschaft) == 0,00
+    }
+    testfall "höchstens in Höhe des abgerundeten Gewerbeertrags (10.000 < 24.500)" {
+        Freibetrag11(NatuerlichePersonPersonengesellschaft, 10.000,00) == 10.000,00
+    }
+    testfall "voller Freibetrag bei hohem Gewerbeertrag" {
+        Freibetrag11(NatuerlichePersonPersonengesellschaft, 197.000,00) == 24.500,00
+    }
+}
+
+prüfe "§ 11 Abs. 2/3 GewStG — Steuermesszahl und Steuermessbetrag" {
+    testfall "Regelmesszahl 3,5 %" {
+        Steuermesszahl11(Keine) == 3,5%
+    }
+    testfall "Hausgewerbetreibende: ermäßigt 1,96 % (= 56 % von 3,5 %)" {
+        Steuermesszahl11(Hausgewerbetreibender) == 1,96%
+    }
+    testfall "(197.000 − 24.500)·3,5 % = 172.500·3,5 % = 6.037,50" {
+        Steuermessbetrag11(197.000,00, 24.500,00, 3,5%) == 6.037,50
+    }
+    testfall "Kapitalgesellschaft ohne Freibetrag: 1.000.000·3,5 % = 35.000" {
+        Steuermessbetrag11(1.000.000,00, 0,00, 3,5%) == 35.000,00
+    }
+}
+
+prüfe "§ 16 GewStG — Hebesatz (mindestens 200 %)" {
+    testfall "Gemeinde-Hebesatz unter 200 % → 200 %" {
+        AngewandterHebesatz16(150%) == 200%
+    }
+    testfall "genau 200 % bleibt 200 %" {
+        AngewandterHebesatz16(200%) == 200%
+    }
+    testfall "höherer Hebesatz bleibt unverändert" {
+        AngewandterHebesatz16(450%) == 450%
+    }
+    testfall "Steuermessbetrag · Hebesatz: 6.037,50 · 400 % = 24.150" {
+        Gewerbesteuer16(6.037,50, 400%) == 24.150,00
+    }
+}
+
+prüfe "Gesamtberechnung (§ 7 → § 8 → § 9 → § 10a → § 11 → § 16 GewStG)" {
+    testfall "Personengesellschaft, EZ 2025, Gewinn 200.000, Hebesatz 400 %" {
+        var e: GewerbesteuerErgebnis = BerechneGewerbesteuer(
+            Gewerbebetrieb(
+                gewinnAusGewerbebetrieb = 200.000,00,
+                rechtsform              = NatuerlichePersonPersonengesellschaft,
+                erhebungszeitraum       = 2025,
+                hinzurechnungen         = Hinzurechnungen8(entgelteSchulden = 100.000,00),
+                kuerzungen              = Kuerzungen9(grundsteuerBetriebsgrundbesitz = 3.000,00),
+                hebesatz                = 400%,
+            ),
+        )
+        e.summeHinzurechnungen == 0,00
+            und e.summeKuerzungen == 3.000,00
+            und e.gewerbeertrag == 197.000,00
+            und e.gewerbeertragNachVerlust == 197.000,00
+            und e.abgerundeterGewerbeertrag == 197.000,00
+            und e.freibetrag == 24.500,00
+            und e.steuermessbetrag == 6.037,50
+            und e.angewandterHebesatz == 400%
+            und e.gewerbesteuer == 24.150,00
+    }
+    testfall "Kapitalgesellschaft, EZ 2025, Gewinn 1.000.000, Hebesatz 500 %, kein Freibetrag" {
+        var e: GewerbesteuerErgebnis = BerechneGewerbesteuer(
+            Gewerbebetrieb(
+                gewinnAusGewerbebetrieb = 1.000.000,00,
+                rechtsform              = Kapitalgesellschaft,
+                erhebungszeitraum       = 2025,
+                hinzurechnungen         = Hinzurechnungen8(),
+                kuerzungen              = Kuerzungen9(),
+                hebesatz                = 500%,
+            ),
+        )
+        e.freibetrag == 0,00
+            und e.bemessungsgrundlage == 1.000.000,00
+            und e.steuermessbetrag == 35.000,00
+            und e.angewandterHebesatz == 500%
+            und e.gewerbesteuer == 175.000,00
+    }
+    testfall "Volle Kette: § 8-Excess + § 9 + § 10a + Hausgewerbe, Hebesatz 410 %" {
+        var e: GewerbesteuerErgebnis = BerechneGewerbesteuer(
+            Gewerbebetrieb(
+                gewinnAusGewerbebetrieb = 800.000,00,
+                rechtsform              = NatuerlichePersonPersonengesellschaft,
+                erhebungszeitraum       = 2025,
+                hinzurechnungen         = Hinzurechnungen8(
+                    entgelteSchulden      = 600.000,00,
+                    steuerfreieDividenden = 20.000,00,
+                ),
+                kuerzungen              = Kuerzungen9(
+                    grundsteuerBetriebsgrundbesitz = 10.000,00,
+                    schachteldividendenInland      = 50.000,00,
+                    geleisteteSpenden              = 5.000,00,
+                    umsaetze                       = 2.000.000,00,
+                    loehneUndGehaelter             = 500.000,00,
+                ),
+                gewerbeverlustVortrag   = 100.000,00,
+                messzahlermaessigung    = Hausgewerbetreibender,
+                hebesatz                = 410%,
+            ),
+        )
+        e.summeHinzurechnungen == 120.000,00
+            und e.summeKuerzungen == 65.000,00
+            und e.gewerbeertrag == 855.000,00
+            und e.verlustabzug == 100.000,00
+            und e.gewerbeertragNachVerlust == 755.000,00
+            und e.bemessungsgrundlage == 730.500,00
+            und e.steuermesszahl == 1,96%
+            und e.steuermessbetrag == 14.317,80
+            und e.gewerbesteuer == 58.702,98
+    }
+    testfall "Negativer Gewerbeertrag → kein Messbetrag, keine Steuer" {
+        var e: GewerbesteuerErgebnis = BerechneGewerbesteuer(
+            Gewerbebetrieb(
+                gewinnAusGewerbebetrieb = 50.000,00,
+                rechtsform              = NatuerlichePersonPersonengesellschaft,
+                erhebungszeitraum       = 2025,
+                hinzurechnungen         = Hinzurechnungen8(),
+                kuerzungen              = Kuerzungen9(grundsteuerBetriebsgrundbesitz = 100.000,00),
+            ),
+        )
+        e.gewerbeertrag == -50.000,00
+            und e.abgerundeterGewerbeertrag == 0,00
+            und e.freibetrag == 0,00
+            und e.steuermessbetrag == 0,00
+            und e.gewerbesteuer == 0,00
+    }
+    testfall "Erhebungszeitraum vor 2025 wird abgelehnt (§ 36 Abs. 4b GewStG)" erwartet abbruch {
+        BerechneGewerbesteuer(
+            Gewerbebetrieb(
+                gewinnAusGewerbebetrieb = 100.000,00,
+                rechtsform              = Kapitalgesellschaft,
+                erhebungszeitraum       = 2024,
+                hinzurechnungen         = Hinzurechnungen8(),
+                kuerzungen              = Kuerzungen9(),
+            ),
+        )
+    }
+}

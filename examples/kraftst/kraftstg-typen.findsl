@@ -1,0 +1,240 @@
+--
+# Kraftfahrzeugsteuer — gemeinsame Typen und Helfer
+
+Geteiltes Vokabular des KraftStG-Moduls (aus `kraftstg-steuer`
+herausgelöst, damit die Hauptdatei nicht überlang wird): die
+Fahrzeug-Klassifizierungs-Aufzählungen (§§ 8, 9, 3a KraftStG), der
+Eingabe-Datensatz `Fahrzeug`, der Ergebnis-Datensatz
+`KraftfahrzeugsteuerErgebnis` sowie die allgemeinen Berechnungshelfer
+`einheiten` (je angefangene Einheit, § 9 KraftStG) und `begrenze`
+(Höchstbetrags-Kappung, § 9 Abs. 1 KraftStG).
+
+Importiert nichts (Blatt des Modul-Graphen); wird von den Tarif-Dateien
+`kraftstg-tarif-leicht`, `kraftstg-tarif-nutzfahrzeug` und vom Orchestrator
+`kraftstg-steuer` genutzt.
+--
+
+// ===========================================================================
+// Datenstrukturen
+// ===========================================================================
+
+--
+Fahrzeugart i.S.d. § 8 / § 9 Abs. 1 KraftStG — bestimmt, welcher
+Tarif (welche Nummer des § 9 Abs. 1) anzuwenden ist.
+
+@param Kraftrad        § 9 Abs. 1 Nr. 1: Krafträder (Hubkolbenmotor).
+@param Pkw             § 9 Abs. 1 Nr. 2: Personenkraftwagen (M1) mit
+                       Hubkolbenmotor.
+@param Wohnmobil       § 9 Abs. 1 Nr. 2a: Wohnmobile.
+@param DreiLeichtvier  § 9 Abs. 1 Nr. 2b: dreirädrige und leichte
+                       vierrädrige Kraftfahrzeuge.
+@param AndereBis3500   § 9 Abs. 1 Nr. 3: andere Kfz bis 3.500 kg.
+@param AndereUeber3500 § 9 Abs. 1 Nr. 4: Kfz über 3.500 kg.
+@param Anhaenger       § 9 Abs. 1 Nr. 5: Kraftfahrzeuganhänger.
+--
+@Quelle("§ 8 KraftStG")
+aufzählung Fahrzeugart {
+    Kraftrad,
+    Pkw,
+    Wohnmobil,
+    DreiLeichtvier,
+    AndereBis3500,
+    AndereUeber3500,
+    Anhaenger,
+}
+
+--
+Antriebsart. § 9 unterscheidet Fremdzündungsmotor (Ottomotor/Benzin)
+und Selbstzündungsmotor (Dieselmotor); `Elektro` steuert die
+Ermäßigung/Befreiung (§ 9 Abs. 2, § 3d KraftStG).
+
+@param Fremdzuendung  Fremdzündungsmotor (Ottomotor).
+@param Selbstzuendung Selbstzündungsmotor (Dieselmotor).
+@param Elektro        Elektrofahrzeug i.S.d. § 9 Abs. 2 KraftStG.
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 KraftStG")
+aufzählung Antrieb {
+    Fremdzuendung,
+    Selbstzuendung,
+    Elektro,
+}
+
+--
+Erstzulassungs-Regime des PKW — wählt den Buchstaben des
+§ 9 Abs. 1 Nr. 2 KraftStG.
+
+@param BisJuni2009    Erstzulassung bis 30.6.2009 (Buchst. a, Hubraum
+                      + Schadstoffstufe aa–ee).
+@param JuliBisDez2020 Erstzulassung 1.7.2009–31.12.2020 (Buchst. b,
+                      Hubraum + CO₂ über datumsabhängiger Freigrenze).
+@param AbJan2021      Erstzulassung ab 1.1.2021 (Buchst. c, Hubraum +
+                      progressiver CO₂-Aufschlag ab 95 g/km).
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 KraftStG")
+aufzählung Erstzulassungsregime {
+    BisJuni2009,
+    JuliBisDez2020,
+    AbJan2021,
+}
+
+--
+Schadstoffstufe aa–ee für PKW mit Erstzulassung bis 30.6.2009
+(§ 9 Abs. 1 Nr. 2 Buchst. a KraftStG). Die Einstufung trifft nach
+§ 2 Abs. 2 Nr. 2 KraftStG verbindlich die Zulassungsbehörde.
+
+@param Aa Doppelbuchst. aa (günstigste Stufe).
+@param Bb Doppelbuchst. bb.
+@param Cc Doppelbuchst. cc.
+@param Dd Doppelbuchst. dd.
+@param Ee Doppelbuchst. ee (höchste Stufe, keine Voraussetzungen).
+--
+@Quelle("§ 9 Absatz 1 Nummer 2 Buchstabe a KraftStG")
+aufzählung PkwSchadstoffstufe {
+    Aa,
+    Bb,
+    Cc,
+    Dd,
+    Ee,
+}
+
+--
+Schadstoffklasse für Wohnmobile (§ 9 Abs. 1 Nr. 2a KraftStG).
+
+@param MindestensS4 mindestens Schadstoffklasse S 4 (Buchst. a).
+@param S1bisS3      Schadstoffklasse S 3, S 2 oder S 1 (Buchst. b).
+@param WomoSonst    Voraussetzungen a/b nicht erfüllt (Buchst. c).
+--
+@Quelle("§ 9 Absatz 1 Nummer 2a KraftStG")
+aufzählung WohnmobilKlasse {
+    MindestensS4,
+    S1bisS3,
+    WomoSonst,
+}
+
+--
+Schadstoff-/Geräuschklasse für Kfz > 3.500 kg
+(§ 9 Abs. 1 Nr. 4 KraftStG). Verbindliche Feststellung der
+Zulassungsbehörde (§ 2 Abs. 2 Nr. 2 KraftStG).
+
+@param MindestensS2 mindestens Schadstoffklasse S 2 (Buchst. a).
+@param S1           Schadstoffklasse S 1 (Buchst. b).
+@param G1           Geräuschklasse G 1 (Buchst. c).
+@param NfzSonst     Voraussetzungen a/b/c nicht erfüllt (Buchst. d).
+--
+@Quelle("§ 9 Absatz 1 Nummer 4 KraftStG")
+aufzählung NfzKlasse {
+    MindestensS2,
+    S1,
+    G1,
+    NfzSonst,
+}
+
+--
+Schwerbehinderten-Vergünstigung nach § 3a KraftStG.
+
+@param Keine            keine Vergünstigung.
+@param Befreit3aAbs1    volle Steuerbefreiung (Merkzeichen H, Bl, aG —
+                        § 3a Abs. 1 KraftStG).
+@param Ermaessigt3aAbs2 50 % Ermäßigung (orangefarbener Aufdruck,
+                        § 3a Abs. 2 KraftStG).
+--
+@Quelle("§ 3a KraftStG")
+aufzählung Behinderung {
+    Keine,
+    Befreit3aAbs1,
+    Ermaessigt3aAbs2,
+}
+
+--
+Eingaben eines Fahrzeugs für die Jahressteuer-Berechnung. Nicht jedes
+Feld ist für jede Fahrzeugart relevant — maßgeblich ist `art`
+(§ 8 KraftStG); die übrigen Felder gelten nur im jeweiligen Tarif.
+
+@param art                  Fahrzeugart (§ 8 KraftStG) — wählt den Tarif.
+@param antrieb              Antriebsart (Fremd-/Selbstzündung/Elektro).
+@param hubraumCcm           Hubraum in cm³ (Nr. 1, Nr. 2, Nr. 2b).
+@param co2GrammProKm        CO₂-Emission in g/km (Nr. 2 Buchst. b/c).
+@param gesamtgewichtKg      verkehrsrechtlich zulässiges Gesamtgewicht
+                            in kg (Nr. 2a, 3, 4, 5).
+@param erstzulassung        Erstzulassungs-Regime des PKW (Nr. 2 a/b/c).
+@param pkwStufe             Schadstoffstufe aa–ee (Nr. 2 Buchst. a).
+@param co2FreigrenzeNr2b    datumsabhängige CO₂-Freigrenze g/km für
+                            Nr. 2 Buchst. b (120 bis 31.12.2011 / 110
+                            ab 1.1.2012 / 95 ab 1.1.2014).
+@param dreiradGrenzwerte    Dreirad/leichtes Vierrad: Grenzwerte
+                            eingehalten? (Nr. 2b a vs. b).
+@param wohnmobilklasse      Schadstoffklasse des Wohnmobils (Nr. 2a).
+@param nfzklasse            Schadstoff-/Geräuschklasse > 3.500 kg (Nr. 4).
+@param behinderung          Schwerbehinderten-Vergünstigung (§ 3a).
+@param elektroBefreitNach3d Steuerbefreiung nach § 3d KraftStG aktiv?
+                            (datumsabhängig — verbindlich extern
+                            festgestellt).
+--
+@Quelle("§ 8 KraftStG")
+datensatz Fahrzeug(
+    art:                  Fahrzeugart,                            // § 8 KraftStG: Tarifauswahl
+    antrieb:              Antrieb,                                 // Fremd-/Selbstzündung/Elektro
+    hubraumCcm:           Ganzzahl       = 0,                      // cm³ (Nr. 1, 2, 2b)
+    co2GrammProKm:        Ganzzahl       = 0,                      // g/km (Nr. 2 b/c)
+    gesamtgewichtKg:      Ganzzahl       = 0,                      // kg (Nr. 2a, 3, 4, 5)
+    erstzulassung:        Erstzulassungsregime = AbJan2021,        // PKW: § 9 Nr. 2 a/b/c
+    pkwStufe:             PkwSchadstoffstufe   = Ee,               // PKW Nr. 2a: Stufe aa–ee
+    co2FreigrenzeNr2b:    Ganzzahl       = 95,                     // PKW Nr. 2b: Freigrenze g/km
+    dreiradGrenzwerte:    Wahrheitswert  = falsch,                 // Nr. 2b: Grenzwerte eingehalten?
+    wohnmobilklasse:      WohnmobilKlasse      = WomoSonst,        // Nr. 2a: Schadstoffklasse
+    nfzklasse:            NfzKlasse            = NfzSonst,         // Nr. 4: Schadstoff-/Geräuschklasse
+    behinderung:          Behinderung          = Keine,            // § 3a KraftStG
+    elektroBefreitNach3d: Wahrheitswert  = falsch,                 // § 3d KraftStG aktiv?
+)
+
+--
+Vollständige, prüfbare Berechnung der Kraftfahrzeug-Jahressteuer.
+
+@param tarifbetrag       Steuer nach § 9 Abs. 1 KraftStG (vor § 9
+                         Abs. 2 / § 3a / § 3d).
+@param nachElektro       nach Anwendung der 50 %-Ermäßigung für
+                         Elektrofahrzeuge (§ 9 Abs. 2 KraftStG).
+@param jahressteuer      festgesetzte Jahressteuer nach Anwendung von
+                         § 3a / § 3d KraftStG (0 bei Befreiung).
+--
+@Quelle("§ 9 KraftStG")
+datensatz KraftfahrzeugsteuerErgebnis(
+    tarifbetrag:   EuroCent,    // § 9 Abs. 1 KraftStG
+    nachElektro:   EuroCent,    // § 9 Abs. 2 KraftStG
+    jahressteuer:  EuroCent,    // nach § 3a / § 3d KraftStG
+)
+
+// ===========================================================================
+// Allgemeine Helfer
+// ===========================================================================
+
+--
+Anzahl angefangener Einheiten: `wert` geteilt durch `schritt`,
+aufgerundet (§ 9 KraftStG: „für je … oder einen Teil davon").
+
+@param wert    zu zerlegende Menge (cm³ bzw. kg).
+@param teiler  Einheitengröße (25 / 100 / 200).
+@rückgabe  Anzahl angefangener Einheiten (≥ 0).
+--
+@Quelle("§ 9 Absatz 1 KraftStG")
+fn Einheiten(wert: Ganzzahl, teiler: Ganzzahl): Ganzzahl =
+    wähle {
+        falls wert <= 0 -> 0
+        sonst           -> aufrunden(wert / teiler)
+    }
+
+--
+Höchstbetrags-Begrenzung („insgesamt jedoch nicht mehr als …",
+§ 9 Abs. 1 KraftStG).
+
+@param betrag    errechneter Tarifbetrag.
+@param hoechstens gesetzlicher Höchstbetrag.
+@rückgabe  `betrag`, höchstens `hoechstens`.
+--
+@Quelle("§ 9 Absatz 1 KraftStG")
+fn Begrenze(betrag: EuroCent, hoechstens: EuroCent): EuroCent =
+    wähle {
+        falls betrag > hoechstens -> hoechstens
+        sonst                     -> betrag
+    }
+

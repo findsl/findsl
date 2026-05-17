@@ -1,0 +1,13 @@
+{
+  "name": "@findsl/cli",
+  "version": "0.1.0",
+  "description": "FinDSL Kommandozeilen-Werkzeug (parse, pruefe, doku)",
+  "type": "module",
+  "license": "EUPL-1.2",
+  "bin": { "findsl": "./out/main.js" },
+  "dependencies": {
+    "@findsl/core": "*",
+    "commander": "~12.1.0",
+    "langium": "~4.2.0"
+  }
+}

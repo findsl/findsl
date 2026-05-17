@@ -1,0 +1,103 @@
+name: Fehlerbericht
+description: Einen reproduzierbaren Fehler in FinDSL melden.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke, dass du dir die Zeit für einen Fehlerbericht nimmst.
+
+        **Vor dem Absenden:** bitte [bestehende Issues](https://github.com/findsl/findsl/issues) durchsuchen (Duplikate vermeiden) und gegen den aktuellen `main`-Stand prüfen.
+
+        **Sicherheitslücken bitte NICHT als öffentliches Issue** — vertraulich an contact@devtank42.de melden.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Zusammenfassung
+      description: Den Fehler in einem Satz beschreiben.
+      placeholder: 'z. B. "Type-Checker akzeptiert Geld + Zahl ohne Fehler in wähle-Arm"'
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / Commit-SHA
+      description: Ausgabe von `git rev-parse HEAD` oder der Release-Tag.
+      placeholder: 'z. B. "130079b" oder "v0.1.0"'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Betroffener Bereich
+      description: Wo tritt der Fehler auf?
+      options:
+        - Grammatik / Parser (findsl.langium)
+        - Type-Checker
+        - Interpreter (Tree-Walker)
+        - Validator
+        - LSP-Provider (Hover/Completion/Rename/…)
+        - Formatter
+        - Doc-Generator (MD/HTML/PDF)
+        - CLI (parse/test/docgen)
+        - VS-Code-Extension
+        - Build / Tooling / CI
+        - Sonstiges (in Zusammenfassung angeben)
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduktionsschritte
+      description: Minimale Schrittfolge inkl. **FinDSL-Snippet** und ausgeführtem CLI-Kommando (`findsl parse|test|docgen …`).
+      placeholder: |
+        1. Datei `repro.findsl` mit folgendem Inhalt anlegen:
+           ```findsl
+           // minimales Beispiel
+           ```
+        2. `node packages/cli/out/main.js parse repro.findsl -v`
+        3. Ausgabe beobachten
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Erwartetes Verhalten
+      description: Falls einschlägig, mit Bezug auf SPEC.md-Kapitel/Regel.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Tatsächliches Verhalten
+      description: Was stattdessen passiert — inkl. Fehlermeldung/Diagnose/Stacktrace.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Umgebung
+      description: OS, Node-Version (Toolchain benötigt Node 21+), Editor (falls LSP betroffen).
+      placeholder: |
+        - OS: Ubuntu 24.04
+        - Node: v22.x
+        - Editor: VS Code 1.95 (falls LSP)
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: Relevante Ausgabe — auf die wenigen Zeilen rund um den Fehler kürzen.
+      render: shell
+    validations:
+      required: false

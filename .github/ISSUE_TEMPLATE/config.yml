@@ -1,0 +1,13 @@
+# Strukturierte Issue-Forms erzwingen (kein leeres Freitext-Issue) —
+# analog plugwerks Org-.github-Konvention.
+blank_issues_enabled: false
+contact_links:
+  - name: Frage oder Design-Diskussion
+    url: mailto:contact@devtank42.de
+    about: Für Nutzungsfragen, Design-Diskussionen oder „ist das der richtige Ansatz?" bitte zuerst per E-Mail — keine Issue.
+  - name: Sicherheitslücke (vertraulich)
+    url: mailto:contact@devtank42.de
+    about: KEIN öffentliches Issue erstellen. Sicherheitsrelevante Funde bitte ausschließlich vertraulich per E-Mail an contact@devtank42.de melden.
+  - name: Kommerzielle Lizenzierung / Support
+    url: mailto:info@devtank42.de
+    about: Für kommerzielle Lizenzierung, dedizierten Support oder Auftragsentwicklung (Dual-Lizenz — siehe LICENSE-COMMERCIAL.md).

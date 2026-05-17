@@ -1,0 +1,16 @@
+# CODEOWNERS — FinDSL
+#
+# Jede Datei im Repo gehört BEIDEN Maintainern. In Kombination mit dem
+# `main`-Ruleset (Regel `pull_request`: required_approving_review_count = 1
+# UND require_code_owner_review = true) bedeutet das:
+#
+#   → Ein PR ist erst mergebar, wenn MINDESTENS EINE/R von @devtank42 oder
+#     @bigpuritz genehmigt hat (ein Code-Owner-Approval genügt; GitHub
+#     verlangt nicht beide).
+#
+# @devtank42 und @bigpuritz sind zugleich Bypass-Actors des Rulesets
+# (Repository-Admin- bzw. Organization-Admin-Rolle) und können das
+# Approval daher umgehen — die hier gesetzten Owner sind die Regel,
+# der Ruleset-Bypass die Ausnahme für genau diese zwei.
+
+*       @devtank42 @bigpuritz

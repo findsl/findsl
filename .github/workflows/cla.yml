@@ -1,0 +1,100 @@
+# ---------------------------------------------------------------------------
+# CLA Assistant (FinDSL)
+#
+# SICHERHEITSHINWEIS
+#
+# Dieser Workflow nutzt `pull_request_target` und läuft damit im Kontext des
+# Base-Repos MIT Zugriff auf Repo-Secrets — auch für Fork-PRs. Das ist der
+# Workflow mit dem höchsten Risiko in diesem Repository.
+#
+#   1. Die `contributor-assistant/github-action`-Referenz ist auf einen
+#      vollen Commit-SHA gepinnt (Supply-Chain-Härtung). NICHT auf ein
+#      bewegliches Tag zurücksetzen.
+#
+#   2. Permissions liegen auf Job-Ebene, nicht Workflow-Ebene. Das
+#      Workflow-weite `permissions: {}` entzieht alle Defaults; künftige
+#      Jobs in dieser Datei erben KEINE Schreibrechte des CLA-Jobs.
+#
+#   3. Dieser Workflow darf NIEMALS `actions/checkout` ergänzen oder sonst
+#      Code aus dem PR-Head ausführen. `pull_request_target` + checkout +
+#      Fork ist das klassische Supply-Chain-Exploit-Muster. Build/Lint des
+#      PR-Codes gehört in einen separaten `pull_request`-Workflow
+#      (fork-sicher, ohne Secrets) — siehe `ci.yml`.
+#
+# Speicherung: Es wird NUR das eingebaute `GITHUB_TOKEN` verwendet (kein
+# separater PAT). Die Signaturen werden im selben Repo auf dem Branch
+# `cla-signatures` unter `signatures/cla.json` abgelegt; dafür ist
+# `contents: write` auf Job-Ebene erforderlich. Die Signatur-Commits laufen
+# daher unter `github-actions[bot]`.
+# ---------------------------------------------------------------------------
+name: CLA
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+permissions: {}
+
+jobs:
+  cla-check:
+    runs-on: ubuntu-latest
+
+    # GitHub feuert `issue_comment` für Issue- UND PR-Kommentare (gleicher
+    # Payload). Ohne diesen Filter triggert jeder Kommentar an einem
+    # normalen Issue die CLA-Action, die dann eine PR mit der Issue-Nummer
+    # GraphQL-auflösen will und mit "Could not resolve to a PullRequest"
+    # abstürzt. `issue.pull_request` ist nur gesetzt, wenn das Parent eine
+    # PR ist — kanonischer "nur PR-Kommentar"-Filter, kein ungeprüfter
+    # User-Input wird interpoliert.
+    if: |
+      github.event_name == 'pull_request_target' ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request != null)
+
+    # Entspricht den dokumentierten Permission-Anforderungen der Action.
+    # Nur auf diesen Job beschränkt, damit künftige Jobs keine
+    # Schreibrechte erben.
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+      statuses: write
+
+    steps:
+      - name: CLA Assistant
+        # v2.6.1, per Commit-SHA gepinnt (entspricht dem in plugwerk
+        # geprüften Pin). Nicht auf ein bewegliches Tag zurücksetzen.
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: signatures/cla.json
+          path-to-document: https://github.com/findsl/findsl/blob/main/CLA.md
+          branch: cla-signatures
+          allowlist: bigpuritz,devtank42,*[bot]
+          create-file-commit-message: "chore: CLA-Signaturdatei initialisieren"
+          signed-commit-message: "chore: $contributorName zu den CLA-Unterzeichnenden hinzufügen"
+          custom-notsigned-prcomment: |
+            Danke für deinen Beitrag zu **FinDSL**! :tada:
+
+            Bevor wir diesen PR mergen können, musst du das
+            **Contributor License Agreement (CLA)** unterzeichnen. FinDSL ist
+            dual-lizenziert (EUPL-1.2 **und** kommerziell); das CLA erlaubt es
+            der **devtank42 GmbH**, das Dual-Modell tragfähig zu halten.
+
+            Bitte lies [CLA.md](https://github.com/findsl/findsl/blob/main/CLA.md)
+            (Individual- und Entity-Variante, in einfacher Sprache).
+
+            Poste anschließend genau folgenden Kommentar **in diesem PR**:
+
+            > I have read the CLA Document and I hereby sign the CLA
+
+            Wenn du im Auftrag eines Unternehmens beiträgst, muss zusätzlich
+            eine zeichnungsberechtigte Person deines Arbeitgebers diesen
+            Kommentar posten.
+
+            Wenn du einen KI-Coding-Agenten nutzt, unterzeichnest du (die
+            menschliche Bedienperson) stellvertretend für die Einreichung.
+          custom-pr-sign-comment: I have read the CLA Document and I hereby sign the CLA
+          lock-pullrequest-aftermerge: false

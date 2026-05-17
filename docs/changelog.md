@@ -1,0 +1,380 @@
+## Changelog — Chronologie der Arbeitsstände
+
+> Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
+
+*Letzte Aktualisierung: 2026-05-17 — **`est` mit den neuen Listen-
+Konstrukten erweitert: § 32 Abs. 6 / § 33 / § 10b mehr-entitätig**.
+Nach dem Interpreter-Ausbau überprüft, welche `est`-Skalar-Eingaben nur
+*Tooling-Kompromiss* waren (vs. echtes „anderes Recht/Verfahren").
+Echt modelliert (estg.xml-verbatim, VZ 2026): **§ 32 Abs. 6**
+Kinderfreibetrag (3.414) + BEA (1.464) je `Liste<Kind>` via
+`zuordnen`/`summe` (Faktor Satz 2/3, Zwölftel Satz 5, Auslandsfaktor
+Satz 4); **§ 33 Abs. 1/3** außergewöhnliche Belastungen mit
+**staffelweiser** zumutbarer Belastung (Stufen 15.340/51.130 × vier
+Personengruppen-Sätze, `_Spanne`-Helfer); **§ 10b** Spenden ≤
+max(20 % GdE; 4 ‰ Umsätze+Löhne). Bleibt Eingabe (anderes Recht/
+Verfahren, NICHT Tooling): Einkunftsarten-Ermittlung, § 24a/§ 24b/
+§ 13 Abs. 3, Vorsorge-SA, § 10d (mehrperiodig), § 2-Abs.-6-Komponenten,
+Sachverhalte je Kind. **Statut-stille Rundung dokumentiert:**
+Kategorie-Abzüge `abrundenEuro` (konsistent § 32a Satz 1,
+fiskuskonservativ). Sollwerte handgerechnet aus dem Wortlaut
+(Python-Referenz), Interpreter = Arbiter. Datei-Doc trennt jetzt
+ehrlich „modelliert (auch mehr-entitätig)" ⇄ „Eingabe weil anderes
+Recht". Pitfall verifiziert: `bis` ist Range-Keyword → kein
+Parametername (`obereGrenze`); `EuroCent`-Zwischenwerte vor
+`Euro`-Helfern via `abrundenEuro` (gleicher Sollwert: floor positiv =
+floor; negativ → 0). est.test.findsl Fall K/S/L/0 (Listen statt
+Skalare; „0" = leere Listen ≙ alte Kaskade = Regressionsanker).
+**778 Tests grün** (unverändert; est weiterhin 22, `pruefe.test.ts`
+nicht betroffen), Aggregat 122/122, Bundle 4/4, GESETZ §8 + Datei-Doc
+nachgezogen; keine Grammatik-/Interpreter-/Type-Checker-Änderung
+(reine Beispielarbeit auf dem neuen Sprachstand). Davor:
+**Interpreter-Skelett-Ausbau:
+Listen/Bereich/`für jeden`/parametrische Lambdas+Closures/§-11.2-
+Methoden ausführbar (Sprachkern, 5 Phasen, TDD)**. Hintergrund:
+Frage „warum ist die vollständige ESt nicht abbildbar?" — Befund: die
+Konstrukte waren in SPEC/Grammatik/AST vollständig spezifiziert, nur
+Interpreter+Type-Checker+Stdlib waren bewusste Skelett-Lücken. Behoben:
+**P1** `ListValue` (values.ts; `FunctionValue` deckt Closures, Bereich
+materialisiert → keine neue Klasse). **P2** Interpreter-Eval:
+parametrisches Lambda→Closure (lexikalischer Capture, `FunctionValue.lambda`),
+`ListLiteral`, numerischer `Range` (materialisiert; `bis`/`bis unter`/
+`schritt`; Schritt≤0 wirft), `für jeden` (eager L→R, ≡ `.zuordnen`,
+verschachtelt → `Liste<Liste>`), Index `[i]`; `runBlock`-Helfer.
+**P3** Type-Checker: `Bereich<T>`≙`ListType`, Inferenz für ListLiteral
+(joinBranches-LUB)/Range/`für jeden`/param-Lambda, bidirektionale
+Lambda-Param-Bindung gegen `(T…)->R`, `inferCallChain` Index +
+Listen-Methoden-**Spezialfall-Substitution** (kein General-Generics).
+**P4** Stdlib: alle 12 §-11.2-Methoden ausführbar (Property direkt;
+Aufruf-Methoden als `BuiltinValue` über bestehenden `applyCall`-Pfad;
+`callClosure`/`applyValueFn` — Lambdas UND benannte Fn als Argument).
+**Entscheidungen:** D1 leere `.summe()`→0 / leere `.kopf`/`.größtes`/
+`.kleinstes`→`InterpretError`; D2 Index/leer-Fehler = Bug-Klasse (kein
+`abbruch`); D3 Bereich materialisiert; D4 `für jeden` eager L→R.
+**Bewusst offen:** Aufzählungs-Bereiche `I bis VI` (klare Fehlermeldung).
+**P5 Capability-Nachweis:** mehr-entitätiges Modul (`Liste<Kind>` →
+`.zuordnen`/`.summe`/`für jeden`/`.filtern`) Type-Checker-clean **und**
+`pruefe`-grün über vitest **und** echte `findsl test`-CLI (2/2).
+**GESETZ-ZU-FINDSL.md §3.3-Regel umgekehrt** („keine Listen/Schleifen"
+→ Mehr-Entitäten SIND zu modellieren); CLAUDE §5/Roadmap nachgezogen.
+**Keine Grammatik-/SPEC-/EBNF-Änderung** (Trias war synchron → kein
+`langium:generate`, kein Drei-Artefakt-Sync). **775 Tests grün**
+(Baseline 707 → +68 TDD: values/listen-iteration/listen-typen/
+listen-capability), Bundle-Smoke 4/4, alle `pruefe`-Beispiele
+(kst/kraftst/gewst/est) unverändert grün, 0 Regression. Davor:
+**Neues Beispielmodul `est` —
+Einkommensteuer: Veranlagungskaskade § 2 EStG + Tarif § 32a (VZ 2026)**:
+via `GESETZ-ZU-FINDSL.md` aus `examples/est/estg.xml` (juris-Stand
+2026-05-06, konsolidiert) generiert. Stufen-Funktionen
+`SummeDerEinkuenfte` (§ 2 Abs. 1–3) → `GesamtbetragDerEinkuenfte`
+(Abs. 3) → `Einkommen` (Abs. 4) → `ZuVersteuerndesEinkommen` (Abs. 5)
+→ `TariflicheEinkommensteuer` (§ 32a: 5-Zonen-`wähle`-Grundtarif +
+Splitting Abs. 5) → `FestzusetzendeEinkommensteuer` (§ 2 Abs. 6 =
+tariflich − Anrechnungen/Ermäßigungen + Hinzurechnungen);
+`BerechneEinkommensteuer`-Orchestrator füllt `EinkommensteuerErgebnis`
+(jede Zwischengröße). `EinkommensteuerFall` (17 Felder) — alle
+Detailermittlungen (7 Einkunftsarten, § 24a/§ 24b/§ 13 Abs. 3, SA
+§§ 10–10c, agB §§ 33–33b, § 32 Abs. 6, § 2-Abs.-6-Komponenten)
+**konsequent als geprüfte Eingaben** (Leitfaden §1.3); **eingebaute**
+`Tarifart` (SPEC § 8.5, kein Import — eigene `aufzählung` verworfen);
+`_NichtNegativ`-Helfer ⇒ negatives zvE → 0 (kein `abbruch` im
+Orchestrator; § 10d-Verlustabzug = Verfahren, nicht modelliert), die
+skalaren Tarifkern-`fn` (`EstGrundtarif`/`EstSplitting`) behalten ihren
+strikten `abbruch`. Sollwerte (Tarif **und** Kaskade) **handgerechnet
+aus dem Wortlaut** (Decimal, Floor = § 32a Satz 6), nicht aus dem
+gelöschten `tarif2025`. **Fassungs-Befund (Leitfaden §1.3 „Fassung
+wählen"):** estg.xml trägt § 32a nur in der VZ-2026-Fassung
+(GFB 12.348), **keine** VZ-2025-Werte (auch § 52 nicht) → bewusst
+VZ 2026; Datei-Doc benennt Fassung/Quelle/Stand und grenzt sämtliche
+nicht modellierten §§ explizit ab. `est.test.findsl` 22/22
+(Tarif-Knotenpunkte je Zone ±1, Splitting, `erwartet abbruch`,
+Kaskade Fall A/B/C/D inkl. Verlust→0 + zvE=GFB). `pruefe.test.ts`
+EXAMPLE_SUITES (est 22), GESETZ §8, CLAUDE §5/Strukturbaum/Fußzeile
+nachgezogen. **707 Tests grün**, Bundle 4/4, Aggregat
+`test 'examples/**/*.test.findsl'` **122/122** (kst 23 · kraftst 34 ·
+gewst 43 · est 22); parse 0 Diagnosen. Keine Sprachänderung
+(Drei-Artefakt-Sync unberührt). Davor:
+**Formatter: Aufruf mit
+benannten Argumenten → Zwei-Spalten** (analog datensatz; Nutzer-Fall
+`GewerbesteuerErgebnis(…)`): mehrzeiliger `Call` bekommt das idempotente
+datensatz-Multiline-Block-Rezept (`interior`+`properties('args')`
+indent, Komma `noSpace`, `)` eigene Zeile) plus `=`-Spalten-Ausrichtung
+je `CallArg` — Polsterung `spaces(maxNameLen − nameLen + 1)` vor
+`keyword('=', 0)` (Index 0 = Arg-Separator; ein `=` in einem
+verschachtelten benannten Aufruf gehört zu DESSEN CallArg und bleibt
+unberührt — per Test verifiziert). Einzeilige/positionale Aufrufe
+unangetastet (wie fn-Params — Trailing-Komma-Oszillation vermeiden);
+einzeilig benannt → kanonisch `name = wert`. `pad` aus AST-Namens-
+längen ⇒ idempotent; alle 17 Beispiele idempotent/tab-frei/valide
+(KStG/GewStG/KraftStG-Ergebnis-Konstruktoren). Neue Helfer
+`callIstMehrzeilig`; `isCall`/`isCallArg`. TDD `formatter.test.ts`
++4 (Nutzer-Fall, einzeilig kompakt, positional, verschachtelt-
+inneres-`=`-unberührt). **704 Tests grün** (51 Dateien), tsc/Bundle
+4/4. Beispieldateien auf Platte unverändert. Davor: **Formatter:
+`wähle`-Arm-RHS-
+Ketten brechen jetzt auch bei > 120** (Nutzer-Fall
+`VerlustVerrechnungsobergrenze10a`): vorher nur `fn`/`konst`/`var`-
+Rumpf, Arm-RHS war ausgeklammert (Quell-Spalte oszillierte). Fix:
+Arm-RHS-Startspalte DETERMINISTISCH `indentDepth(arm)·4 + maxArmLinke
++ 4` (= exakt die `->`-Ausrichtungs-Geometrie; neuer `indentDepth`
+zählt umschließende `wähle`/`BlockExpr`/`Lambda`/`prüfe`-Scopes —
+struktur-, nicht quell-abgeleitet) in `declPrefixWidth`. Damit
+idempotent (gewerbesteuer.findsl, das vorher oszillierte, jetzt stabil
++ `sonst`-Kette korrekt umgebrochen). Reststand: nur noch 2 Zeilen
+> 120 = unzerlegbare String-Literale `abbruch("§ … Begründung")`
+(ein Token, Wert unveränderbar — kein Formatter bricht Strings). Alle
+17 Beispiele idempotent/tab-frei/valide; `->`-Ausrichtung +
+4-Hang-Umbruch koexistieren. Pitfall (b3) erweitert. TDD
+`formatter.test.ts` +2 (Nutzer-Fall + kurze Arm-Kette einzeilig).
+**700 Tests grün** (51 Dateien), tsc/Bundle 4/4. Beispieldateien auf
+Platte unverändert. Davor: **Formatter: Operator-Ketten-
+Umbruch + 120-Spalten**: `BinaryOp`-Lücke nicht mehr hart `oneSpace`
+(zerstörte hand-mehrzeilige `+`-Ketten) — stattdessen: bei `fn`/`konst`/
+`var`-Rumpfkette, deren **strukturell** (aus Namen/Typen, alignment-
+frei) berechnete Prefix-Breite + flache Kettenbreite > 120, Umbruch
+**vor jedem Operator** mit 4-Hang (`Formatting.indent()`); sonst
+`fit(oneSpace, indent())` — bewahrt vom Autor gesetzte Umbrüche
+idempotent (gleiche Mechanik wie der Program-Leerzeilen-Separator),
+kollabiert nie. Erst war die Breite spalten-basiert (`cst.range.start.
+character`) → `gewerbesteuer.findsl` oszillierte (Pfeil-Polsterung
+eines `sonst`-Arms verschob pass2 die Spalte); Fix: nur fn/konst/var-
+Kontext + strukturelle Prefix-Breite (`declPrefixWidth`/`typeStr`,
+keine Quell-Spalte), Arm-RHS/verschachtelt nur `fit` (kein Auto-Break)
+→ alle 17 Beispiele idempotent/tab-frei/valide. Rest >120 (3 Zeilen):
+2× nicht umbrechbare String-Literale `abbruch("…")`, 1× `sonst`-Arm-
+`+`-Kette (bewusst nicht auto-umgebrochen — Idempotenz vor 120).
+Pitfall (b3) ergänzt (Breiten-Maß muss formatierungs-invariant sein).
+TDD `formatter.test.ts` +4 (>120-Umbruch, ≤120-Erhalt mehrzeilig,
+≤120-einzeilig, langer `konst`). **698 Tests grün** (51 Dateien),
+tsc/Bundle 4/4. Beispieldateien auf Platte unverändert. Davor:
+**Formatter: `wähle` Zwei-Spalten-
+Layout** (analog datensatz/`@param`): in `wähle`-Blöcken wird die Arm-
+Linke (`falls …`/`sonst`) linksbündig gesetzt und alle `->` auf eine
+Spalte gerückt (Breite = längste Arm-Linke + 1; längster Arm bekommt
+genau ein Space). Umsetzung in `isFallArm`/`isSonstArm`:
+`f.keyword('->', 0).prepend(Formatting.spaces(pad))` — Index 0 trifft
+gezielt das **Separator-`->`** (ein `->` im Ergebnis-Lambda/
+Funktionstyp bleibt unberührt); `arrowPad(arm)` = `max(armLinkeBreite)
+− armLinkeBreite(arm) + 1` über `node.$container`-Geschwister;
+`armLinkeBreite` = Arm-CST-Text bis zum ersten `->`, Whitespace zu
+einem Space kollabiert (= kanonische Breite ⇒ idempotent). `sonst`-
+`append`-Regel entfernt (benachbart zu `->` → Lücken-Konflikt; nur
+`->`-prepend bedient sie). Empirisch auf allen 17 Beispielen
+idempotent/tab-frei/valide (KraftStG/GewStG = viele mehrarmige
+`wähle`). 3 bestehende Tests aufs neue Layout aktualisiert (alt:
+1 Space vor `->`), TDD `formatter.test.ts` +3 (Nutzer-Fall, Mehrfach-
+Pattern, Block-Arm-Sicherheit). CLAUDE Formatter-Zeile + Pitfall (b2)
+ergänzt. **694 Tests grün** (51 Dateien), tsc/Bundle 4/4.
+Beispieldateien auf Platte unverändert. Davor: **Formatter:
+`@param`/`@rückgabe`
+Zwei-Spalten-Layout** (analog datensatz): Doc-Kommentar-Tags werden
+ausgerichtet — erste Spalte = längste Marke (`@param <name>` bzw.
+`@rückgabe`) + 1 Space, Beschreibungen fluchten, eingerückte
+Fortsetzungszeilen hängen unter der Beschreibungsspalte. Umsetzung:
+**Doc-Kommentare sind ein `DOC_COMMENT`-Terminal** → Langiums
+`Formatting`-API kann Token-INHALT NICHT umformen; daher reine Funktion
+`alignDocTags(text)` (exportiert, testbar) + Erweiterung des
+`doDocumentFormat`-Override: nach den Gap-Edits zusätzliche Replace-
+Edits für die Doc-Token-Range jedes `DeclPrefix`/`fileDoc`
+(`GrammarUtils.findNodeForProperty(prefix.$cstNode,'doc')`), nur bei
+Änderung, mit Range-Containment- + Overlap-Schutz (`rangesOverlap`/
+`rangeContains`). Prosa/Überschriften/Leerzeilen/```-Codeblöcke/`--`-
+Marker byte-genau; Fence-Parität mit `parseDocTags`. Spaltenbreite rein
+aus Markennamen ⇒ idempotent; empirisch auf allen 17 Beispielen
+(idempotent, tab-frei, formatiert sev1=0; inkl. `simple.findsl` mit
+vielen `@param`/`@rückgabe` + Fortsetzungen). TDD `formatter.test.ts`
++5 (alignDocTags-Spalten, Fortsetzung/Idempotenz, Prosa/Fence-Schutz,
+Kein-Tag-No-op, Formatter-Integration); veralteter Test-Datei-Kopf
+(„§ 4.15 … NICHT angetastet") korrigiert. **691 Tests grün** (51
+Dateien), tsc/Bundle 4/4. Beispieldateien auf Platte unverändert. Davor:
+**Formatter: `datensatz` Zwei-
+Spalten-Layout**: mehrzeilige Feldlisten werden ausgerichtet — Feldname
++ `:` linksbündig, alle Typen auf einer Spalte (Breite = längster
+Feldname + 1 Space). Umsetzung in der `isField`-Regel:
+`spaces(maxNameLen − nameLen + 1)` nach `:` (Geschwister via
+`node.$container` = `DatensatzDecl`, nur mehrzeilig); Funktionsparameter
+& einzeilige `datensatz` unverändert (ein Space). **Ehem. § 4.15-Schutz
+aufgehoben**: auch Feldlisten MIT Trailing-`//` werden jetzt
+ausgerichtet — der `,`→`//`-Abstand bleibt unangetastet (Hidden-Token,
+keine Regel), nur die Name/Typ-Spalte normalisiert. AST-abgeleitete
+Polsterung ⇒ idempotent; empirisch auf allen 17 Beispielen verifiziert
+(idempotent, tab-frei, formatiert sev1=0). SPEC/CLAUDE § 4.15 +
+Pitfall (d) + Formatter-Zeile angepasst. TDD `formatter.test.ts` +5
+(Spalten-Layout, Trailing-//-Idempotenz, Einzeiler kompakt, Parameter
+nicht ausgerichtet; bestehender Invarianten-Test auf neues Layout
+aktualisiert). **686 Tests grün** (51 Dateien), tsc/Bundle 4/4.
+Beispieldateien auf Platte unverändert (nur In-Memory verifiziert) →
+pruefe unberührt. Davor: **Formatter: 4-Blank-Zwang +
+`verwende`-Block**: (1) Override `doDocumentFormat` (Single-Chokepoint
+aller Entry-Points Document/Range/OnType) erzwingt `insertSpaces:true,
+tabSize:4` unabhängig von Client-`FormattingOptions` → Tabs werden
+projektweit zu 4 Blanks (alle strukturellen Einrückungen neu
+emittiert). (2) Neue `ImportDecl`-Regel: `verwende`-Block IMMER
+mehrzeilig — jeder Import auf eigener, um 4 eingerückter Zeile, `}` auf
+eigener Zeile, dann ` aus "…"`; Rezept exakt wie datensatz-Multiline
+(`interior`+`properties('items')` indent, Komma klebt am Item ohne
+Append → keine Trenn-/Trailing-Komma-Oszillation). `ImportItem`:
+`als`-Spacing. Idempotenz empirisch auf allen 17 Beispielen verifiziert
+(auch bei Client-Wunsch Tabs/Größe 2 → Ausgabe tab-frei, 4 Blanks).
+Beispieldateien auf Platte unverändert (nur In-Memory geprüft) →
+pruefe unberührt. TDD `formatter.test.ts` +6 (verwende ·4, Einzel-
+Import, Idempotenz, Validität, Tab→Blank-Zwang, vorhandene Tabs
+konvertiert). **682 Tests grün** (51 Dateien), tsc/Bundle 4/4. Davor:
+**`_`-Interne visuell markiert
+(Editor + Outline)**: SemanticTokens-Provider bekommt Custom-Modifier
+`internal` (Override `get tokenModifiers()` → `{…AllSemanticToken
+Modifiers, internal: 1<<10}`; Langium baut Legende+Encoding aus dieser
+Map → konsistent), gesetzt an Deklaration UND Referenzen modul-interner
+`_`-Top-Level-Decls (`konst`/`fn`/`datensatz`/`aufzählung`, via
+`withIntern` + `isInternalName`; klassifiziert in `classifyName`/
+`classifyType`). Default-Stil **kursiv** via `package.json
+contributes.configurationDefaults` (`editor.semanticTokenColor
+Customizations` → `*.internal`, out-of-the-box sichtbar, themen-/
+benutzerüberschreibbar; bewusst KEIN `deprecated`-Tag — Durchstreichung
+wäre im Audit-Kontext irreführend). DocumentSymbol setzt `🔒 intern · `
+als **Präfix** ins `detail` (VS Code rendert detail direkt hinter dem
+Namen — Suffix wäre am Ende langer Signaturen abgeschnitten/unsichtbar;
+Korrektur nach Nutzer-Rückmeldung „in Outline keine Markierung";
+Outline/Breadcrumbs/Sticky-Scroll, zuverlässig themenunabhängig;
+`internPrefix`). Reine LSP-Darstellung — Sprachverhalten unberührt
+(pruefe 126/126, parse sauber). TDD
+`test/language/intern-visual.test.ts` (5). **676 Tests grün** (51
+Dateien), Bundle 4/4. Davor: **Beispiele: 20 echte Helfer als
+`_`-intern markiert**: konservatives Kriterium (generische/arithmetische
+Zerlegungs-Helfer, NICHT cross-file konsumiert, NICHT im `.test`-
+`verwende`, KEIN Domänenmodell/§-Konstanten/materielle Gesetzes-
+Rechenschritte). Markiert: GewStG `_NichtNegativ/_Hoechstens/
+_Groesseres` (3); KStG `_BegrenzterFreibetrag24` (1); kraftstg-tarif-
+leicht `_Co2AufschlagNr2c/_PkwHubraumSockel/_SteuerPkwC/_SteuerPkwB/
+_SteuerPkwA/_SatzPkwA/_SteuerWohnmobilSonst/_WomoZweiStufen/
+_SatzDreiLeichtvier` (9); kraftstg-tarif-nutzfahrzeug `_Nr4a/_Nr4d/
+_Nr4b/_Nr4c` (4); kraftstg-steuer `_Anwende9Abs2/_AnwendeVerguenstigung`
+(2); berechnung2025 `_MindestensPauschbetrag` (1). Per-Datei whole-word
+Rename (in-file-Aufrufe mitgezogen, keine `.test`/Cross-Datei-
+Anpassung nötig — Import-Graph vorab erhoben). BEWUSST öffentlich
+belassen: alle `datensatz`/`aufzählung`, §-`konst`, der §2-EStG-
+Rechenkette (`SummeDerEinkünfte`/`GesamtbetragDerEinkünfte`/
+`Einkommen`/`ZuVersteuerndesEinkommen`/`FestzusetzendeEinkommensteuer`),
+`EstSplitting`, alle `Berechne…`-Orchestratoren, getestete §-Schritte,
+`Einheiten`/`Begrenze` (cross-file konsumiert); `simple.findsl`
+unangetastet (didaktisch). Verhalten unverändert (reines Rename:
+**pruefe 126/126**, parse 9/9 sauber); Doku-Decl-Zähler exakt −20
+(KStG 23→22, KraftStG 207→192, GewStG 54→51, ESt 60→59), Interne aus
+MD/HTML/PDF verschwunden, Orchestratoren drin. **671 Tests grün** (50
+Dateien), Bundle 4/4; alle 5 Dokus nach `out/` neu. Davor:
+**`_`-intern-Sichtbarkeit
+(SPEC § 8.4, verschärft P7)**: Top-Level-Decl (`fn`/`konst`/`datensatz`/
+`aufzählung`) mit führendem `_` ist modul-intern — **nicht cross-file
+`verwende`-importierbar** (Fehler `findsl.import-intern`,
+`checkInternalImports` vor `checkImportTargetsExist`), **nicht in der
+Doku** (`model.ts` filtert `isInternalName`; abbruch-Anhang bleibt =
+Audit). Ausnahme: `<basis>.test.findsl` darf Interna ihrer zugehörigen
+`<basis>.findsl` importieren (Test→fremd bleibt gesperrt). Eine Quelle
+`import-path.ts` (`isInternalName`/`mayImportInternal`/
+`associatedSourcePath`), geteilt von Validator + Import-Completion;
+Doc-Gen filtert hart. Geltungsbereich = ALLE Top-Level-Decls,
+Test-Ausnahme = ja, Doku = komplett weglassen (Nutzer-Entscheidungen).
+Grammatik-Trias-Kommentare + SPEC § 8.4/P7 + § 4.16 synchron; rein
+namensbasiert (kein Token). Bestehende Beispiele nutzen kein
+`_`-Top-Level → **nicht-breaking**. TDD `test/language/
+intern-sichtbarkeit.test.ts` (7). **671 Tests grün** (50 Dateien),
+Bundle-Smoke 4/4, parse 9/9 sauber, pruefe 126/126. Davor:
+**Doku-Ausgabe-Konvention
+`out/`**: generierte Dokumentation liegt je Gesetz im
+`examples/<Gesetz>/out/`-Unterverzeichnis (`out/<slug>-doku.{md,html,
+pdf}`); die kuratierte `<slug>-doku.kopf.md` (Input) bleibt außerhalb
+`out/`. CLI legt das Zielverzeichnis selbst an
+(`fs.mkdir(path.dirname(base),{recursive:true})` in `cli/main.ts` —
+`-o <dir>/out/<name>` ohne Vor-`mkdir`). Alte, direkt im Gesetz-
+Verzeichnis liegende `*-doku.{md,html,pdf}` entfernt; alle 5 Dokus
+(KStG/KraftStG/GewStG/ESt/Lohnsteuer) nach `out/` neu mit `--kopf`.
+CLAUDE.md § 5 Doc-Generator-Zeile dokumentiert die Konvention. Davor:
+**Kanonische Dateiendung
+`.findsl` (statt `.fin`)**: harter Wechsel, kein `.fin`-Alias.
+`langium-config.json fileExtensions` + `package.json
+contributes.languages.extensions` → `.findsl`; `langium:generate`
+regeneriert `generated/module.ts` + TextMate. Auflöser/Scanner auf
+`.findsl` (`import-path.ts resolveImportPath`/`isTestFile`/`displayId`,
+`docs/model.ts findFinFiles`, Modul-Loader, DocumentLink,
+WorkspaceSymbols, Extension-Glob, CLI). Alle 17 Beispiel-Dateien
+physisch umbenannt (`*.fin`→`*.findsl`, inkl. `<basis>.test.findsl`-
+Konvention § 4.9); `verwende … aus "./x"`-Strings unverändert (ohne
+Endung — nur der angehängte Suffix im Resolver). Grammatik-Trias-
+Kommentare (findsl.langium/findsl.ebnf/SPEC) + Test-Fixtures (URIs/
+Literale) + Doc-Generator + `.kopf.md`-Prosa migriert; alle Dokus
+neu. **664 Tests grün** (49 Dateien), Bundle-Smoke 4/4, parse 9/9
+sauber, pruefe 126/126 (simple 2 · KraftStG 34 · GewStG 43 · KStG 23
+· freibetraege 6 · tarif 9 · berechnung 9). Davor: **Harte
+Großschreibungs-Regel
+(SPEC § 2.5)**: Funktionen/Datensätze/Aufzählungen/Enum-Werte MÜSSEN
+mit Großbuchstaben beginnen (`^_*\p{Lu}`; Builtins ausgenommen;
+`var`/Param/Feld bleiben lowerCamel) — Validator-Fehler
+`findsl.name-grossschreibung` (Vorbild `checkKonstNameUppercase`,
+kein Lexer-Eingriff). ALLE `fn` in Beispielen (80, inkl. GewStG) +
+Test-Fixtures auf UpperCamel migriert; 2 Kollisionen distinkt gelöst
+(`tabellenFreibetraege`→`BerechneTabellenFreibetraege`,
+`womoSonst`→`SteuerWohnmobilSonst`); Datensatz/Enum waren bereits groß.
+SPEC § 2.5 + Grammatik-Trias-Kommentare + CLAUDE.md § 11. **661 Tests
+grün** (49 Dateien, +9 Großschreibungs-Tests), Bundle-Smoke 4/4,
+pruefe tarif 9/9 · freibetraege 6/6 · berechnung 9/9 · simple 2/2 ·
+KStG 23/23 · KraftStG 34/34 · GewStG 43/43; Dokus neu. Davor:
+**Konfigurierbare Doku-Titelseite/
+Einleitung**: neues `src/docs/kopf.ts` (Front-Matter-Datei via CLI
+`doku … --kopf <datei>`: `name/titel/untertitel/autor/beschreibung/
+lizenz/metadaten` + Markdown-Einleitung; unbekannte Schlüssel →
+Metadaten). Fehlt `--kopf`, werden **Titel/Untertitel aus dem ersten
+Modul abgeleitet** (erste Überschrift/erster Satz des Datei-Doc-Blocks,
+markdown-bereinigt) — der hartkodierte „FinDSL-Dokumentation" +
+Sprach-Untertitel greift nur noch im Kein-Kopf-Direktaufruf
+(byte-identisch, Rückwärtskompatibilität). MD/HTML/PDF teilen einen
+`DocKopf`; CLI reicht ihn an alle drei Renderer durch. +12 Tests,
+**661 Tests grün** (49 Dateien), keine Regression. Davor
+**KraftStG-Modul aufgeteilt + einheitliches `kraftstg-`-Präfix**: die
+1191-Zeilen-Datei (vormals
+`kraftfahrzeugsteuer.findsl`) in 4 kohäsive Dateien zerlegt und alle
+generierten Dateien auf das Präfix `kraftstg-` vereinheitlicht:
+`kraftstg-typen.findsl` (Aufzählungen/Datensätze/Helfer) ·
+`kraftstg-tarif-leicht.findsl` (§ 9 Abs. 1 Nr. 1/2/2a/2b Konst.+Fn.) ·
+`kraftstg-tarif-nutzfahrzeug.findsl` (Nr. 3/4/5) · `kraftstg-steuer.findsl`
+(öffentl. Orchestrator + § 9 Abs. 4) · `kraftstg-steuer.test.findsl` ·
+`kraftstg-doku.{md,html,pdf}` (nur die Law-Quelle `KraftStG_2002.xml`
+bleibt unpräfixiert); azyklischer Modul-Graph (typen ← tarif-* ←
+orchestrator), Konstanten beim zugehörigen Tarif (minimale
+`verwende`-Importe, keine Wildcards/Re-Exports). Beispiel für
+Modul-Dekomposition. `.test.findsl` quelldatei-gruppiert; 34/34
+unverändert, 639 Tests grün, alle 5 KraftStG-Dateien diagnosefrei.
+Davor **GewStG-Modul** (`examples/gewst/`,
+Gewerbesteuer §§ 7–11/16: § 8-Hinzurechnungen inkl. ¼-über-200.000-€-
+Formel mit a–f-Gewichtung, § 9-Kürzungen inkl. Spenden-Höchstbetrag
+max(20 %; 4 ‰), § 10a-Mindestbesteuerung 1 Mio. + 60 %, § 11-Abrundung/
+Freibetrag/Messzahl, § 16-Mindesthebesatz; EZ-<2025-`abbruch`; 43/43
+`pruefe`, Datei + separate `.test.findsl`) samt neuer KI-Agenten-Anleitung
+**[`GESETZ-ZU-FINDSL.md`](GESETZ-ZU-FINDSL.md)** (vollständiger,
+schrittweiser Leitfaden Gesetz-XML/PDF → `.findsl` + Tests; in § 2 und § 10
+referenziert). **639 Tests grün**, Bundle-Smoke 4/4; `pruefe`-Stand:
+ESt 9/9/6/2, KStG 23/23, KraftStG 34/34, GewStG 43/43. Davor
+**§-Prosa-Verlinkung**: `quelle.ts`
+`linkifyQuelleProsa` verlinkt §-Refs in ALLER Doc-Prosa automatisch
+(Doku-Generator MD/HTML/PDF + Editor-DocumentLink), gleiche Quelle wie
+@Quelle; **`GESETZ_PFAD`-Slug-Fix** (`KStG → kstg_1977`, `KraftStG`
+ergänzt, live verifiziert). Davor **KraftStG-2002-Modul** (voller
+§ 9-Tarif: Nr. 1–5 inkl. progressiver Gewichts-/CO₂-Bänder & Caps,
+§ 9 Abs. 2/3/4, § 3a, § 3d; `examples/kraftst/`, 34/34 Tests)
+samt **Stdlib-Erweiterung** `aufrunden`/`abrunden(Dezimal): Ganzzahl`
+(builtins.json + Interpreter + SPEC § 11; § 8c-Teilentscheidung); davor
+**KStG-Modul** (§§ 7/23/24, 23/23). 639 Tests grün, Bundle-Smoke 4/4.
+Zuvor: **Langium 3.3 → 4.2.4 migriert**
+(chevrotain 12, TypeScript 5.9; nur `findsl-hover.ts` angepasst —
+`getHoverContent` async, `getAstNodeHoverContent` → string).
+Außerdem **Geldmodell-Fix**: Typannotationen
+setzen die Geld-Einheit (`var y: Cent = 20` → 20 ct; § 7), Euro/Cent-
+Ganzzahligkeit auch bei berechneten Werten erzwungen; alle vier
+Rundungs-Builtins (`ab/aufrundenEuro/Cent`) im Interpreter implementiert.
+Davor: Sprache (`abbruch`/`never`/
+`ausgabe`), **deutsche Zahl-Notation**, Type-Checker, Interpreter
+(Euro-kanonisches Geldmodell), CLI `pruefe`, vollständige LSP-Provider-
+Suite, VS-Code Test-Controller, Bundle-Smoke-Gate, **Doc-Generator
+Phase 1** (CLI `doku` → MD/HTML/PDF). **639 Tests grün**,
+Bundle-Smoke 4/4; `pruefe` der Beispiele: einkommensteuer 9/6/9/2,
+KStG 23/23, KraftStG 34/34.
+Offen: Codegen (Java/TS/JS) und optionaler Starlight-Export (s. § 8).*

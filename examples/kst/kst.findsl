@@ -1,0 +1,316 @@
+--
+# Körperschaftsteuer — Tarif, Freibetrag und Bemessungsgrundlage
+
+Bildet die Festsetzung der Körperschaftsteuer nach dem
+**Körperschaftsteuergesetz (KStG 1977, Stand: zuletzt geändert durch
+Art. 30 G v. 4.2.2026 I Nr. 33)** ab — die drei normativen Kerne:
+
+- **§ 7 KStG** — Grundlagen der Besteuerung: die KSt bemisst sich nach
+  dem zu versteuernden Einkommen; dieses ist das Einkommen i.S.d.
+  § 8 Abs. 1 KStG, vermindert um die Freibeträge der §§ 24 und 25 KStG
+  (Abs. 2); die KSt ist eine Jahressteuer (Abs. 3).
+- **§ 23 KStG** — Steuersatz: nach Veranlagungszeitraum gestaffelter
+  Prozentsatz auf das zu versteuernde Einkommen (Abs. 1); optionale
+  Anpassung über § 51 Abs. 3 EStG (Abs. 2).
+- **§ 24 KStG** — Freibetrag von 5.000 Euro, höchstens in Höhe des
+  Einkommens (Satz 1), mit den drei Ausschlusstatbeständen des Satz 2.
+
+Anschließende **§ 31 Satz 2 KStG**-Rundung: die festgesetzten
+KSt-Beträge sind zugunsten des Steuerpflichtigen auf volle Euro zu
+runden — Abrundung (zu Gunsten = niedrigere Steuer).
+
+Nicht modelliert (außerhalb des Auftragsumfangs §§ 7/23/24): die
+Ermittlung des Einkommens i.S.d. § 8 Abs. 1 KStG selbst und der
+Freibetrag nach § 25 KStG — beide gehen als geprüfte Eingaben ein,
+damit die § 7 Abs. 2-Formel rechnerisch vollständig bleibt.
+--
+
+// ===========================================================================
+// Konstanten — § 23 Absatz 1 KStG (gestaffelter Steuersatz) und § 24 KStG
+// ===========================================================================
+
+--
+Steuersatz für Veranlagungszeiträume **bis 2027**: 15 % des zu
+versteuernden Einkommens (§ 23 Abs. 1 Nr. 1 KStG).
+--
+@Quelle("§ 23 Absatz 1 Nummer 1 KStG")
+konst KST_SATZ_BIS_2027: Prozent = 15%
+
+-- Steuersatz für den Veranlagungszeitraum **2028**: 14 % (§ 23 Abs. 1 Nr. 2 KStG). --
+@Quelle("§ 23 Absatz 1 Nummer 2 KStG")
+konst KST_SATZ_2028: Prozent = 14%
+
+-- Steuersatz für den Veranlagungszeitraum **2029**: 13 % (§ 23 Abs. 1 Nr. 3 KStG). --
+@Quelle("§ 23 Absatz 1 Nummer 3 KStG")
+konst KST_SATZ_2029: Prozent = 13%
+
+-- Steuersatz für den Veranlagungszeitraum **2030**: 12 % (§ 23 Abs. 1 Nr. 4 KStG). --
+@Quelle("§ 23 Absatz 1 Nummer 4 KStG")
+konst KST_SATZ_2030: Prozent = 12%
+
+-- Steuersatz für den Veranlagungszeitraum **2031**: 11 % (§ 23 Abs. 1 Nr. 5 KStG). --
+@Quelle("§ 23 Absatz 1 Nummer 5 KStG")
+konst KST_SATZ_2031: Prozent = 11%
+
+-- Steuersatz für Veranlagungszeiträume **ab 2032**: 10 % (§ 23 Abs. 1 Nr. 6 KStG). --
+@Quelle("§ 23 Absatz 1 Nummer 6 KStG")
+konst KST_SATZ_AB_2032: Prozent = 10%
+
+--
+Freibetrag nach § 24 Satz 1 KStG: 5.000 Euro, höchstens jedoch in Höhe
+des Einkommens. Greift nur, wenn kein Ausschlusstatbestand des § 24
+Satz 2 KStG vorliegt.
+--
+@Quelle("§ 24 Satz 1 KStG")
+konst FREIBETRAG_24: Euro = 5.000
+
+// ===========================================================================
+// Datenstrukturen
+// ===========================================================================
+
+--
+Ausschlusstatbestände des § 24 Satz 2 KStG. Liegt einer davon vor,
+entfällt der Freibetrag nach § 24 Satz 1 KStG vollständig.
+
+@param Keiner               Kein Ausschluss — der Freibetrag von 5.000 €
+                            (§ 24 Satz 1 KStG) ist anwendbar.
+@param Nr1KapitalLeistungen § 24 Satz 2 Nr. 1 KStG: Körperschaften/
+                            Personenvereinigungen, deren Leistungen beim
+                            Empfänger zu Einnahmen i.S.d. § 20 Abs. 1
+                            Nr. 1 oder 2 EStG gehören (typische
+                            Kapitalgesellschaften mit Ausschüttungen).
+@param Nr2VereinNach25      § 24 Satz 2 Nr. 2 KStG: Vereine i.S.d.
+                            § 25 KStG (land-/forstwirtschaftliche
+                            Erwerbs- und Wirtschaftsgenossenschaften
+                            sowie Vereine).
+@param Nr3Investmentfonds   § 24 Satz 2 Nr. 3 KStG: Investmentfonds
+                            (§ 1 InvStG) und Spezial-Investmentfonds
+                            (§ 26 InvStG), deren Leistungen beim
+                            Empfänger zu Einnahmen i.S.d. § 20 Abs. 1
+                            Nr. 3 oder 3a EStG gehören.
+--
+@Quelle("§ 24 Satz 2 KStG")
+aufzählung Freibetragsausschluss {
+    Keiner,
+    Nr1KapitalLeistungen,
+    Nr2VereinNach25,
+    Nr3Investmentfonds,
+}
+
+--
+Eingaben für die Körperschaftsteuer-Festsetzung eines Steuerfalls.
+
+@param einkommenNach8Abs1    Einkommen i.S.d. § 8 Abs. 1 KStG (nach
+                             EStG/KStG ermittelt) — Bemessungsbasis VOR
+                             Abzug der Freibeträge §§ 24, 25 KStG.
+@param veranlagungszeitraum  Kalenderjahr des Veranlagungszeitraums
+                             (§ 7 Abs. 3 KStG); bestimmt den Steuersatz
+                             nach § 23 Abs. 1 KStG.
+@param freibetragsausschluss Ausschlusstatbestand nach § 24 Satz 2 KStG
+                             (siehe `Freibetragsausschluss`).
+@param freibetragNach25      Freibetrag nach § 25 KStG (extern ermittelt;
+                             geht nach § 7 Abs. 2 KStG mindernd ein).
+                             0, wenn nicht einschlägig.
+@param anpassungNach23Abs2   Anpassungssatz nach § 23 Abs. 2 KStG i.V.m.
+                             § 51 Abs. 3 EStG (Herab-/Heraufsetzung). In
+                             aller Regel 0 % (keine Änderung).
+--
+@Quelle("§ 7 KStG")
+datensatz KörperschaftsteuerFall(
+    einkommenNach8Abs1:    Euro,                            // Einkommen § 8 Abs. 1 KStG (vor Freibeträgen)
+    veranlagungszeitraum:  Ganzzahl,                        // Kalenderjahr des VZ (§ 7 Abs. 3 KStG)
+    freibetragsausschluss: Freibetragsausschluss,           // § 24 Satz 2 KStG: Ausschlusstatbestand
+    freibetragNach25:      Euro     = 0,                    // Freibetrag § 25 KStG (extern; § 7 Abs. 2 KStG)
+    anpassungNach23Abs2:   Prozent  = 0%,                   // § 23 Abs. 2 KStG i.V.m. § 51 Abs. 3 EStG
+)
+
+--
+Vollständige, prüfbare Berechnungsdokumentation eines
+Körperschaftsteuerfalls — jede Zwischengröße ist einzeln ausgewiesen,
+damit die Festsetzung Schritt für Schritt gegen das Gesetz auditierbar
+ist.
+
+@param einkommen                 Einkommen i.S.d. § 8 Abs. 1 KStG
+                                 (Eingabe, unverändert übernommen).
+@param freibetragNach24          Tatsächlich abgezogener Freibetrag
+                                 nach § 24 KStG (0, falls Satz 2 greift).
+@param freibetragNach25          Abgezogener Freibetrag nach § 25 KStG
+                                 (Eingabe).
+@param zuVersteuerndesEinkommen  § 7 Abs. 1, 2 KStG: Bemessungsgrundlage
+                                 = Einkommen − § 24 − § 25.
+@param steuersatz                § 23 Abs. 1 KStG: für den
+                                 Veranlagungszeitraum geltender Satz.
+@param körperschaftsteuer        Festgesetzte Körperschaftsteuer nach
+                                 § 23 KStG, auf volle Euro abgerundet
+                                 (§ 31 Satz 2 KStG), inkl. § 23 Abs. 2.
+--
+@Quelle("§ 7 KStG")
+datensatz KörperschaftsteuerErgebnis(
+    einkommen:                Euro,       // Einkommen § 8 Abs. 1 KStG (Eingabe)
+    freibetragNach24:         Euro,       // abgezogener Freibetrag § 24 KStG
+    freibetragNach25:         Euro,       // abgezogener Freibetrag § 25 KStG (Eingabe)
+    zuVersteuerndesEinkommen: Euro,       // § 7 Abs. 1, 2 KStG: Bemessungsgrundlage
+    steuersatz:               Prozent,    // § 23 Abs. 1 KStG: VZ-abhängiger Satz
+    körperschaftsteuer:       Euro,       // festgesetzte KSt (§ 31 Satz 2: abgerundet)
+)
+
+// ===========================================================================
+// § 23 Absatz 1 KStG — gestaffelter Steuersatz
+// ===========================================================================
+
+--
+Liefert den Körperschaftsteuersatz für einen Veranlagungszeitraum nach
+der Staffel des § 23 Abs. 1 KStG. „bis 2027" (Nr. 1) ist einschließlich
+2027; „ab 2032" (Nr. 6) ist einschließlich 2032 (durch `sonst`
+abgedeckt, da alle früheren Jahre vorher erfasst sind).
+
+@param veranlagungszeitraum  Kalenderjahr des Veranlagungszeitraums.
+@rückgabe  Der nach § 23 Abs. 1 KStG für diesen VZ geltende Satz.
+--
+@Quelle("§ 23 Absatz 1 KStG")
+fn KstSatz(veranlagungszeitraum: Ganzzahl): Prozent = wähle {
+    falls veranlagungszeitraum <= 2027 -> KST_SATZ_BIS_2027
+    falls veranlagungszeitraum == 2028 -> KST_SATZ_2028
+    falls veranlagungszeitraum == 2029 -> KST_SATZ_2029
+    falls veranlagungszeitraum == 2030 -> KST_SATZ_2030
+    falls veranlagungszeitraum == 2031 -> KST_SATZ_2031
+    sonst                              -> KST_SATZ_AB_2032
+}
+
+// ===========================================================================
+// § 24 KStG — Freibetrag für bestimmte Körperschaften
+// ===========================================================================
+
+--
+Begrenzung des Freibetrags nach § 24 Satz 1 KStG: 5.000 Euro,
+**höchstens jedoch in Höhe des Einkommens**. Ist das Einkommen 0 oder
+negativ, beträgt der Freibetrag 0 (er darf keinen Verlust schaffen oder
+vergrößern); ist es kleiner als 5.000 €, ist es selbst die Obergrenze.
+
+@param einkommen  Einkommen i.S.d. § 8 Abs. 1 KStG.
+@rückgabe  Der der Höhe nach begrenzte Freibetrag (vor Anwendung des
+           Ausschlusses nach § 24 Satz 2 KStG).
+--
+@Quelle("§ 24 Satz 1 KStG")
+fn _BegrenzterFreibetrag24(einkommen: Euro): Euro = wähle {
+    falls einkommen <= 0            -> 0
+    falls einkommen < FREIBETRAG_24 -> einkommen
+    sonst                           -> FREIBETRAG_24
+}
+
+--
+Freibetrag nach § 24 KStG unter Berücksichtigung des Ausschlusses nach
+§ 24 Satz 2 KStG: liegt ein Ausschlusstatbestand (Nr. 1–3) vor,
+entfällt der Freibetrag vollständig; andernfalls der nach Satz 1 der
+Höhe nach begrenzte Betrag.
+
+@param einkommen  Einkommen i.S.d. § 8 Abs. 1 KStG.
+@param ausschluss Ausschlusstatbestand nach § 24 Satz 2 KStG.
+@rückgabe  Abzuziehender Freibetrag nach § 24 KStG (0 bei Ausschluss).
+--
+@Quelle("§ 24 KStG")
+fn FreibetragNach24(einkommen: Euro, ausschluss: Freibetragsausschluss): Euro =
+    wähle (ausschluss) {
+        falls Keiner                                                    -> _BegrenzterFreibetrag24(einkommen)
+        falls Nr1KapitalLeistungen, Nr2VereinNach25, Nr3Investmentfonds -> 0
+    }
+
+// ===========================================================================
+// § 7 Absatz 2 KStG — zu versteuerndes Einkommen
+// ===========================================================================
+
+--
+Zu versteuerndes Einkommen nach § 7 Abs. 2 KStG: das Einkommen i.S.d.
+§ 8 Abs. 1 KStG, vermindert um die Freibeträge der §§ 24 und 25 KStG.
+Kann negativ werden (Verlust); die steuerliche Auswirkung eines
+negativen Betrags regelt die Steuerfestsetzung (`körperschaftsteuer`),
+nicht diese Größe.
+
+@param einkommen        Einkommen i.S.d. § 8 Abs. 1 KStG.
+@param freibetragNach24 Freibetrag nach § 24 KStG.
+@param freibetragNach25 Freibetrag nach § 25 KStG.
+@rückgabe  Zu versteuerndes Einkommen (§ 7 Abs. 1 KStG: Bemessung).
+--
+@Quelle("§ 7 Absatz 2 KStG")
+fn ZuVersteuerndesEinkommen(
+    einkommen: Euro,
+    freibetragNach24: Euro,
+    freibetragNach25: Euro,
+): Euro = einkommen - freibetragNach24 - freibetragNach25
+
+// ===========================================================================
+// § 23 KStG — Steuerbetrag (inkl. § 31 Satz 2 Rundung, § 23 Abs. 2)
+// ===========================================================================
+
+--
+Körperschaftsteuerbetrag nach § 23 Abs. 1 KStG: Steuersatz des
+Veranlagungszeitraums multipliziert mit dem zu versteuernden Einkommen,
+anschließend nach § 31 Satz 2 KStG **zu Gunsten des Steuerpflichtigen
+auf volle Euro abgerundet** (niedrigere Steuer = zu Gunsten). Bei einem
+zu versteuernden Einkommen von 0 oder weniger beträgt die Steuer 0
+(keine negative Steuer; Verlustabzug regelt § 8 KStG i.V.m.
+§ 10d EStG, hier nicht modelliert).
+
+@param zuVersteuerndesEinkommen  § 7 KStG: Bemessungsgrundlage.
+@param veranlagungszeitraum      Kalenderjahr (§ 23 Abs. 1 KStG).
+@rückgabe  Körperschaftsteuer nach § 23 Abs. 1 KStG, auf volle Euro
+           abgerundet (§ 31 Satz 2 KStG).
+--
+@Quelle("§ 23 Absatz 1 KStG")
+fn KörperschaftsteuerBetrag(
+    zuVersteuerndesEinkommen: Euro,
+    veranlagungszeitraum: Ganzzahl,
+): Euro = wähle {
+    falls zuVersteuerndesEinkommen <= 0 -> 0
+    sonst -> abrundenEuro(zuVersteuerndesEinkommen * KstSatz(veranlagungszeitraum))
+}
+
+--
+Anpassung der Körperschaftsteuer nach § 23 Abs. 2 KStG: wird die
+Einkommensteuer aufgrund der Ermächtigung des § 51 Abs. 3 EStG herab-
+oder heraufgesetzt, ermäßigt oder erhöht sich die Körperschaftsteuer
+entsprechend (proportional). Der Anpassungsbetrag wird nach der
+Wertung des § 31 Satz 2 KStG auf volle Euro abgerundet. In aller Regel
+ist der Anpassungssatz 0 % (keine Verordnung in Kraft → unverändert).
+
+@param körperschaftsteuer  Steuer nach § 23 Abs. 1 KStG (abgerundet).
+@param anpassung           Anpassungssatz nach § 51 Abs. 3 EStG.
+@rückgabe  Angepasste Körperschaftsteuer (§ 23 Abs. 2 KStG).
+--
+@Quelle("§ 23 Absatz 2 KStG")
+fn Anwenden23Abs2(körperschaftsteuer: Euro, anpassung: Prozent): Euro =
+    körperschaftsteuer + abrundenEuro(körperschaftsteuer * anpassung)
+
+// ===========================================================================
+// Gesamtberechnung
+// ===========================================================================
+
+--
+Vollständige Festsetzung der Körperschaftsteuer eines Steuerfalls in
+der gesetzlichen Reihenfolge: § 24 KStG (Freibetrag) → § 7 Abs. 2 KStG
+(zu versteuerndes Einkommen) → § 23 Abs. 1 KStG (Steuersatz × zvE) →
+§ 31 Satz 2 KStG (Abrundung) → § 23 Abs. 2 KStG (Anpassung). Liefert
+alle Zwischengrößen für die Audit-Vorlage.
+
+@param fall  Eingaben des Steuerfalls (siehe `KörperschaftsteuerFall`).
+@rückgabe  Vollständig dokumentiertes Berechnungsergebnis.
+--
+@Quelle("§ 7 KStG")
+fn BerechneKörperschaftsteuer(fall: KörperschaftsteuerFall): KörperschaftsteuerErgebnis {
+    var freibetrag24: Euro = FreibetragNach24(fall.einkommenNach8Abs1, fall.freibetragsausschluss)
+    var zve: Euro = ZuVersteuerndesEinkommen(
+        fall.einkommenNach8Abs1, freibetrag24, fall.freibetragNach25,
+    )
+    var satz: Prozent = KstSatz(fall.veranlagungszeitraum)
+    var basis: Euro = KörperschaftsteuerBetrag(zve, fall.veranlagungszeitraum)
+    var endgültig: Euro = Anwenden23Abs2(basis, fall.anpassungNach23Abs2)
+
+    KörperschaftsteuerErgebnis(
+        einkommen                = fall.einkommenNach8Abs1,
+        freibetragNach24         = freibetrag24,
+        freibetragNach25         = fall.freibetragNach25,
+        zuVersteuerndesEinkommen = zve,
+        steuersatz               = satz,
+        körperschaftsteuer       = endgültig,
+    )
+}

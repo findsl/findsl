@@ -1,0 +1,201 @@
+--
+# Akzeptanztests — Einkommensteuer § 2 + § 32a EStG (VZ 2026)
+
+Sollwerte **von Hand aus dem Wortlaut** gerechnet (Quelle
+`examples/est/estg.xml`, Fassung „ab Veranlagungszeitraum 2026").
+§ 32a Satz 6: Steuerbetrag auf vollen Euro **abgerundet**.
+
+Tarif-Größen: `y = (zvE − 12.348)/10.000`, `z = (zvE − 17.799)/10.000`.
+Zonen: Nr. 2 `(914,51·y + 1.400)·y`; Nr. 3
+`(173,10·z + 2.397)·z + 1.034,87`; Nr. 4 `0,42·x − 11.135,63`;
+Nr. 5 `0,45·x − 19.470,38`. Splitting (Abs. 5) = 2·Grundtarif(⌊zvE/2⌋).
+
+§ 32 Abs. 6: je Kind (3.414 + 1.464)·faktor·Monate/12·auslandsfaktor.
+§ 33 Abs. 3 zumutbare Belastung **staffelweise** (Stufen 15.340 /
+51.130; Sätze ohne Kind Grund 5/6/7 %, Splitting 4/5/6 %; 1–2 Kinder
+2/3/4 %; ≥3 Kinder 1/1/2 %). § 10b: Spenden ≤ max(20 % GdE; 4 ‰
+Umsätze+Löhne). Modellierungs-Entscheidung: Kategorie-Abzugssummen
+auf volle Euro abgerundet (s. est.findsl Datei-Doc).
+--
+
+verwende {
+    EstGrundtarif,
+    EstSplitting,
+    BerechneEinkommensteuer,
+    EinkommensteuerFall,
+    EinkommensteuerErgebnis,
+    Kind,
+} aus "./est"
+
+prüfe "§ 32a Abs. 1 Nr. 1 EStG — Zone 1 (Grundfreibetrag)" {
+    testfall "zvE = 0 → 0" {
+        EstGrundtarif(0) == 0
+    }
+    testfall "zvE = Grundfreibetrag 12.348 → 0 (bis-Grenze inklusiv)" {
+        EstGrundtarif(12.348) == 0
+    }
+    testfall "zvE = 12.349 (Zone-2-Beginn) → 0 (Steuer rundet auf 0 ab)" {
+        // y = 1/10000 = 0,0001 → (914,51·0,0001 + 1.400)·0,0001
+        //   = 0,14000914… → abrunden 0
+        EstGrundtarif(12.349) == 0
+    }
+}
+
+prüfe "§ 32a Abs. 1 Nr. 2 EStG — Zone 2 (Eingangsprogression)" {
+    testfall "zvE = 15.000" {
+        // y = (15.000 − 12.348)/10.000 = 0,2652
+        // (914,51·0,2652 + 1.400)·0,2652 = 435,5984… → abrunden 435
+        EstGrundtarif(15.000) == 435
+    }
+    testfall "zvE = 17.799 (obere Grenze Zone 2)" {
+        // y = (17.799 − 12.348)/10.000 = 0,5451
+        // (914,51·0,5451 + 1.400)·0,5451 = 1.034,99… → abrunden 1.034
+        EstGrundtarif(17.799) == 1.034
+    }
+}
+
+prüfe "§ 32a Abs. 1 Nr. 3 EStG — Zone 3 (Hauptprogression)" {
+    testfall "zvE = 17.800 (Zone-3-Beginn)" {
+        // z = (17.800 − 17.799)/10.000 = 0,0001
+        // (173,10·0,0001 + 2.397)·0,0001 + 1.034,87 = 1.035,109… → 1.035
+        EstGrundtarif(17.800) == 1.035
+    }
+    testfall "zvE = 50.000" {
+        // z = (50.000 − 17.799)/10.000 = 3,2201
+        // (173,10·3,2201 + 2.397)·3,2201 + 1.034,87 = 10.548,… → 10.548
+        EstGrundtarif(50.000) == 10.548
+    }
+    testfall "zvE = 69.878 (obere Grenze Zone 3)" {
+        EstGrundtarif(69.878) == 18.213
+    }
+}
+
+prüfe "§ 32a Abs. 1 Nr. 4 EStG — Zone 4 (Proportionalzone, 42 %)" {
+    testfall "zvE = 69.879 (Zone-4-Beginn, stetiger Anschluss)" {
+        // 0,42·69.879 − 11.135,63 = 18.213,55 → abrunden 18.213
+        EstGrundtarif(69.879) == 18.213
+    }
+    testfall "zvE = 100.000" {
+        // 0,42·100.000 − 11.135,63 = 30.864,37 → abrunden 30.864
+        EstGrundtarif(100.000) == 30.864
+    }
+    testfall "zvE = 277.825 (obere Grenze Zone 4)" {
+        // 0,42·277.825 − 11.135,63 = 105.550,87 → abrunden 105.550
+        EstGrundtarif(277.825) == 105.550
+    }
+}
+
+prüfe "§ 32a Abs. 1 Nr. 5 EStG — Zone 5 (Proportionalzone, 45 %)" {
+    testfall "zvE = 277.826 (Zone-5-Beginn)" {
+        // 0,45·277.826 − 19.470,38 = 105.551,32 → abrunden 105.551
+        EstGrundtarif(277.826) == 105.551
+    }
+    testfall "zvE = 300.000" {
+        // 0,45·300.000 − 19.470,38 = 115.529,62 → abrunden 115.529
+        EstGrundtarif(300.000) == 115.529
+    }
+}
+
+prüfe "§ 32a Abs. 5 EStG — Splitting-Verfahren" {
+    testfall "zvE = 200.000 → 2 · Grundtarif(100.000) = 2 · 30.864" {
+        EstSplitting(200.000) == 61.728
+    }
+    testfall "zvE = 100.001 → Hälfte 50.000 (abgerundet) → 2 · 10.548" {
+        EstSplitting(100.001) == 21.096
+    }
+    testfall "zvE = 150.000 → Hälfte 75.000 → 2 · Grundtarif(75.000)" {
+        // 0,42·75.000 − 11.135,63 = 20.364,37 → 20.364 ; 2·20.364
+        EstSplitting(150.000) == 40.728
+    }
+}
+
+prüfe "§ 32a EStG — unzulässige Eingaben (abbruch)" {
+    testfall "negatives zvE (Grundtarif) ist nicht definiert" erwartet abbruch {
+        var n: Euro = -1
+        EstGrundtarif(n)
+    }
+    testfall "negatives gemeinsames zvE (Splitting) ist nicht definiert" erwartet abbruch {
+        var n: Euro = -2
+        EstSplitting(n)
+    }
+}
+
+prüfe "§ 2 EStG — Kaskade mit § 32 Abs. 6 / § 33 / § 10b (Listen)" {
+    testfall "Fall K — Single, 2 Kinder, agB- + Spenden-Posten" {
+        // GdE 60.000. zumutbare Belastung (2 Kinder, Stufen 2/3/4 %):
+        //   2%·15.340 + 3%·(51.130−15.340) + 4%·(60.000−51.130)
+        //   = 306,80 + 1.073,70 + 354,80 = 1.735,30
+        // agB abziehbar = abrundenEuro(nichtNeg(5.000 − 1.735,30)) = 3.264
+        // Spenden abziehbar = min(2.000; 20%·60.000=12.000) = 2.000
+        // SA = 4.000 + 2.000 = 6.000
+        // KFB = abrundenEuro((3.414+1.464)·1·12/12·100% ·2 Kinder) = 9.756
+        // Einkommen = 60.000 − 6.000 − 3.264 = 50.736
+        // zvE = 50.736 − 9.756 = 40.980 → Grundtarif = 7.521
+        var e: EinkommensteuerErgebnis = BerechneEinkommensteuer(EinkommensteuerFall(
+            einkuenfteNichtselbstaendigeArbeit = 60.000,
+            sonstigeSonderausgaben             = 4.000,
+            spenden                            = [2.000],
+            aussergewoehnlicheAufwendungen     = [5.000],
+            kinder                             = [Kind(), Kind()],
+        ))
+        e.gesamtbetragDerEinkuenfte == 60.000
+            und e.kinderfreibetraege == 9.756
+            und e.abziehbareAussergewoehnlicheBelastungen == 3.264
+            und e.einkommen == 50.736
+            und e.zuVersteuerndesEinkommen == 40.980
+            und e.tariflicheEinkommensteuer == 7.521
+            und e.festzusetzendeEinkommensteuer == 7.521
+    }
+    testfall "Fall S — Splitting, 3 Kinder (eines halbjährig), Spenden gekappt" {
+        // SdE = 100.000 → GdE 100.000. zumutbar (3 Kinder, 1/1/2 %):
+        //   1%·15.340 + 1%·35.790 + 2%·48.870 = 153,40+357,90+977,40 = 1.488,70
+        // agB abziehbar = abrundenEuro(8.000 − 1.488,70) = 6.511
+        // Spenden abziehbar = min(30.000; max(20%·100.000=20.000; 0)) = 20.000
+        // KFB Splitting faktor 2: 2·4.878·2 + 4.878·2·6/12 = 19.512 + 4.878 = 24.390
+        // Einkommen = 100.000 − 20.000 − 6.511 = 73.489
+        // zvE = 73.489 − 24.390 = 49.099 → Splitting=2·Grundtarif(24.549)=5.462
+        // festzusetzend = 5.462 − 2.500 + 600 = 3.562
+        var e: EinkommensteuerErgebnis = BerechneEinkommensteuer(EinkommensteuerFall(
+            einkuenfteNichtselbstaendigeArbeit = 100.000,
+            spenden                            = [10.000, 20.000],
+            aussergewoehnlicheAufwendungen     = [3.000, 5.000],
+            kinder                             = [
+                Kind(faktor = 2),
+                Kind(faktor = 2),
+                Kind(faktor = 2, berücksichtigteMonate = 6),
+            ],
+            tarifart                           = Splitting,
+            anrechnungenUndErmaessigungen      = 2.500,
+            hinzurechnungen                    = 600,
+        ))
+        e.kinderfreibetraege == 24.390
+            und e.abziehbareAussergewoehnlicheBelastungen == 6.511
+            und e.einkommen == 73.489
+            und e.zuVersteuerndesEinkommen == 49.099
+            und e.tariflicheEinkommensteuer == 5.462
+            und e.festzusetzendeEinkommensteuer == 3.562
+    }
+    testfall "Fall L — agB unter zumutbarer Belastung → 0 abziehbar" {
+        // GdE 40.000, 0 Kinder, Grundtarif: zumutbar
+        //   5%·15.340 + 6%·(40.000−15.340) = 767 + 1.479,60 = 2.246,60
+        // 1.000 < 2.246,60 → abziehbare agB = 0
+        var e: EinkommensteuerErgebnis = BerechneEinkommensteuer(EinkommensteuerFall(
+            einkuenfteNichtselbstaendigeArbeit = 40.000,
+            aussergewoehnlicheAufwendungen     = [1.000],
+        ))
+        e.abziehbareAussergewoehnlicheBelastungen == 0
+            und e.einkommen == 40.000
+            und e.zuVersteuerndesEinkommen == 40.000
+            und e.tariflicheEinkommensteuer == 7.209
+    }
+    testfall "Fall 0 — leere Listen ≙ alte Skalar-0-Kaskade (Regressionsanker)" {
+        var e: EinkommensteuerErgebnis = BerechneEinkommensteuer(EinkommensteuerFall(
+            einkuenfteNichtselbstaendigeArbeit = 50.000,
+        ))
+        e.kinderfreibetraege == 0
+            und e.abziehbareAussergewoehnlicheBelastungen == 0
+            und e.einkommen == 50.000
+            und e.zuVersteuerndesEinkommen == 50.000
+            und e.tariflicheEinkommensteuer == 10.548
+    }
+}

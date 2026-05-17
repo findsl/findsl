@@ -1,0 +1,68 @@
+# ===========================================================================
+# FinDSL — .gitignore
+#
+# Bewusst NICHT ignoriert (= eingecheckt, da der dokumentierte Frischklon-
+# Workflow `npm install && npm run build` sie ohne vorheriges
+# `npm run langium:generate` voraussetzt):
+#   - packages/core/src/language/generated/   (Langium: ast/grammar/module)
+#   - packages/core/syntaxes/findsl.tmLanguage.json  (Langium TextMate-Ausgabe)
+# Diese sind reproduzierbar (`npm run langium:generate`), aber Teil des
+# eingecheckten Standes. Grammatik-Quelle bleibt die Trias (SPEC.md /
+# grammar/findsl.ebnf / findsl.langium).
+# ===========================================================================
+
+# --- Abhängigkeiten ---
+node_modules/
+
+# --- TypeScript-Build (tsc -b, composite; je Paket rootDir=src outDir=out) ---
+out/
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# --- esbuild-Bundles & self-contained CLI / natives Binary ---
+# apps/vscode/out (Extension-Bundle) deckt `out/` oben bereits ab.
+packages/cli/dist/
+
+# --- Generierte Audit-Doku (regenerierbar via `findsl docgen`) ---
+# Konvention: examples/<Gesetz>/out/<slug>-doku.{md,html,pdf}.
+# Die kuratierte <slug>-doku.kopf.md (Input) liegt AUSSERHALB out/.
+examples/**/out/
+
+# --- Verpackte VS-Code-Extension ---
+*.vsix
+
+# --- Test-Coverage ---
+coverage/
+.nyc_output/
+
+# --- Secrets / lokale Umgebung ---
+.env
+.env.*
+!.env.example
+
+# --- Logs & npm-Artefakte ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.tgz
+
+# --- Editor / IDE (lokal) ---
+.idea/
+*.iml
+# VS Code: lokale Einstellungen ignorieren, geteilte Konfiguration behalten
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/settings.json
+*~
+*.swp
+*.swo
+
+# --- Betriebssystem ---
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+desktop.ini

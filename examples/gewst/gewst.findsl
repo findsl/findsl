@@ -1,0 +1,855 @@
+--
+# Gewerbesteuer — Messbetrag und Steuer (§§ 7–11, 16 GewStG)
+
+Bildet die Festsetzung der **Gewerbesteuer** nach dem
+Gewerbesteuergesetz (GewStG, i.d.F. ab Erhebungszeitraum 2025 —
+insbesondere § 9 Nr. 1 Satz 1 in der Fassung des Art. 9 G v. 2.12.2024,
+§ 36 Abs. 4b GewStG) vollständig in der gesetzlichen Reihenfolge ab:
+
+- **§ 6 GewStG** — Besteuerungsgrundlage ist der Gewerbeertrag.
+- **§ 7 Satz 1 GewStG** — Gewerbeertrag ist der nach EStG/KStG zu
+  ermittelnde Gewinn aus Gewerbebetrieb, vermehrt um die § 8- und
+  vermindert um die § 9-Beträge.
+- **§ 8 GewStG** — Hinzurechnungen: Nr. 1 (Viertel der Summe aus
+  a–f Finanzierungsanteilen, soweit über 200.000 €) sowie die
+  Nummern 4, 5, 8, 9, 10, 12 (die übrigen Nummern sind weggefallen).
+- **§ 9 GewStG** — Kürzungen: Nr. 1 (Grundsteuer für Betriebs-
+  grundbesitz bzw. erweiterte Kürzung auf Antrag), Nr. 2/2a/2b/3/7/8
+  (Beteiligungs-/Betriebsstätten-Erträge) und Nr. 5 (Spenden bis
+  20 % des Gewinns oder 4 ‰ der Summe aus Umsätzen und Löhnen).
+- **§ 10/§ 10a GewStG** — maßgebender Gewerbeertrag und Kürzung um
+  vortragsfähige Fehlbeträge (Mindestbesteuerung: bis 1 Mio. € voll,
+  darüber nur 60 %).
+- **§ 11 GewStG** — Abrundung auf volle 100 €, Freibetrag (24.500 €
+  bzw. 5.000 € bzw. 0 € je Rechtsform) und Steuermesszahl 3,5 %
+  (ermäßigt 1,96 % bei Hausgewerbetreibenden, § 11 Abs. 3).
+- **§ 16 GewStG** — Anwendung des Hebesatzes der hebeberechtigten
+  Gemeinde, mindestens 200 % (§ 16 Abs. 4 Satz 2).
+
+**Bewusst nicht modelliert (dokumentiert, außerhalb der reinen
+Steuerbetragsberechnung):**
+
+- Die Ermittlung des **Gewinns aus Gewerbebetrieb** selbst (§ 7 Satz 1:
+  „nach den Vorschriften des EStG oder KStG"). Er geht — wie das
+  Einkommen i.S.d. § 8 Abs. 1 KStG im KStG-Modul — als geprüfte
+  Eingabe ein. Ebenso die *Höhe* der einzelnen Hinzurechnungs-/
+  Kürzungsbeträge, die § 8/§ 9 aus EStG/KStG-Sachverhalten ableiten
+  (Nr. 4/5/8/9/10/12 bzw. Nr. 2/2a/2b/3/7/8): das GewStG schreibt nur
+  die Verrechnung vor — diese ist hier vollständig und exakt
+  implementiert.
+- **Zerlegung (§§ 28–34 GewStG)** auf mehrere Gemeinden (Maßstab
+  Arbeitslöhne, Sonderfälle Windenergie/Solar/Speicher). Modelliert
+  ist der Regelfall **einer** hebeberechtigten Gemeinde.
+- Verfahren §§ 14a/19–21 (Vorauszahlung, Festsetzung, Zerlegungs-
+  bescheid), § 35b (Änderung), abgekürzter Erhebungszeitraum
+  (§ 14 Satz 3), Steuerbefreiungen § 3, optierende Gesellschaft
+  § 1a KStG (§ 2 Abs. 8).
+- Erweiterte Kürzung § 9 Nr. 1 Satz 2 dem Grunde nach (Antrag,
+  Grundstücksunternehmens-Voraussetzungen) — die *Höhe* des auf den
+  eigenen Grundbesitz entfallenden Gewerbeertrags geht als Eingabe ein.
+--
+
+// ===========================================================================
+// § 8 Nr. 1 GewStG — Anteile und Freibetrag der Finanzierungs-Hinzurechnung
+// ===========================================================================
+
+--
+Anteil der Hinzurechnung nach § 8 Nr. 1 GewStG: „Ein Viertel der
+Summe" der Finanzierungsanteile a–f wird hinzugerechnet, soweit die
+Summe den Freibetrag übersteigt.
+--
+@Quelle("§ 8 Nummer 1 GewStG")
+konst ANTEIL_8_1: Prozent = 25%
+
+--
+Freibetrag der Finanzierungs-Hinzurechnung: erst der **200.000 €
+übersteigende** Teil der gewichteten Summe a–f wird zu einem Viertel
+hinzugerechnet (§ 8 Nr. 1 letzter Halbsatz GewStG).
+--
+@Quelle("§ 8 Nummer 1 GewStG")
+konst HINZURECHNUNG_FREIBETRAG_8_1: EuroCent = 200.000,00
+
+--
+Anteil der Miet-/Pachtzinsen (einschl. Leasingraten) für **bewegliche**
+Wirtschaftsgüter des Anlagevermögens: ein Fünftel
+(§ 8 Nr. 1 Buchst. d GewStG).
+--
+@Quelle("§ 8 Nummer 1 Buchstabe d GewStG")
+konst ANTEIL_BEWEGLICH_8_1D: Prozent = 20%
+
+--
+Anteil der Miet-/Pachtzinsen für **unbewegliche** Wirtschaftsgüter des
+Anlagevermögens: die Hälfte (§ 8 Nr. 1 Buchst. e GewStG).
+--
+@Quelle("§ 8 Nummer 1 Buchstabe e GewStG")
+konst ANTEIL_UNBEWEGLICH_8_1E: Prozent = 50%
+
+--
+Anteil der Aufwendungen für die zeitlich befristete Überlassung von
+Rechten (Konzessionen, Lizenzen): ein Viertel
+(§ 8 Nr. 1 Buchst. f GewStG).
+--
+@Quelle("§ 8 Nummer 1 Buchstabe f GewStG")
+konst ANTEIL_RECHTE_8_1F: Prozent = 25%
+
+// ===========================================================================
+// § 9 Nr. 5 GewStG — Spendenhöchstbeträge
+// ===========================================================================
+
+--
+Spenden-Höchstsatz I (§ 9 Nr. 5 Satz 1 GewStG): 20 % des um die
+Hinzurechnungen nach § 8 Nr. 9 erhöhten Gewinns aus Gewerbebetrieb.
+--
+@Quelle("§ 9 Nummer 5 GewStG")
+konst SPENDEN_SATZ_GEWINN_9_5: Prozent = 20%
+
+--
+Spenden-Höchstsatz II (§ 9 Nr. 5 Satz 1 GewStG): 4 Promille der Summe
+der gesamten Umsätze und der im Wirtschaftsjahr aufgewendeten Löhne
+und Gehälter. 4 ‰ = 0,4 %.
+--
+@Quelle("§ 9 Nummer 5 GewStG")
+konst SPENDEN_PROMILLE_9_5: Prozent = 0,4%
+
+// ===========================================================================
+// § 10a GewStG — Gewerbeverlust (Mindestbesteuerung)
+// ===========================================================================
+
+--
+Sockelbetrag des Verlustabzugs: der maßgebende Gewerbeertrag wird bis
+zu **1 Mio. €** ungekürzt um Fehlbeträge gemindert
+(§ 10a Satz 1 GewStG).
+--
+@Quelle("§ 10a Satz 1 GewStG")
+konst VERLUST_SOCKEL_10A: EuroCent = 1.000.000,00
+
+--
+Mindestbesteuerungsquote: der 1 Mio. € übersteigende maßgebende
+Gewerbeertrag ist nur bis zu **60 %** um Fehlbeträge zu kürzen
+(§ 10a Satz 2 GewStG).
+--
+@Quelle("§ 10a Satz 2 GewStG")
+konst VERLUST_QUOTE_10A: Prozent = 60%
+
+// ===========================================================================
+// § 11 GewStG — Abrundung, Freibeträge, Steuermesszahl
+// ===========================================================================
+
+--
+Abrundungsstufe: der Gewerbeertrag ist auf volle **100 €** nach unten
+abzurunden (§ 11 Abs. 1 Satz 3 GewStG).
+--
+@Quelle("§ 11 Absatz 1 Satz 3 GewStG")
+konst ABRUNDUNG_11: Ganzzahl = 100
+
+--
+Freibetrag bei **natürlichen Personen und Personengesellschaften**:
+24.500 €, höchstens in Höhe des abgerundeten Gewerbeertrags
+(§ 11 Abs. 1 Satz 3 Nr. 1 GewStG).
+--
+@Quelle("§ 11 Absatz 1 Satz 3 Nummer 1 GewStG")
+konst FREIBETRAG_NAT_PERSON_11: EuroCent = 24.500,00
+
+--
+Freibetrag bei sonstigen juristischen Personen des privaten Rechts und
+Vereinen (§ 2 Abs. 3), Unternehmen i.S.d. § 3 Nr. 5/6/… sowie
+juristischen Personen des öffentlichen Rechts: 5.000 €, höchstens in
+Höhe des abgerundeten Gewerbeertrags (§ 11 Abs. 1 Satz 3 Nr. 2 GewStG).
+--
+@Quelle("§ 11 Absatz 1 Satz 3 Nummer 2 GewStG")
+konst FREIBETRAG_VEREIN_11: EuroCent = 5.000,00
+
+--
+Steuermesszahl für den Gewerbeertrag: **3,5 %** (§ 11 Abs. 2 GewStG).
+--
+@Quelle("§ 11 Absatz 2 GewStG")
+konst STEUERMESSZAHL_11: Prozent = 3,5%
+
+--
+Ermäßigte Steuermesszahl für Hausgewerbetreibende und Gleichgestellte:
+die Messzahl ermäßigt sich auf **56 %** von 3,5 %, also **1,96 %**
+(§ 11 Abs. 3 GewStG).
+--
+@Quelle("§ 11 Absatz 3 GewStG")
+konst STEUERMESSZAHL_HAUSGEWERBE_11_3: Prozent = 1,96%
+
+// ===========================================================================
+// § 16 GewStG — Hebesatz
+// ===========================================================================
+
+--
+Mindest-Hebesatz: beträgt 200 %, wenn die Gemeinde keinen höheren
+Hebesatz bestimmt hat (§ 16 Abs. 4 Satz 2 GewStG).
+--
+@Quelle("§ 16 Absatz 4 Satz 2 GewStG")
+konst MINDEST_HEBESATZ_16: Prozent = 200%
+
+--
+Frühester von diesem Modul abgebildeter Erhebungszeitraum. Die hier
+implementierte Fassung gilt insbesondere für § 9 Nr. 1 Satz 1
+(Grundsteuer-Fassung) erstmals für den Erhebungszeitraum 2025
+(§ 36 Abs. 4b Satz 1 GewStG).
+--
+@Quelle("§ 36 Absatz 4b GewStG")
+konst FRUEHESTER_EZ: Ganzzahl = 2025
+
+// ===========================================================================
+// Datenstrukturen
+// ===========================================================================
+
+--
+Rechtsform des Steuerschuldners (§ 5 GewStG) — bestimmt den Freibetrag
+nach § 11 Abs. 1 Satz 3 GewStG.
+
+@param NatuerlichePersonPersonengesellschaft Einzelunternehmen oder
+                                             Personengesellschaft (Mitunternehmerschaft)
+                                             — Freibetrag 24.500 € (§ 11 Abs. 1 S. 3 Nr. 1 GewStG).
+@param Kapitalgesellschaft                   Kapitalgesellschaft / Genossenschaft
+                                             (§ 2 Abs. 2 GewStG) — **kein** Freibetrag.
+@param VereinJuristischePersonOerR           Sonstige juristische Personen des
+                                             privaten Rechts, Vereine (§ 2 Abs. 3) und
+                                             juristische Personen des öffentlichen
+                                             Rechts — Freibetrag 5.000 € (§ 11 Abs. 1
+                                             S. 3 Nr. 2 GewStG).
+--
+@Quelle("§ 11 Absatz 1 Satz 3 GewStG")
+aufzählung Rechtsform {
+    NatuerlichePersonPersonengesellschaft,
+    Kapitalgesellschaft,
+    VereinJuristischePersonOerR,
+}
+
+--
+Ermäßigung der Steuermesszahl nach § 11 Abs. 3 GewStG.
+
+@param Keine                 Regelmesszahl 3,5 % (§ 11 Abs. 2 GewStG).
+@param Hausgewerbetreibender Hausgewerbetreibende und nach dem
+                             Heimarbeitsgesetz Gleichgestellte —
+                             ermäßigte Messzahl 1,96 % (§ 11 Abs. 3
+                             GewStG).
+--
+@Quelle("§ 11 Absatz 3 GewStG")
+aufzählung Messzahlermaessigung {
+    Keine,
+    Hausgewerbetreibender,
+}
+
+--
+Hinzurechnungsbeträge nach § 8 GewStG. Die Beträge a–f der Nr. 1 sind
+**vor** der gesetzlichen Gewichtung (20 %/50 %/25 %) und **vor** dem
+Freibetrag/Viertel anzugeben — diese wendet `hinzurechnung8Nr1` an.
+Die Nummern 4, 5, 8, 9, 10, 12 werden in voller Höhe hinzugerechnet
+und sind als die bereits nach EStG/KStG ermittelten Beträge
+einzutragen (Nr. 2/3/6/7/11 GewStG sind weggefallen).
+
+@param entgelteSchulden                   § 8 Nr. 1 Buchst. a: Entgelte für Schulden
+                                          (Zinsen, Skonti, Diskontbeträge), 100 %.
+@param rentenDauerndeLasten               § 8 Nr. 1 Buchst. b: Renten und dauernde
+                                          Lasten, 100 %.
+@param gewinnanteileStillerGesellschafter § 8 Nr. 1 Buchst. c:
+                                          Gewinnanteile des stillen Gesellschafters,
+                                          100 %.
+@param mietePachtBeweglich                § 8 Nr. 1 Buchst. d: Miet-/Pachtzinsen
+                                          (inkl. Leasing) für bewegliche WG des
+                                          Anlagevermögens — geht zu einem Fünftel ein.
+@param mietePachtUnbeweglich              § 8 Nr. 1 Buchst. e: Miet-/Pachtzinsen für
+                                          unbewegliche WG des Anlagevermögens — geht
+                                          zur Hälfte ein.
+@param aufwendungenRechteUeberlassung     § 8 Nr. 1 Buchst. f: Aufwendungen
+                                          für zeitlich befristete Rechteüberlassung —
+                                          geht zu einem Viertel ein.
+@param gewinnanteilePhgKgaa               § 8 Nr. 4: Gewinnanteile an persönlich
+                                          haftende Gesellschafter einer KGaA, 100 %.
+@param steuerfreieDividenden              § 8 Nr. 5: nach § 3 Nr. 40 EStG / § 8b
+                                          KStG außer Ansatz gebliebene Gewinnanteile
+                                          (Streubesitz), 100 %.
+@param verlustanteileMitunternehmerschaft § 8 Nr. 8: Anteile am Verlust
+                                          einer Mitunternehmerschaft, 100 %.
+@param ausgaben9Abs1Nr2KStG               § 8 Nr. 9: Ausgaben i.S.d. § 9 Abs. 1
+                                          Nr. 2 KStG (abziehbare Zuwendungen), 100 %.
+@param gewinnminderungenTeilwert          § 8 Nr. 10: Gewinnminderungen durch
+                                          Teilwertansatz/Veräußerung von
+                                          Körperschaftsanteilen, 100 %.
+@param auslaendischeSteuern               § 8 Nr. 12: nach § 34c EStG abgezogene
+                                          ausländische Steuern, 100 %.
+--
+@Quelle("§ 8 GewStG")
+datensatz Hinzurechnungen8(
+    entgelteSchulden:                   EuroCent = 0,00,   // § 8 Nr. 1 a (100 %)
+    rentenDauerndeLasten:               EuroCent = 0,00,   // § 8 Nr. 1 b (100 %)
+    gewinnanteileStillerGesellschafter: EuroCent = 0,00,  // § 8 Nr. 1 c (100 %)
+    mietePachtBeweglich:                EuroCent = 0,00,   // § 8 Nr. 1 d (1/5)
+    mietePachtUnbeweglich:              EuroCent = 0,00,   // § 8 Nr. 1 e (1/2)
+    aufwendungenRechteUeberlassung:     EuroCent = 0,00,   // § 8 Nr. 1 f (1/4)
+    gewinnanteilePhgKgaa:               EuroCent = 0,00,   // § 8 Nr. 4 (100 %)
+    steuerfreieDividenden:              EuroCent = 0,00,   // § 8 Nr. 5 (100 %)
+    verlustanteileMitunternehmerschaft: EuroCent = 0,00,  // § 8 Nr. 8 (100 %)
+    ausgaben9Abs1Nr2KStG:               EuroCent = 0,00,   // § 8 Nr. 9 (100 %)
+    gewinnminderungenTeilwert:          EuroCent = 0,00,   // § 8 Nr. 10 (100 %)
+    auslaendischeSteuern:               EuroCent = 0,00,   // § 8 Nr. 12 (100 %)
+)
+
+--
+Kürzungsbeträge nach § 9 GewStG. Die Spenden-Begrenzung (Nr. 5) und
+die Wahl zwischen einfacher und erweiterter Grundbesitzkürzung (Nr. 1)
+werden von den Funktionen angewandt; alle übrigen Nummern werden in
+der angegebenen Höhe abgezogen.
+
+@param grundsteuerBetriebsgrundbesitz      § 9 Nr. 1 Satz 1: im
+                                           Erhebungszeitraum als Betriebsausgabe
+                                           erfasste Grundsteuer für zum
+                                           Betriebsvermögen gehörenden Grundbesitz.
+@param erweiterteKuerzungBeantragt         § 9 Nr. 1 Satz 2: Antrag auf
+                                           erweiterte Kürzung bei Grundstücks-
+                                           unternehmen (tritt an die Stelle von
+                                           Satz 1).
+@param erweiterteKuerzungGrundbesitzertrag § 9 Nr. 1 Satz 2: Teil des
+                                           Gewerbeertrags, der auf die Verwaltung und
+                                           Nutzung des eigenen Grundbesitzes entfällt
+                                           (extern ermittelt; nur bei Antrag).
+@param gewinnanteileMitunternehmerschaft   § 9 Nr. 2: Anteile am Gewinn
+                                           einer Mitunternehmerschaft.
+@param schachteldividendenInland           § 9 Nr. 2a: Gewinne aus Anteilen an
+                                           inländischer Kapitalgesellschaft bei
+                                           Beteiligung ≥ 15 % zu Beginn des EZ.
+@param kgaaGewinnanteile                   § 9 Nr. 2b: nach § 8 Nr. 4 dem
+                                           Gewerbeertrag einer KGaA hinzugerechnete
+                                           Gewinnanteile.
+@param auslandsbetriebsstaette             § 9 Nr. 3: Teil des Gewerbeertrags, der
+                                           auf eine nicht im Inland belegene
+                                           Betriebsstätte entfällt.
+@param geleisteteSpenden                   § 9 Nr. 5: aus Betriebsmitteln geleistete
+                                           Zuwendungen für steuerbegünstigte Zwecke
+                                           (vor Höchstbetragsbegrenzung).
+@param umsaetze                            § 9 Nr. 5: Summe der gesamten Umsätze
+                                           (Bemessung des 4-‰-Höchstsatzes).
+@param loehneUndGehaelter                  § 9 Nr. 5: im Wirtschaftsjahr aufgewendete
+                                           Löhne und Gehälter (Bemessung des
+                                           4-‰-Höchstsatzes).
+@param schachteldividendenAuslandNr7       § 9 Nr. 7: Gewinne aus Anteilen
+                                           an einer Kapitalgesellschaft außerhalb des
+                                           Geltungsbereichs, Beteiligung ≥ 15 %.
+@param schachteldividendenDbaNr8           § 9 Nr. 8: nach DBA befreite Gewinne
+                                           aus Anteilen an einer ausländischen
+                                           Gesellschaft (Mindestbeteiligung).
+--
+@Quelle("§ 9 GewStG")
+datensatz Kuerzungen9(
+    grundsteuerBetriebsgrundbesitz:      EuroCent = 0,00,    // § 9 Nr. 1 S. 1
+    erweiterteKuerzungBeantragt:         Wahrheitswert = falsch,  // § 9 Nr. 1 S. 2 (Antrag)
+    erweiterteKuerzungGrundbesitzertrag: EuroCent = 0,00,    // § 9 Nr. 1 S. 2
+    gewinnanteileMitunternehmerschaft:   EuroCent = 0,00,    // § 9 Nr. 2
+    schachteldividendenInland:           EuroCent = 0,00,    // § 9 Nr. 2a
+    kgaaGewinnanteile:                   EuroCent = 0,00,    // § 9 Nr. 2b
+    auslandsbetriebsstaette:             EuroCent = 0,00,    // § 9 Nr. 3
+    geleisteteSpenden:                   EuroCent = 0,00,    // § 9 Nr. 5
+    umsaetze:                            EuroCent = 0,00,    // § 9 Nr. 5 (4 ‰)
+    loehneUndGehaelter:                  EuroCent = 0,00,    // § 9 Nr. 5 (4 ‰)
+    schachteldividendenAuslandNr7:       EuroCent = 0,00,    // § 9 Nr. 7
+    schachteldividendenDbaNr8:           EuroCent = 0,00,    // § 9 Nr. 8
+)
+
+--
+Eingaben eines Gewerbesteuerfalls für **eine** hebeberechtigte
+Gemeinde (Regelfall ohne Zerlegung).
+
+@param gewinnAusGewerbebetrieb § 7 Satz 1 GewStG: der nach EStG/KStG
+                               ermittelte Gewinn aus Gewerbebetrieb
+                               (extern ermittelt; Bemessungsbasis vor
+                               §§ 8/9).
+@param rechtsform              Rechtsform des Steuerschuldners — bestimmt
+                               den Freibetrag nach § 11 GewStG.
+@param erhebungszeitraum       Kalenderjahr des Erhebungszeitraums
+                               (§ 14 Satz 2 GewStG).
+@param hinzurechnungen         § 8 GewStG (siehe `Hinzurechnungen8`).
+@param kuerzungen              § 9 GewStG (siehe `Kuerzungen9`).
+@param gewerbeverlustVortrag   § 10a GewStG: zum Schluss des
+                               vorangegangenen EZ gesondert festgestellte
+                               vortragsfähige Fehlbeträge (§ 10a Satz 6).
+@param messzahlermaessigung    § 11 Abs. 3 GewStG.
+@param hebesatz                Von der Gemeinde bestimmter Hebesatz
+                               (§ 16 GewStG); mindestens 200 % werden
+                               angewandt (§ 16 Abs. 4 Satz 2).
+--
+@Quelle("§ 7 GewStG")
+datensatz Gewerbebetrieb(
+    gewinnAusGewerbebetrieb: EuroCent,                                    // § 7 S. 1 (nach EStG/KStG)
+    rechtsform:              Rechtsform,                                  // § 5/§ 11 GewStG
+    erhebungszeitraum:       Ganzzahl,                                    // § 14 S. 2 GewStG
+    hinzurechnungen:         Hinzurechnungen8,                            // § 8 GewStG
+    kuerzungen:              Kuerzungen9,                                 // § 9 GewStG
+    gewerbeverlustVortrag:   EuroCent = 0,00,                             // § 10a GewStG
+    messzahlermaessigung:    Messzahlermaessigung = Keine,                // § 11 Abs. 3 GewStG
+    hebesatz:                Prozent = 200%,                             // § 16 GewStG
+)
+
+--
+Vollständige, prüfbare Berechnungsdokumentation eines
+Gewerbesteuerfalls — jede Zwischengröße der gesetzlichen
+Reihenfolge ist einzeln ausgewiesen, damit die Festsetzung Schritt
+für Schritt gegen das Gesetz auditierbar ist.
+
+@param gewinn                    § 7 Satz 1: Gewinn aus Gewerbebetrieb
+                                 (Eingabe, unverändert übernommen).
+@param summeHinzurechnungen      § 8 GewStG: Summe aller Hinzurechnungen.
+@param summeKuerzungen           § 9 GewStG: Summe aller Kürzungen.
+@param gewerbeertrag             § 7/§ 10 GewStG: Gewinn + § 8 − § 9.
+@param verlustabzug              § 10a GewStG: tatsächlich abgezogener
+                                 Fehlbetrag (Mindestbesteuerung beachtet).
+@param gewerbeertragNachVerlust  § 10a GewStG: maßgebender Gewerbeertrag
+                                 nach Verlustabzug (nicht negativ).
+@param abgerundeterGewerbeertrag § 11 Abs. 1 Satz 3: auf volle 100 €
+                                 abgerundet.
+@param freibetrag                § 11 Abs. 1 Satz 3: angewandter Freibetrag.
+@param bemessungsgrundlage       Abgerundeter Gewerbeertrag − Freibetrag.
+@param steuermesszahl            § 11 Abs. 2/3 GewStG: angewandte Messzahl.
+@param steuermessbetrag          § 11 GewStG: Bemessungsgrundlage × Messzahl.
+@param angewandterHebesatz       § 16 GewStG: angewandter Hebesatz
+                                 (mindestens 200 %).
+@param gewerbesteuer             § 16 GewStG: Steuermessbetrag × Hebesatz.
+--
+@Quelle("§ 7 GewStG")
+datensatz GewerbesteuerErgebnis(
+    gewinn:                    EuroCent,   // § 7 S. 1 (Eingabe)
+    summeHinzurechnungen:      EuroCent,   // § 8 GewStG
+    summeKuerzungen:           EuroCent,   // § 9 GewStG
+    gewerbeertrag:             EuroCent,   // § 7/§ 10 GewStG
+    verlustabzug:              EuroCent,   // § 10a GewStG
+    gewerbeertragNachVerlust:  EuroCent,  // § 10a GewStG (≥ 0)
+    abgerundeterGewerbeertrag: EuroCent, // § 11 Abs. 1 S. 3
+    freibetrag:                EuroCent,   // § 11 Abs. 1 S. 3
+    bemessungsgrundlage:       EuroCent,   // abger. GE − Freibetrag
+    steuermesszahl:            Prozent,    // § 11 Abs. 2/3
+    steuermessbetrag:          EuroCent,   // § 11 GewStG
+    angewandterHebesatz:       Prozent,    // § 16 GewStG
+    gewerbesteuer:             EuroCent,   // § 16 GewStG
+)
+
+// ===========================================================================
+// Allgemeine Begrenzungs-Helfer
+// ===========================================================================
+
+--
+Nicht-negativ-Kappung: liefert `0,00` für negative Beträge, sonst den
+Betrag selbst (entspricht dem Maximum aus `0` und `betrag`).
+
+@param betrag Zu kappender Betrag.
+@rückgabe     `betrag`, mindestens jedoch `0,00`.
+--
+fn _NichtNegativ(betrag: EuroCent): EuroCent = wähle {
+    falls betrag <= 0,00 -> 0,00
+    sonst                -> betrag
+}
+
+--
+Höchstbetrags-Begrenzung: liefert den kleineren der beiden Beträge
+(Minimum) — für „höchstens jedoch …"-Regelungen.
+
+@param betrag     Errechneter Betrag.
+@param hoechstens Obergrenze.
+@rückgabe         `betrag`, höchstens `hoechstens`.
+--
+fn _Hoechstens(betrag: EuroCent, hoechstens: EuroCent): EuroCent = wähle {
+    falls betrag > hoechstens -> hoechstens
+    sonst                     -> betrag
+}
+
+--
+Liefert den größeren zweier Beträge (Maximum) — für die „… oder …"-
+Alternative des § 9 Nr. 5 Höchstbetrags.
+
+@param a  Erster Betrag.
+@param b  Zweiter Betrag.
+@rückgabe Der größere der beiden Beträge.
+--
+fn _Groesseres(a: EuroCent, b: EuroCent): EuroCent = wähle {
+    falls a >= b -> a
+    sonst        -> b
+}
+
+// ===========================================================================
+// § 8 GewStG — Hinzurechnungen
+// ===========================================================================
+
+--
+Hinzurechnung nach **§ 8 Nr. 1 GewStG**: Ein Viertel der Summe aus
+den Finanzierungsanteilen a–f, soweit die Summe **200.000 €
+übersteigt**. Buchst. a–c gehen zu 100 %, Buchst. d (bewegliche WG)
+zu einem Fünftel, Buchst. e (unbewegliche WG) zur Hälfte, Buchst. f
+(Rechteüberlassung) zu einem Viertel in die Summe ein. Liegt die
+gewichtete Summe ≤ 200.000 €, ist die Hinzurechnung nach Nr. 1 = 0.
+
+@param h  Hinzurechnungsbeträge (siehe `Hinzurechnungen8`).
+@rückgabe Hinzurechnungsbetrag nach § 8 Nr. 1 GewStG.
+--
+@Quelle("§ 8 Nummer 1 GewStG")
+fn Hinzurechnung8Nr1(h: Hinzurechnungen8): EuroCent = {
+    var gewichteteSumme: EuroCent = h.entgelteSchulden
+        + h.rentenDauerndeLasten
+        + h.gewinnanteileStillerGesellschafter
+        + (ANTEIL_BEWEGLICH_8_1D * h.mietePachtBeweglich) als EuroCent
+        + (ANTEIL_UNBEWEGLICH_8_1E * h.mietePachtUnbeweglich) als EuroCent
+        + (ANTEIL_RECHTE_8_1F * h.aufwendungenRechteUeberlassung) als EuroCent
+    var uebersteigend: EuroCent = _NichtNegativ(gewichteteSumme - HINZURECHNUNG_FREIBETRAG_8_1)
+    var nr1: EuroCent = (ANTEIL_8_1 * uebersteigend) als EuroCent
+    nr1
+}
+
+--
+Summe der Hinzurechnungen nach **§ 8 GewStG**: der Betrag nach Nr. 1
+zuzüglich der in voller Höhe hinzuzurechnenden Nummern 4, 5, 8, 9, 10
+und 12 (Nr. 2/3/6/7/11 GewStG sind weggefallen).
+
+@param h  Hinzurechnungsbeträge (siehe `Hinzurechnungen8`).
+@rückgabe Summe der Hinzurechnungen nach § 8 GewStG.
+--
+@Quelle("§ 8 GewStG")
+fn SummeHinzurechnungen8(h: Hinzurechnungen8): EuroCent = Hinzurechnung8Nr1(h)
+    + h.gewinnanteilePhgKgaa
+    + h.steuerfreieDividenden
+    + h.verlustanteileMitunternehmerschaft
+    + h.ausgaben9Abs1Nr2KStG
+    + h.gewinnminderungenTeilwert
+    + h.auslaendischeSteuern
+
+// ===========================================================================
+// § 9 GewStG — Kürzungen
+// ===========================================================================
+
+--
+Höchstbetrag der Spenden-Kürzung nach **§ 9 Nr. 5 Satz 1 GewStG**:
+der höhere Betrag aus
+- 20 % des um die Hinzurechnungen nach § 8 Nr. 9 erhöhten Gewinns aus
+  Gewerbebetrieb und
+- 4 ‰ (0,4 %) der Summe aus den gesamten Umsätzen und den im
+  Wirtschaftsjahr aufgewendeten Löhnen und Gehältern.
+
+Ein negativer „20 %"-Wert (bei Verlust) wird durch die Maximum-Bildung
+mit dem nicht-negativen 4-‰-Wert bzw. die Nicht-negativ-Kappung
+abgefangen.
+
+@param gewinn             § 7 Satz 1: Gewinn aus Gewerbebetrieb.
+@param hinzurechnung8Nr9  § 8 Nr. 9: erhöht die 20-%-Bemessung.
+@param umsaetze           Summe der gesamten Umsätze.
+@param loehneUndGehaelter Aufgewendete Löhne und Gehälter.
+@rückgabe                 Höchstbetrag der nach § 9 Nr. 5 abziehbaren Spenden.
+--
+@Quelle("§ 9 Nummer 5 GewStG")
+fn SpendenHoechstbetrag9Nr5(
+    gewinn: EuroCent,
+    hinzurechnung8Nr9: EuroCent,
+    umsaetze: EuroCent,
+    loehneUndGehaelter: EuroCent,
+): EuroCent = {
+    var nachGewinn: EuroCent = (SPENDEN_SATZ_GEWINN_9_5 * (gewinn + hinzurechnung8Nr9)) als EuroCent
+    var nachUmsatzLohn: EuroCent = (SPENDEN_PROMILLE_9_5 * (umsaetze + loehneUndGehaelter)) als EuroCent
+    _NichtNegativ(_Groesseres(nachGewinn, nachUmsatzLohn))
+}
+
+--
+Tatsächlich abziehbare Spenden-Kürzung nach § 9 Nr. 5 GewStG: die
+geleisteten Zuwendungen, höchstens jedoch der Höchstbetrag nach
+`spendenHoechstbetrag9Nr5`.
+
+@param k                 Kürzungsbeträge (siehe `Kuerzungen9`).
+@param gewinn            § 7 Satz 1: Gewinn aus Gewerbebetrieb.
+@param hinzurechnung8Nr9 § 8 Nr. 9 (erhöht die 20-%-Bemessung).
+@rückgabe                Abziehbare Spenden nach § 9 Nr. 5 GewStG.
+--
+@Quelle("§ 9 Nummer 5 GewStG")
+fn Kuerzung9Nr5(k: Kuerzungen9, gewinn: EuroCent, hinzurechnung8Nr9: EuroCent): EuroCent =
+    _Hoechstens(
+    k.geleisteteSpenden,
+    SpendenHoechstbetrag9Nr5(gewinn, hinzurechnung8Nr9, k.umsaetze, k.loehneUndGehaelter),
+)
+
+--
+Kürzung nach **§ 9 Nr. 1 GewStG**: regulär die als Betriebsausgabe
+erfasste Grundsteuer für Betriebsgrundbesitz (Satz 1). Auf Antrag
+tritt bei Grundstücksunternehmen **an deren Stelle** die erweiterte
+Kürzung um den auf die Verwaltung/Nutzung des eigenen Grundbesitzes
+entfallenden Teil des Gewerbeertrags (Satz 2) — die beiden Kürzungen
+sind Alternativen, nicht kumulativ.
+
+@param k  Kürzungsbeträge (siehe `Kuerzungen9`).
+@rückgabe Kürzungsbetrag nach § 9 Nr. 1 GewStG.
+--
+@Quelle("§ 9 Nummer 1 GewStG")
+fn Kuerzung9Nr1(k: Kuerzungen9): EuroCent = wähle {
+    falls k.erweiterteKuerzungBeantragt -> k.erweiterteKuerzungGrundbesitzertrag
+    sonst                               -> k.grundsteuerBetriebsgrundbesitz
+}
+
+--
+Summe der Kürzungen nach **§ 9 GewStG**: Nr. 1 (einfach oder
+erweitert), die Beteiligungs-/Betriebsstätten-Kürzungen Nr. 2, 2a,
+2b, 3, 7 und 8 sowie die begrenzte Spenden-Kürzung Nr. 5.
+
+@param k                 Kürzungsbeträge (siehe `Kuerzungen9`).
+@param gewinn            § 7 Satz 1: Gewinn aus Gewerbebetrieb (für § 9 Nr. 5).
+@param hinzurechnung8Nr9 § 8 Nr. 9 (für die § 9 Nr. 5-Bemessung).
+@rückgabe                Summe der Kürzungen nach § 9 GewStG.
+--
+@Quelle("§ 9 GewStG")
+fn SummeKuerzungen9(k: Kuerzungen9, gewinn: EuroCent, hinzurechnung8Nr9: EuroCent): EuroCent =
+    Kuerzung9Nr1(k)
+    + k.gewinnanteileMitunternehmerschaft
+    + k.schachteldividendenInland
+    + k.kgaaGewinnanteile
+    + k.auslandsbetriebsstaette
+    + Kuerzung9Nr5(k, gewinn, hinzurechnung8Nr9)
+    + k.schachteldividendenAuslandNr7
+    + k.schachteldividendenDbaNr8
+
+// ===========================================================================
+// § 7 / § 10 GewStG — (maßgebender) Gewerbeertrag
+// ===========================================================================
+
+--
+Gewerbeertrag nach **§ 7 Satz 1 i.V.m. § 10 GewStG**: der Gewinn aus
+Gewerbebetrieb, vermehrt um die Hinzurechnungen nach § 8 und
+vermindert um die Kürzungen nach § 9. Kann negativ sein (Fehlbetrag);
+die steuerliche Auswirkung regelt der Verlustabzug bzw. die
+Steuerfestsetzung, nicht diese Größe.
+
+@param gewinn § 7 Satz 1: Gewinn aus Gewerbebetrieb.
+@param h      Hinzurechnungen (§ 8 GewStG).
+@param k      Kürzungen (§ 9 GewStG).
+@rückgabe     Gewerbeertrag (§ 7/§ 10 GewStG), ggf. negativ.
+--
+@Quelle("§ 7 GewStG")
+fn Gewerbeertrag(gewinn: EuroCent, h: Hinzurechnungen8, k: Kuerzungen9): EuroCent =
+    gewinn
+    + SummeHinzurechnungen8(h)
+    - SummeKuerzungen9(k, gewinn, h.ausgaben9Abs1Nr2KStG)
+
+// ===========================================================================
+// § 10a GewStG — Gewerbeverlust (Mindestbesteuerung)
+// ===========================================================================
+
+--
+Höchstens abziehbarer Fehlbetrag nach **§ 10a Sätze 1, 2 GewStG**
+(Mindestbesteuerung): bei einem maßgebenden Gewerbeertrag bis
+1 Mio. € ist der gesamte Gewerbeertrag verrechenbar; der 1 Mio. €
+übersteigende Teil nur zu 60 %. Bei einem Gewerbeertrag ≤ 0 ist kein
+Verlustabzug möglich (es gibt keinen positiven Ertrag zu kürzen).
+
+@param gewerbeertrag Maßgebender Gewerbeertrag (§ 7/§ 10 GewStG).
+@rückgabe            Obergrenze des im Erhebungszeitraum verrechenbaren
+                     Fehlbetrags.
+--
+@Quelle("§ 10a GewStG")
+fn VerlustVerrechnungsobergrenze10a(gewerbeertrag: EuroCent): EuroCent = wähle {
+    falls gewerbeertrag <= 0,00               -> 0,00
+    falls gewerbeertrag <= VERLUST_SOCKEL_10A -> gewerbeertrag
+    sonst                                     -> VERLUST_SOCKEL_10A
+        + (VERLUST_QUOTE_10A * (gewerbeertrag - VERLUST_SOCKEL_10A)) als EuroCent
+}
+
+--
+Tatsächlich abgezogener Fehlbetrag nach **§ 10a GewStG**: der
+vortragsfähige Fehlbetrag, höchstens jedoch die Verrechnungsobergrenze
+nach Sätzen 1 und 2.
+
+@param gewerbeertrag Maßgebender Gewerbeertrag (§ 7/§ 10 GewStG).
+@param fehlbetrag    Gesondert festgestellter vortragsfähiger
+                     Fehlbetrag der Vorjahre (§ 10a Satz 6).
+@rückgabe            Im Erhebungszeitraum abgezogener Fehlbetrag.
+--
+@Quelle("§ 10a GewStG")
+fn Verlustabzug10a(gewerbeertrag: EuroCent, fehlbetrag: EuroCent): EuroCent =
+    _Hoechstens(fehlbetrag, VerlustVerrechnungsobergrenze10a(gewerbeertrag))
+
+--
+Maßgebender Gewerbeertrag **nach** dem Verlustabzug des § 10a GewStG.
+Durch die Verrechnungsobergrenze ist das Ergebnis nie negativ.
+
+@param gewerbeertrag Maßgebender Gewerbeertrag (§ 7/§ 10 GewStG).
+@param fehlbetrag    Vortragsfähiger Fehlbetrag der Vorjahre.
+@rückgabe            Gewerbeertrag nach Verlustabzug (≥ 0).
+--
+@Quelle("§ 10a GewStG")
+fn GewerbeertragNachVerlust(gewerbeertrag: EuroCent, fehlbetrag: EuroCent): EuroCent =
+    gewerbeertrag
+    - Verlustabzug10a(gewerbeertrag, fehlbetrag)
+
+// ===========================================================================
+// § 11 GewStG — Steuermesszahl und Steuermessbetrag
+// ===========================================================================
+
+--
+Abrundung auf volle **100 €** nach unten (§ 11 Abs. 1 Satz 3 GewStG).
+Nur für nicht-negative Beträge vorgesehen (bei ≤ 0 entsteht kein
+Steuermessbetrag — siehe `berechneGewerbesteuer`).
+
+@param betrag Maßgebender Gewerbeertrag nach Verlustabzug.
+@rückgabe     Auf volle 100 € abgerundeter Betrag.
+--
+@Quelle("§ 11 Absatz 1 Satz 3 GewStG")
+fn AbrundenAuf100(betrag: EuroCent): EuroCent =
+    (abrunden(betrag / ABRUNDUNG_11) * ABRUNDUNG_11) als EuroCent
+
+--
+Roher Freibetrag nach **§ 11 Abs. 1 Satz 3 GewStG** je Rechtsform —
+**vor** der Begrenzung „höchstens in Höhe des abgerundeten
+Gewerbeertrags": 24.500 € (natürliche Personen/Personengesellschaften,
+Nr. 1), 5.000 € (Vereine/jur. Personen öR, Nr. 2), 0 €
+(Kapitalgesellschaften — kein Freibetrag).
+
+@param rechtsform Rechtsform des Steuerschuldners.
+@rückgabe         Freibetrag der Rechtsform (vor Höhenbegrenzung).
+--
+@Quelle("§ 11 Absatz 1 Satz 3 GewStG")
+fn FreibetragRoh11(rechtsform: Rechtsform): EuroCent = wähle (rechtsform) {
+    falls NatuerlichePersonPersonengesellschaft -> FREIBETRAG_NAT_PERSON_11
+    falls VereinJuristischePersonOerR           -> FREIBETRAG_VEREIN_11
+    falls Kapitalgesellschaft                   -> 0,00
+}
+
+--
+Anzuwendender Freibetrag nach **§ 11 Abs. 1 Satz 3 GewStG**: der
+Freibetrag der Rechtsform, höchstens jedoch in Höhe des abgerundeten
+Gewerbeertrags (der Freibetrag darf keinen negativen Messbetrag
+erzeugen).
+
+@param rechtsform                Rechtsform des Steuerschuldners.
+@param abgerundeterGewerbeertrag Auf 100 € abgerundeter Gewerbeertrag.
+@rückgabe                        Anzuwendender Freibetrag.
+--
+@Quelle("§ 11 Absatz 1 Satz 3 GewStG")
+fn Freibetrag11(rechtsform: Rechtsform, abgerundeterGewerbeertrag: EuroCent): EuroCent =
+    _Hoechstens(FreibetragRoh11(rechtsform), _NichtNegativ(abgerundeterGewerbeertrag))
+
+--
+Anzuwendende Steuermesszahl nach **§ 11 Abs. 2/3 GewStG**: regulär
+3,5 %; bei Hausgewerbetreibenden und Gleichgestellten ermäßigt auf
+1,96 % (= 56 % von 3,5 %, § 11 Abs. 3 GewStG).
+
+@param ermaessigung Messzahl-Ermäßigung nach § 11 Abs. 3 GewStG.
+@rückgabe           Anzuwendende Steuermesszahl.
+--
+@Quelle("§ 11 Absatz 2 GewStG")
+fn Steuermesszahl11(ermaessigung: Messzahlermaessigung): Prozent = wähle (ermaessigung) {
+    falls Keine                 -> STEUERMESSZAHL_11
+    falls Hausgewerbetreibender -> STEUERMESSZAHL_HAUSGEWERBE_11_3
+}
+
+--
+Steuermessbetrag nach **§ 11 GewStG**: die um den Freibetrag
+verminderte, auf volle 100 € abgerundete Bemessungsgrundlage,
+multipliziert mit der Steuermesszahl.
+
+@param abgerundeterGewerbeertrag § 11 Abs. 1 Satz 3.
+@param freibetrag                § 11 Abs. 1 Satz 3 (anzuwendender Freibetrag).
+@param messzahl                  § 11 Abs. 2/3 (anzuwendende Steuermesszahl).
+@rückgabe                        Steuermessbetrag (§ 11 GewStG).
+--
+@Quelle("§ 11 GewStG")
+fn Steuermessbetrag11(
+    abgerundeterGewerbeertrag: EuroCent,
+    freibetrag: EuroCent,
+    messzahl: Prozent,
+): EuroCent = (messzahl * (abgerundeterGewerbeertrag - freibetrag)) als EuroCent
+
+// ===========================================================================
+// § 16 GewStG — Hebesatz
+// ===========================================================================
+
+--
+Anzuwendender Hebesatz nach **§ 16 Abs. 4 Satz 2 GewStG**: der von der
+Gemeinde bestimmte Hebesatz, mindestens jedoch 200 % (hat die Gemeinde
+keinen höheren bestimmt, beträgt er 200 %).
+
+@param hebesatz Von der Gemeinde bestimmter Hebesatz.
+@rückgabe       Anzuwendender Hebesatz (≥ 200 %).
+--
+@Quelle("§ 16 Absatz 4 Satz 2 GewStG")
+fn AngewandterHebesatz16(hebesatz: Prozent): Prozent = wähle {
+    falls hebesatz < MINDEST_HEBESATZ_16 -> MINDEST_HEBESATZ_16
+    sonst                                -> hebesatz
+}
+
+--
+Festzusetzende Gewerbesteuer nach **§ 16 Abs. 1 GewStG**: der
+Steuermessbetrag, multipliziert mit dem anzuwendenden Hebesatz.
+
+@param steuermessbetrag § 11 GewStG.
+@param hebesatz         Anzuwendender Hebesatz (§ 16 GewStG).
+@rückgabe               Festzusetzende Gewerbesteuer.
+--
+@Quelle("§ 16 Absatz 1 GewStG")
+fn Gewerbesteuer16(steuermessbetrag: EuroCent, hebesatz: Prozent): EuroCent =
+    (steuermessbetrag * hebesatz) als EuroCent
+
+// ===========================================================================
+// Gesamtberechnung
+// ===========================================================================
+
+--
+Vollständige Festsetzung der Gewerbesteuer eines Steuerfalls in der
+gesetzlichen Reihenfolge: § 7 Satz 1 (Gewinn) → § 8 (Hinzurechnungen)
+→ § 9 (Kürzungen) → § 7/§ 10 (Gewerbeertrag) → § 10a (Verlustabzug,
+Mindestbesteuerung) → § 11 Abs. 1 Satz 3 (Abrundung, Freibetrag) →
+§ 11 Abs. 2/3 (Steuermesszahl, Messbetrag) → § 16 (Hebesatz).
+Liefert alle Zwischengrößen für die Audit-Vorlage.
+
+Ist der maßgebende Gewerbeertrag nach Verlustabzug **0 oder negativ**,
+entsteht kein Steuermessbetrag und keine Gewerbesteuer (alle
+nachfolgenden Größen sind 0); ein Verlustvortrag regelt § 10a, der
+hier nicht fortgeschrieben wird.
+
+Erhebungszeiträume **vor 2025** werden bewusst nicht berechnet:
+§ 9 Nr. 1 Satz 1 (Grundsteuer-Fassung) gilt erst ab EZ 2025
+(§ 36 Abs. 4b Satz 1 GewStG) — ein begründeter, nicht abfangbarer
+Abbruch macht diese Konstellation im Audit sichtbar.
+
+@param betrieb Eingaben des Steuerfalls (siehe `Gewerbebetrieb`).
+@rückgabe      Vollständig dokumentiertes Berechnungsergebnis.
+--
+@Quelle("§ 7 GewStG")
+fn BerechneGewerbesteuer(betrieb: Gewerbebetrieb): GewerbesteuerErgebnis = {
+    var h8: EuroCent = SummeHinzurechnungen8(betrieb.hinzurechnungen)
+    var k9: EuroCent = SummeKuerzungen9(
+        betrieb.kuerzungen,
+        betrieb.gewinnAusGewerbebetrieb,
+        betrieb.hinzurechnungen.ausgaben9Abs1Nr2KStG,
+    )
+    // Erhebungszeitraum-Schranke (§ 36 Abs. 4b GewStG) als nicht
+    // abfangbarer Abbruch in die erste genutzte Größe gefädelt.
+    var ertrag: EuroCent = wähle {
+        falls betrieb.erhebungszeitraum < FRUEHESTER_EZ -> abbruch("""
+                                    § 36 Abs. 4b GewStG: dieses Modul bildet die Fassung ab Erhebungszeitraum 2025 ab; 
+                                    EZ ${betrieb.erhebungszeitraum} ist nicht abgedeckt
+                                    """)
+        sonst                                           -> Gewerbeertrag(
+            betrieb.gewinnAusGewerbebetrieb, betrieb.hinzurechnungen, betrieb.kuerzungen,
+        )
+    }
+    var abzug: EuroCent = Verlustabzug10a(ertrag, betrieb.gewerbeverlustVortrag)
+    var nachVerlust: EuroCent = ertrag - abzug
+    var abgerundet: EuroCent = wähle {
+        falls nachVerlust <= 0,00 -> 0,00
+        sonst                     -> AbrundenAuf100(nachVerlust)
+    }
+    var fb: EuroCent = Freibetrag11(betrieb.rechtsform, abgerundet)
+    var messzahl: Prozent = Steuermesszahl11(betrieb.messzahlermaessigung)
+    var bemessung: EuroCent = abgerundet - fb
+    var messbetrag: EuroCent = Steuermessbetrag11(abgerundet, fb, messzahl)
+    var heb: Prozent = AngewandterHebesatz16(betrieb.hebesatz)
+    var steuer: EuroCent = Gewerbesteuer16(messbetrag, heb)
+    GewerbesteuerErgebnis(
+        gewinn                    = betrieb.gewinnAusGewerbebetrieb,
+        summeHinzurechnungen      = h8,
+        summeKuerzungen           = k9,
+        gewerbeertrag             = ertrag,
+        verlustabzug              = abzug,
+        gewerbeertragNachVerlust  = nachVerlust,
+        abgerundeterGewerbeertrag = abgerundet,
+        freibetrag                = fb,
+        bemessungsgrundlage       = bemessung,
+        steuermesszahl            = messzahl,
+        steuermessbetrag          = messbetrag,
+        angewandterHebesatz       = heb,
+        gewerbesteuer             = steuer,
+    )
+}

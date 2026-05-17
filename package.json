@@ -1,0 +1,30 @@
+{
+  "name": "findsl-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "license": "EUPL-1.2",
+  "type": "module",
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "langium:generate": "npm -w @findsl/core run langium:generate",
+    "build": "tsc -b tsconfig.json && node scripts/copy-assets.mjs",
+    "watch": "tsc -b tsconfig.json --watch",
+    "bundle": "node esbuild.mjs",
+    "bundle:watch": "node esbuild.mjs --watch",
+    "test": "vitest run",
+    "dist": "npm run build && npm run bundle",
+    "binary": "npm run bundle && node scripts/build-binary.mjs",
+    "all": "npm run langium:generate && npm run build && npm run bundle && npm test"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "~20.16.0",
+    "@types/pdfmake": "^0.3.2",
+    "@types/vscode": "~1.85.0",
+    "esbuild": "~0.21.5",
+    "langium-cli": "~4.2.0",
+    "postject": "~1.0.0-alpha.6",
+    "typescript": "~5.9.0",
+    "vitest": "~2.1.2"
+  }
+}

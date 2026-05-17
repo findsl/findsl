@@ -1,0 +1,182 @@
+--
+# Kraftfahrzeugsteuer — vollständiger Jahressteuer-Tarif (§§ 8, 9 KraftStG)
+
+Bildet die **Jahressteuer** nach dem Kraftfahrzeugsteuergesetz
+(KraftStG 2002, i.d.g.F.) vollständig ab:
+
+- **§ 8 KraftStG** — Bemessungsgrundlage (Hubraum / CO₂ / zulässiges
+  Gesamtgewicht je nach Fahrzeugart) → Auswahl des Tarifs.
+- **§ 9 Abs. 1 KraftStG** — Steuersatz, alle Nummern:
+  Nr. 1 Krafträder · Nr. 2 a/b/c Personenkraftwagen (Erstzulassung
+  bis 30.6.2009 / 1.7.2009–31.12.2020 / ab 1.1.2021) · Nr. 2a
+  Wohnmobile · Nr. 2b dreirädrige/leichte vierrädrige Kfz · Nr. 3
+  andere Kfz ≤ 3.500 kg · Nr. 4 a/b/c/d Kfz > 3.500 kg · Nr. 5
+  Anhänger.
+- **§ 9 Abs. 2 KraftStG** — 50 % Ermäßigung für Elektrofahrzeuge
+  (nur Beträge nach Abs. 1 Nr. 3 oder Nr. 4 Buchst. a).
+- **§ 9 Abs. 3 KraftStG** — Tagessteuer für ausländische Fahrzeuge.
+- **§ 9 Abs. 4 KraftStG** — Jahressteuer für rote / Oldtimer-Kennzeichen.
+- **§ 3a KraftStG** — Vergünstigungen für Schwerbehinderte
+  (Abs. 1 volle Befreiung · Abs. 2 50 % Ermäßigung).
+- **§ 3d KraftStG** — Steuerbefreiung für Elektrofahrzeuge
+  (Erstzulassung 18.5.2011–31.12.2030: 10 Jahre, längstens bis
+  31.12.2035).
+- **§ 9a KraftStG** — Diesel-Zuschlag: ausgelaufen (galt nur
+  1.4.2007–31.3.2011); wird nicht mehr angewandt (dokumentiert).
+
+**Progressive Tarife** (Nr. 2a/3/4) werden je angefangene 200-kg-Stufe
+in der jeweiligen Gewichtsspanne berechnet; die kumulierten
+Stufenbeträge sind als auditierbare Konstanten aus den Stufensätzen
+abgeleitet (keine handsummierten Werte). „Je angefangene Einheit"
+nutzt das Stdlib-Builtin `aufrunden`.
+
+**Bewusst nicht modelliert (dokumentiert, außerhalb der reinen
+Steuerbetragsberechnung):** Verfahren §§ 11/12 (Entrichtung,
+Festsetzung), Mindestdauer/anteilige Berechnung § 5, Ausnahmekatalog
+§ 3, widerrechtliche Benutzung. Die Zuordnung der Schadstoff-/
+Geräusch-/Erstzulassungsklasse trifft nach § 2 Abs. 2 Nr. 2 KraftStG
+**verbindlich die Zulassungsbehörde** — sie geht hier als geprüfte
+Eingabe ein (nicht aus EU-Richtlinien hergeleitet).
+--
+
+// ===========================================================================
+// Modul-Struktur (Implementierung auf mehrere Dateien aufgeteilt)
+// ===========================================================================
+// Diese Datei ist die öffentliche Einstiegsdatei (Orchestrierung der
+// gesetzlichen Reihenfolge § 9 Abs. 1 Auswahl → Abs. 2 → § 3a/§ 3d →
+// Gesamt) plus die § 9 Abs. 4-Konstanten (rote/Oldtimer-Kennzeichen).
+// Die Tarifdetails liegen in kohäsiven Geschwisterdateien:
+//   - kraftstg-typen.fin              Aufzählungen, Datensätze, Helfer
+//   - kraftstg-tarif-leicht.fin       § 9 Abs. 1 Nr. 1/2/2a/2b (Konst.+Fn.)
+//   - kraftstg-tarif-nutzfahrzeug.fin § 9 Abs. 1 Nr. 3/4/5     (Konst.+Fn.)
+// Modul-Graph (azyklisch): kraftstg-typen ← {kraftstg-tarif-leicht,
+// kraftstg-tarif-nutzfahrzeug} ← kraftstg-steuer.
+
+verwende {
+    Fahrzeug,
+    KraftfahrzeugsteuerErgebnis,
+    Kraftrad,
+    Pkw,
+    Wohnmobil,
+    DreiLeichtvier,
+    AndereBis3500,
+    AndereUeber3500,
+    Anhaenger,
+    Elektro,
+    MindestensS2,
+    Befreit3aAbs1,
+    Ermaessigt3aAbs2,
+} aus "./kraftstg-typen"
+
+verwende {
+    SteuerKraftrad,
+    SteuerPkw,
+    SteuerWohnmobil,
+    SteuerDreiLeichtvier,
+} aus "./kraftstg-tarif-leicht"
+
+verwende {
+    SteuerNr3,
+    SteuerNr4,
+    SteuerAnhaenger,
+} aus "./kraftstg-tarif-nutzfahrzeug"
+
+// ===========================================================================
+// § 9 Abs. 4 — rote / Oldtimer-Kennzeichen
+// ===========================================================================
+
+-- Rotes/Oldtimer-Kennzeichen, nur für Krafträder gültig (Jahressteuer). --
+@Quelle("§ 9 Absatz 4 Nummer 1 KraftStG")
+konst KZ_NUR_KRAD: EuroCent = 46,02
+-- Rotes/Oldtimer-Kennzeichen, im Übrigen (Jahressteuer). --
+@Quelle("§ 9 Absatz 4 Nummer 2 KraftStG")
+konst KZ_UEBRIGE: EuroCent = 191,73
+
+// ===========================================================================
+// § 9 Abs. 1 — Tarifauswahl nach Fahrzeugart (§ 8 KraftStG)
+// ===========================================================================
+
+--
+Tarifbetrag nach § 9 Abs. 1 KraftStG: wählt anhand der Fahrzeugart
+(§ 8 KraftStG) die einschlägige Nummer.
+
+@param f Fahrzeug-Eingaben.
+@rückgabe  Steuer nach § 9 Abs. 1 KraftStG (vor Abs. 2 / § 3a / § 3d).
+--
+@Quelle("§ 9 Absatz 1 KraftStG")
+fn TarifNach9Abs1(f: Fahrzeug): EuroCent = wähle (f.art) {
+    falls Kraftrad        -> SteuerKraftrad(f.hubraumCcm)
+    falls Pkw             -> SteuerPkw(f)
+    falls Wohnmobil       -> SteuerWohnmobil(f.gesamtgewichtKg, f.wohnmobilklasse)
+    falls DreiLeichtvier  -> SteuerDreiLeichtvier(f.hubraumCcm, f.dreiradGrenzwerte, f.antrieb)
+    falls AndereBis3500   -> SteuerNr3(f.gesamtgewichtKg)
+    falls AndereUeber3500 -> SteuerNr4(f.gesamtgewichtKg, f.nfzklasse)
+    falls Anhaenger       -> SteuerAnhaenger(f.gesamtgewichtKg)
+}
+
+// ===========================================================================
+// § 9 Abs. 2 — Elektrofahrzeug-Ermäßigung; § 3a / § 3d — Vergünstigungen
+// ===========================================================================
+
+--
+50 %-Ermäßigung für Elektrofahrzeuge nach § 9 Abs. 2 KraftStG — gilt
+ausschließlich für Beträge nach § 9 Abs. 1 Nr. 3 oder Nr. 4 Buchst. a
+(Nutzfahrzeuge). Für alle anderen Fahrzeugarten/Klassen bleibt der
+Betrag unverändert (reine Elektro-PKW sind regelmäßig nach § 3d
+befreit).
+
+@param f      Fahrzeug-Eingaben.
+@param betrag Tarifbetrag nach § 9 Abs. 1 KraftStG.
+@rückgabe  Betrag nach § 9 Abs. 2 KraftStG.
+--
+@Quelle("§ 9 Absatz 2 KraftStG")
+fn _Anwende9Abs2(f: Fahrzeug, betrag: EuroCent): EuroCent = wähle {
+    falls f.antrieb == Elektro und f.art == AndereBis3500            -> (betrag / 2) als EuroCent
+    falls f.antrieb == Elektro und f.art == AndereUeber3500
+          und f.nfzklasse == MindestensS2                            -> (betrag / 2) als EuroCent
+    sonst                                                            -> betrag
+}
+
+--
+Anwendung der Schwerbehinderten-Vergünstigung (§ 3a KraftStG) und der
+Elektrofahrzeug-Befreiung (§ 3d KraftStG) auf den Steuerbetrag.
+Reihenfolge: § 3d-Befreiung und § 3a Abs. 1-Befreiung setzen die
+Steuer auf 0; § 3a Abs. 2 halbiert.
+
+@param f      Fahrzeug-Eingaben.
+@param betrag Betrag nach § 9 Abs. 1/2 KraftStG.
+@rückgabe  Festgesetzte Jahressteuer (0 bei Befreiung).
+--
+@Quelle("§ 3a KraftStG")
+fn _AnwendeVerguenstigung(f: Fahrzeug, betrag: EuroCent): EuroCent = wähle {
+    falls f.elektroBefreitNach3d                  -> 0,00
+    falls f.behinderung == Befreit3aAbs1          -> 0,00
+    falls f.behinderung == Ermaessigt3aAbs2       -> (betrag / 2) als EuroCent
+    sonst                                         -> betrag
+}
+
+// ===========================================================================
+// Gesamtberechnung
+// ===========================================================================
+
+--
+Vollständige Festsetzung der Kraftfahrzeug-Jahressteuer in der
+gesetzlichen Reihenfolge: § 8 (Tarifauswahl) → § 9 Abs. 1
+(Tarifbetrag) → § 9 Abs. 2 (Elektro-Ermäßigung) → § 3a / § 3d
+(Vergünstigung/Befreiung). Liefert alle Zwischengrößen.
+
+@param f Fahrzeug-Eingaben.
+@rückgabe  Vollständig dokumentiertes Berechnungsergebnis.
+--
+@Quelle("§ 9 KraftStG")
+fn BerechneKraftfahrzeugsteuer(f: Fahrzeug): KraftfahrzeugsteuerErgebnis {
+    var tarif: EuroCent = TarifNach9Abs1(f)
+    var nachE: EuroCent = _Anwende9Abs2(f, tarif)
+    var jahr: EuroCent = _AnwendeVerguenstigung(f, nachE)
+
+    KraftfahrzeugsteuerErgebnis(
+        tarifbetrag  = tarif,
+        nachElektro  = nachE,
+        jahressteuer = jahr,
+    )
+}

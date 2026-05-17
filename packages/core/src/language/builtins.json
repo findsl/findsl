@@ -1,0 +1,71 @@
+{
+  "_comment": "KANONISCHE QUELLE der eingebauten Definitionen (SPEC § 3.7 + § 11.1). Single Source of Truth — von findsl-stdlib.ts (Type-Checker, Hover) und scripts/enhance-textmate.mjs (Highlighting) gelesen. NICHT duplizieren; Änderungen nur hier.",
+  "primitiveTypes": [
+    "Euro", "Cent", "EuroCent",
+    "Ganzzahl", "Dezimal", "Prozent",
+    "Wahrheit", "Wahrheitswert", "Text",
+    "Liste", "Bereich"
+  ],
+  "enums": [
+    {
+      "name": "Tarifart",
+      "values": ["Grundtarif", "Splitting"],
+      "doc": "Eingebaute Aufzählung der Veranlagungs-Tarifarten: `Grundtarif` für Einzelveranlagte, `Splitting` für zusammenveranlagte Ehepaare und eingetragene Lebenspartnerschaften.",
+      "quelle": "§ 32a EStG (SPEC § 3.7)"
+    },
+    {
+      "name": "Steuerklasse",
+      "values": ["I", "II", "III", "IV", "V", "VI"],
+      "doc": "Eingebaute Aufzählung der sechs Lohnsteuer-Klassen. `I` Ledige, `II` Alleinerziehende, `III/V` Ehepaar mit Splittingvorteil-Aufteilung, `IV` Ehepaar (Standard), `VI` Nebenarbeitsverhältnisse.",
+      "quelle": "§ 38b EStG (SPEC § 3.7)"
+    },
+    {
+      "name": "Lohnzahlungszeitraum",
+      "values": ["Jahr", "Monat", "Woche", "Tag"],
+      "doc": "Eingebaute Aufzählung der Lohnzahlungs-Perioden für die unterjährige Hochrechnung.",
+      "quelle": "§ 39b EStG (SPEC § 3.7)"
+    }
+  ],
+  "functions": [
+    {
+      "name": "abrundenEuro",
+      "signature": "fn abrundenEuro(betrag: EuroCent): Euro",
+      "result": "Euro",
+      "doc": "Rundet auf volle Euro **ab** (Richtung minus Unendlich). PAP-Konvention für die abgerundete Bemessungsgrundlage und Tarif-Zwischenergebnisse.",
+      "quelle": "PAP 2025 Standard"
+    },
+    {
+      "name": "aufrundenEuro",
+      "signature": "fn aufrundenEuro(betrag: EuroCent): Euro",
+      "result": "Euro",
+      "doc": "Rundet auf volle Euro **auf** (Richtung plus Unendlich).",
+      "quelle": "PAP 2025 Standard"
+    },
+    {
+      "name": "abrundenCent",
+      "signature": "fn abrundenCent(betrag: EuroCent): Cent",
+      "result": "Cent",
+      "doc": "Rundet auf volle Cent ab."
+    },
+    {
+      "name": "aufrundenCent",
+      "signature": "fn aufrundenCent(betrag: EuroCent): Cent",
+      "result": "Cent",
+      "doc": "Rundet auf volle Cent auf."
+    },
+    {
+      "name": "aufrunden",
+      "signature": "fn aufrunden(wert: Dezimal): Ganzzahl",
+      "result": "Ganzzahl",
+      "doc": "Rundet eine Zahl auf die nächste Ganzzahl **auf** (Richtung plus Unendlich). Für „je angefangene Einheit\"-Tarife — z. B. KraftStG § 9 (je 100 cm³ Hubraum oder einen Teil davon).",
+      "quelle": "SPEC § 11"
+    },
+    {
+      "name": "abrunden",
+      "signature": "fn abrunden(wert: Dezimal): Ganzzahl",
+      "result": "Ganzzahl",
+      "doc": "Rundet eine Zahl auf die nächste Ganzzahl **ab** (Richtung minus Unendlich).",
+      "quelle": "SPEC § 11"
+    }
+  ]
+}

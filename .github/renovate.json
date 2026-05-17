@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "schedule": ["before 6am every weekday"],
+  "timezone": "Europe/Berlin",
+  "automerge": false,
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate Dependency Dashboard",
+  "labels": ["chore"],
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "packageRules": [
+    {
+      "description": "GitHub Actions minor/patch/digest SHA-Bumps (gruppiert). Hält die SHA-Pins in ci.yml/cla.yml/renovate*.yml aktuell — siehe Pin-Hinweis in cla.yml.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "pinDigests": true,
+      "groupName": "GitHub Actions",
+      "groupSlug": "github-actions"
+    },
+    {
+      "description": "GitHub Actions Major-Updates — eigene PRs zur bewussten Prüfung.",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "pinDigests": true,
+      "groupName": "GitHub Actions major updates",
+      "groupSlug": "github-actions-major"
+    },
+    {
+      "description": "npm Minor-/Patch-Updates (gruppiert) über alle Workspaces (packages/*, apps/vscode).",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm dependencies",
+      "groupSlug": "npm-deps"
+    },
+    {
+      "description": "npm Major-Updates — ein PR pro Paket (keine Gruppierung), damit inkompatible Peers (z. B. langium/langium-cli, typescript, vitest) einzeln review- und mergebar bleiben.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["major"]
+    },
+    {
+      "description": "npm-Versionen exakt pinnen (keine ^/~-Ranges) für dependencies/devDependencies. FinDSL setzt auf exakt reproduzierbare Build-Roundtrips (langium:generate→build→bundle→test, 778 Tests, Bundle-Smoke); Pinning macht package-lock.json ehrlich und jeden Patch zu einem expliziten Renovate-PR mit Changelog statt stillem Lockfile-Drift. Peer-/Bundled-Deps behalten ihre Ranges.",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["dependencies", "devDependencies"],
+      "rangeStrategy": "pin"
+    }
+  ]
+}

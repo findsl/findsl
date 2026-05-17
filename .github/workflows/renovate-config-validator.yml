@@ -1,0 +1,45 @@
+# ---------------------------------------------------------------------------
+# Renovate-Config-Validator (FinDSL)
+#
+# Warum: Eine syntaktisch kaputte renovate.json deaktiviert Dependency-
+# Updates still — das soll zur PR-Zeit auffallen, nicht erst beim nächsten
+# geplanten Renovate-Lauf.
+#
+# Tool: Renovates eigener `renovate-config-validator` (Teil des renovate-
+# npm-Pakets) via npx, `--strict` (Warnungen = Fehler). Dieselbe Binary,
+# die produktiv läuft, prüft hier das Schema.
+#
+# Security: Kein Event-Payload fließt in einen `run:`-Step — nur statische
+# Literale; die Workflow-Injection-Klasse ist damit nicht anwendbar.
+# Actions SHA-gepinnt (wie ci.yml/cla.yml).
+# ---------------------------------------------------------------------------
+name: Renovate config validator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/renovate.json"
+      - ".github/workflows/renovate-config-validator.yml"
+  pull_request:
+    paths:
+      - ".github/renovate.json"
+      - ".github/workflows/renovate-config-validator.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Validate .github/renovate.json
+        run: npx --yes --package renovate -- renovate-config-validator --strict .github/renovate.json

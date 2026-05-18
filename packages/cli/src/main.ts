@@ -11,7 +11,7 @@
  * Subkommandos:
  *   parse       — Datei parsen, Diagnose ausgeben
  *   test        — Akzeptanztests aus prüfe-Blöcken ausführen
- *   codegen     — Zielsprachencode erzeugen (--lang; Phase 0: java-Gerüst)
+ *   codegen     — Zielsprachencode erzeugen (--lang; Phase 1: kst-Slice)
  *   docgen      — Dokumentation generieren
  */
 
@@ -489,20 +489,21 @@ Beispiele:
 program
     .command('codegen')
     .description('Erzeugt Zielsprachencode aus .findsl (Issue #7). '
-        + 'Phase 0: java-Gerüst (kompilierbare leere Klasse je Modul) — '
-        + 'Member-Bodies folgen in Phase 1. Semantik-Orakel: Interpreter.')
+        + 'Phase 1: Skalar/fn/wähle/Geld-Slice (kst-Konstruktsatz) → '
+        + 'kompilierbares, bit-genaues Java. Semantik-Orakel: Interpreter.')
     .argument('<pfade...>',
         'beliebig viele Ziele: Dateien, Verzeichnisse (rekursiv) oder '
         + 'Glob-Muster wie "examples/**/*.findsl" (quoten!)')
     .option('-l, --lang <sprache>', 'Zielsprache (java)', 'java')
     .option('-o, --out <verzeichnis>', 'Ausgabeverzeichnis', 'out/java')
+    .option('-p, --package <name>', 'Ziel-Java-Package', 'org.findsl.generated')
     .addHelpText('after', `
 Beispiele:
   $ findsl codegen examples/kst/kst.findsl -l java -o /tmp/findsl-java
   $ findsl codegen examples --lang java`)
     .action(async (
         pfade: string[],
-        options: { lang: string; out: string },
+        options: { lang: string; out: string; package: string },
     ) => {
         const {
             istUnterstuetzteSprache, GEPLANTE_SPRACHEN,
@@ -574,7 +575,7 @@ Beispiele:
             }
             seen.set(className, absFile);
             const ir = lowerProgram(prog, {
-                javaPackage: 'org.findsl.generated',
+                javaPackage: options.package,
                 className,
             });
             const target = path.join(outDir, `${className}.java`);
@@ -584,7 +585,7 @@ Beispiele:
 
         if (written.length > 0) {
             console.log(`✓ ${written.length} Modul(e) → ${lang} `
-                + `(${disp(outDir)}/) — Phase 0: Klassengerüst, Member folgen (Phase 1).`);
+                + `(${disp(outDir)}/) — Phase 1: kst-Konstruktsatz, bit-genau.`);
         }
         process.exit(failures > 0 || missing.length > 0 ? 1 : 0);
     });

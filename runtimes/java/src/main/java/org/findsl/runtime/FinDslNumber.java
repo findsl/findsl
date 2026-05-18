@@ -75,7 +75,12 @@ public record FinDslNumber(BigDecimal value, Type type) {
 
     private static final BigDecimal HUNDERT = new BigDecimal("100");
 
-    /** Kanonischer Konstruktor: Fail-fast gegen {@code null}-Komponenten. */
+    /**
+     * Kanonischer Konstruktor: Fail-fast gegen {@code null}-Komponenten.
+     *
+     * @param value Euro-kanonischer Betrag (nie {@code null}).
+     * @param type  Zahl-Art (nie {@code null}).
+     */
     public FinDslNumber {
         Objects.requireNonNull(value, "value");
         Objects.requireNonNull(type, "type");
@@ -84,23 +89,84 @@ public record FinDslNumber(BigDecimal value, Type type) {
     // --- Factories (Werte Euro-kanonisch, wie values.ts) ------------------
     // Namen spiegeln die FinDSL-Typbezeichner (verbatim — siehe Klassen-Doc).
 
-    public static FinDslNumber ganzzahl(String n) { return new FinDslNumber(new BigDecimal(n), Type.Ganzzahl); }
-    public static FinDslNumber dezimal(String n)  { return new FinDslNumber(new BigDecimal(n), Type.Dezimal); }
-    public static FinDslNumber euro(String n)     { return new FinDslNumber(new BigDecimal(n), Type.Euro); }
-    /** Erwartet den Wert bereits in Euro-Skala (Euro-kanonisch). */
-    public static FinDslNumber euroCent(String euroValue) { return new FinDslNumber(new BigDecimal(euroValue), Type.EuroCent); }
-    /** Erwartet den Wert bereits in Euro-Skala (1 ct = 0,01 €). */
-    public static FinDslNumber cent(String euroValue)     { return new FinDslNumber(new BigDecimal(euroValue), Type.Cent); }
-    /** Erwartet die Bruchzahl (42 % → "0.42"), wie {@code values.ts}. */
-    public static FinDslNumber prozent(String fraction)   { return new FinDslNumber(new BigDecimal(fraction), Type.Prozent); }
+    /**
+     * Erzeugt eine {@code Ganzzahl} aus dem Dezimalstring {@code n}.
+     *
+     * @param n Dezimalstring (Punkt als Dezimaltrenner, wie BigDecimal).
+     * @return {@link FinDslNumber} mit {@link Type#Ganzzahl}.
+     */
+    public static FinDslNumber ganzzahl(String n) {
+        return new FinDslNumber(new BigDecimal(n), Type.Ganzzahl);
+    }
+
+    /**
+     * Erzeugt eine {@code Dezimal}-Zahl aus dem Dezimalstring {@code n}.
+     *
+     * @param n Dezimalstring (Punkt als Dezimaltrenner, wie BigDecimal).
+     * @return {@link FinDslNumber} mit {@link Type#Dezimal}.
+     */
+    public static FinDslNumber dezimal(String n) {
+        return new FinDslNumber(new BigDecimal(n), Type.Dezimal);
+    }
+
+    /**
+     * Erzeugt einen {@code Euro}-Betrag (bereits in Euro-Skala).
+     *
+     * @param n Betrag in Euro als Dezimalstring.
+     * @return {@link FinDslNumber} mit {@link Type#Euro}.
+     */
+    public static FinDslNumber euro(String n) {
+        return new FinDslNumber(new BigDecimal(n), Type.Euro);
+    }
+
+    /**
+     * Erzeugt einen {@code EuroCent}-Betrag.
+     *
+     * @param euroValue Wert bereits in Euro-Skala (Euro-kanonisch).
+     * @return {@link FinDslNumber} mit {@link Type#EuroCent}.
+     */
+    public static FinDslNumber euroCent(String euroValue) {
+        return new FinDslNumber(new BigDecimal(euroValue), Type.EuroCent);
+    }
+
+    /**
+     * Erzeugt einen {@code Cent}-Betrag.
+     *
+     * @param euroValue Wert bereits in Euro-Skala (1 ct = 0,01 €).
+     * @return {@link FinDslNumber} mit {@link Type#Cent}.
+     */
+    public static FinDslNumber cent(String euroValue) {
+        return new FinDslNumber(new BigDecimal(euroValue), Type.Cent);
+    }
+
+    /**
+     * Erzeugt einen {@code Prozent}-Wert.
+     *
+     * @param fraction Bruchzahl (42 % → {@code "0.42"}), wie {@code values.ts}.
+     * @return {@link FinDslNumber} mit {@link Type#Prozent}.
+     */
+    public static FinDslNumber prozent(String fraction) {
+        return new FinDslNumber(new BigDecimal(fraction), Type.Prozent);
+    }
 
     // --- Typ-Lattice (interpreter.ts:427-433) -----------------------------
 
+    /**
+     * Ob {@code t} eine Geld-Art ist ({@code Euro}/{@code EuroCent}/{@code Cent}).
+     *
+     * @param t zu prüfende Zahl-Art.
+     * @return {@code true} gdw. {@code t} eine Geld-Art ist.
+     */
     private static boolean isMoneyType(Type t) {
         return t == Type.Euro || t == Type.EuroCent || t == Type.Cent;
     }
 
-    /** Präzisions-Rang Euro &lt; EuroCent &lt; Cent (interpreter.ts:427). */
+    /**
+     * Präzisions-Rang Euro &lt; EuroCent &lt; Cent (interpreter.ts:427).
+     *
+     * @param t Geld-Art.
+     * @return Rang 0/1/2; wirft {@link FinDslRuntimeError} bei Nicht-Geld.
+     */
     private static int moneyRank(Type t) {
         return switch (t) {
             case Euro -> 0;
@@ -110,19 +176,33 @@ public record FinDslNumber(BigDecimal value, Type type) {
         };
     }
 
-    /** SPEC § 3.2.3 / § 3.4 — {@code combineAddSub} (interpreter.ts:513). */
+    /**
+     * SPEC § 3.2.3 / § 3.4 — {@code combineAddSub} (interpreter.ts:513):
+     * Ergebnis-Art von {@code +}/{@code -}.
+     *
+     * @param a Art des linken Operanden.
+     * @param b Art des rechten Operanden.
+     * @return die resultierende Zahl-Art.
+     */
     static Type combineAddSub(Type a, Type b) {
         if (isMoneyType(a) && isMoneyType(b)) {
             return moneyRank(a) >= moneyRank(b) ? a : b;
         }
         if (isMoneyType(a)) return a;
         if (isMoneyType(b)) return b;
-        if (a == Type.Prozent && b == Type.Prozent)   return Type.Prozent;
+        if (a == Type.Prozent && b == Type.Prozent) return Type.Prozent;
         if (a == Type.Ganzzahl && b == Type.Ganzzahl) return Type.Ganzzahl;
         return Type.Dezimal;
     }
 
-    /** SPEC § 3.2.3 / § 3.4 — {@code combineMul} (interpreter.ts:531). */
+    /**
+     * SPEC § 3.2.3 / § 3.4 — {@code combineMul} (interpreter.ts:531):
+     * Ergebnis-Art von {@code *}.
+     *
+     * @param a Art des linken Operanden.
+     * @param b Art des rechten Operanden.
+     * @return die resultierende Zahl-Art.
+     */
     static Type combineMul(Type a, Type b) {
         boolean aM = isMoneyType(a), bM = isMoneyType(b);
         if (aM && bM) return Type.EuroCent;             // statisch verboten
@@ -136,12 +216,19 @@ public record FinDslNumber(BigDecimal value, Type type) {
                 || (a == Type.Ganzzahl && b == Type.Prozent)) {
             return Type.Prozent;
         }
-        if (a == Type.Prozent && b == Type.Prozent)   return Type.Dezimal;
+        if (a == Type.Prozent && b == Type.Prozent) return Type.Dezimal;
         if (a == Type.Ganzzahl && b == Type.Ganzzahl) return Type.Ganzzahl;
         return Type.Dezimal;
     }
 
-    /** SPEC § 3.2.3 / § 3.4 — {@code combineDiv} (interpreter.ts:558). */
+    /**
+     * SPEC § 3.2.3 / § 3.4 — {@code combineDiv} (interpreter.ts:558):
+     * Ergebnis-Art von {@code /}.
+     *
+     * @param a Art des Dividenden.
+     * @param b Art des Divisors.
+     * @return die resultierende Zahl-Art.
+     */
     static Type combineDiv(Type a, Type b) {
         if (isMoneyType(a)) return Type.Dezimal;
         if (a == Type.Prozent && b == Type.Ganzzahl) return Type.Prozent;
@@ -150,22 +237,44 @@ public record FinDslNumber(BigDecimal value, Type type) {
 
     // --- Arithmetik (interpreter.ts:400-562) ------------------------------
 
-    /** {@code +} — exakt, type = combineAddSub. */
+    /**
+     * Addition {@code +} — exakt; Ergebnis-Art = {@link #combineAddSub}.
+     *
+     * @param b Summand.
+     * @return neue {@link FinDslNumber} (Wert exakt, kein MathContext).
+     */
     public FinDslNumber add(FinDslNumber b) {
         return new FinDslNumber(value.add(b.value), combineAddSub(type, b.type));
     }
 
-    /** {@code -} — exakt, type = combineAddSub. */
+    /**
+     * Subtraktion {@code -} — exakt; Ergebnis-Art = {@link #combineAddSub}.
+     *
+     * @param b Subtrahend.
+     * @return neue {@link FinDslNumber} (Wert exakt, kein MathContext).
+     */
     public FinDslNumber sub(FinDslNumber b) {
         return new FinDslNumber(value.subtract(b.value), combineAddSub(type, b.type));
     }
 
-    /** {@code *} — exakt, type = combineMul. */
+    /**
+     * Multiplikation {@code *} — exakt; Ergebnis-Art = {@link #combineMul}.
+     *
+     * @param b Faktor.
+     * @return neue {@link FinDslNumber} (Wert exakt, kein MathContext).
+     */
     public FinDslNumber mul(FinDslNumber b) {
         return new FinDslNumber(value.multiply(b.value), combineMul(type, b.type));
     }
 
-    /** {@code /} — {@link #MC_DIV} (Gate 0), type = combineDiv. */
+    /**
+     * Division {@code /} mit {@link #MC_DIV} (Gate 0); Ergebnis-Art =
+     * {@link #combineDiv}.
+     *
+     * @param b Divisor.
+     * @return neue {@link FinDslNumber}.
+     * @throws FinDslRuntimeError bei Division durch Null.
+     */
     public FinDslNumber div(FinDslNumber b) {
         if (b.value.signum() == 0) {
             throw new FinDslRuntimeError("Division durch Null.");
@@ -173,7 +282,11 @@ public record FinDslNumber(BigDecimal value, Type type) {
         return new FinDslNumber(value.divide(b.value, MC_DIV), combineDiv(type, b.type));
     }
 
-    /** Unäres {@code -} — exakt, type unverändert. */
+    /**
+     * Unäres Minus {@code -} — exakt; die Art bleibt unverändert.
+     *
+     * @return neue {@link FinDslNumber} mit negiertem Wert.
+     */
     public FinDslNumber neg() {
         return new FinDslNumber(value.negate(), type);
     }
@@ -182,12 +295,37 @@ public record FinDslNumber(BigDecimal value, Type type) {
     // valuesCompare: a.value.cmp(b.value); valuesEqual numerisch: .eq.
     // BigDecimal.compareTo (NICHT equals — equals ist skalen-sensitiv).
 
-    public int cmp(FinDslNumber b)              { return value.compareTo(b.value); }
-    public boolean equalsValue(FinDslNumber b)  { return value.compareTo(b.value) == 0; }
+    /**
+     * Wertvergleich (Spiegel {@code values.ts valuesCompare}):
+     * skalen-unabhängig über {@code BigDecimal.compareTo}, die Art wird
+     * — wie im Interpreter — ignoriert.
+     *
+     * @param b Vergleichswert.
+     * @return negativ/0/positiv, falls dieser Wert kleiner/gleich/größer.
+     */
+    public int compareValue(FinDslNumber b) {
+        return value.compareTo(b.value);
+    }
+
+    /**
+     * FinDSL-Wertgleichheit {@code ==} (Spiegel {@code values.ts
+     * valuesEqual}): Euro-kanonisch, skalen-unabhängig, art-agnostisch.
+     *
+     * @param b Vergleichswert.
+     * @return {@code true} gdw. die Werte numerisch gleich sind.
+     */
+    public boolean equalsValue(FinDslNumber b) {
+        return value.compareTo(b.value) == 0;
+    }
 
     // --- Cast (interpreter.ts:443-459) ------------------------------------
 
-    /** {@code als <Ziel>}-Cast, Euro-kanonisch (castNumeric). */
+    /**
+     * {@code als <Ziel>}-Cast, Euro-kanonisch (Spiegel {@code castNumeric}).
+     *
+     * @param target Ziel-Art.
+     * @return neue {@link FinDslNumber} in der Ziel-Art (Wert ggf. skaliert).
+     */
     public FinDslNumber cast(Type target) {
         return switch (target) {
             case Euro, EuroCent, Cent -> {
@@ -195,18 +333,24 @@ public record FinDslNumber(BigDecimal value, Type type) {
                     yield new FinDslNumber(value, target);     // reiner Typ-Wechsel
                 }
                 BigDecimal euroValue = target == Type.Cent
-                    ? value.divide(HUNDERT, MC_DIV) : value;
+                        ? value.divide(HUNDERT, MC_DIV) : value;
                 yield new FinDslNumber(euroValue, target);
             }
             case Prozent -> {
                 BigDecimal fraction = type == Type.Prozent
-                    ? value : value.divide(HUNDERT, MC_DIV);
+                        ? value : value.divide(HUNDERT, MC_DIV);
                 yield new FinDslNumber(fraction, Type.Prozent);
             }
             case Ganzzahl, Dezimal -> new FinDslNumber(value, target);
         };
     }
 
+    /**
+     * Ob {@code d} ganzzahlig ist (skalen-unabhängig).
+     *
+     * @param d zu prüfender Wert.
+     * @return {@code true} gdw. {@code d} keine Nachkommastellen hat.
+     */
     private static boolean isInteger(BigDecimal d) {
         return d.stripTrailingZeros().scale() <= 0;
     }
@@ -217,6 +361,11 @@ public record FinDslNumber(BigDecimal value, Type type) {
      * Ganzzahligkeit von {@code Euro}/{@code Cent} auch bei berechneten
      * Werten (fraktional → {@link FinDslRuntimeError}); {@code EuroCent}
      * ungeprüft.
+     *
+     * @param name Geld-Ziel-Art (Nicht-Geld → unverändert zurück).
+     * @param what Kontextbeschreibung für die Fehlermeldung.
+     * @return die annotierte {@link FinDslNumber}.
+     * @throws FinDslRuntimeError bei fraktionalem {@code Euro}/{@code Cent}.
      */
     public FinDslNumber withMoneyAnnotation(Type name, String what) {
         if (name != Type.Euro && name != Type.Cent && name != Type.EuroCent) {
@@ -225,13 +374,13 @@ public record FinDslNumber(BigDecimal value, Type type) {
         FinDslNumber c = cast(name);
         if (name == Type.Euro && !isInteger(c.value)) {
             throw new FinDslRuntimeError(what + ": Euro-Wert \""
-                + germanFormat(c.value, null) + "\" ist nicht ganzzahlig — "
-                + "explizite Rundung nötig (.abrunden()/.aufrunden(), SPEC § 11.1).");
+                    + germanFormat(c.value, null) + "\" ist nicht ganzzahlig — "
+                    + "explizite Rundung nötig (.abrunden()/.aufrunden(), SPEC § 11.1).");
         }
         if (name == Type.Cent && !isInteger(c.value.multiply(HUNDERT))) {
             throw new FinDslRuntimeError(what + ": Cent-Wert \""
-                + germanFormat(c.value.multiply(HUNDERT), null) + "\" ist nicht "
-                + "ganzzahlig — explizite Rundung nötig (.abrunden()/.aufrunden(), SPEC § 11.1).");
+                    + germanFormat(c.value.multiply(HUNDERT), null) + "\" ist nicht "
+                    + "ganzzahlig — explizite Rundung nötig (.abrunden()/.aufrunden(), SPEC § 11.1).");
         }
         return c;
     }
@@ -242,9 +391,36 @@ public record FinDslNumber(BigDecimal value, Type type) {
     // invariante Rechnung aus. abrunden=ROUND_FLOOR, aufrunden=ROUND_CEIL.
     // Die Methodennamen spiegeln die FinDSL-§-11.1-Stdlib (verbatim).
 
-    public FinDslNumber abrunden(Type target)  { return round(target, RoundingMode.FLOOR); }
-    public FinDslNumber aufrunden(Type target) { return round(target, RoundingMode.CEILING); }
+    /**
+     * Abrunden (FinDSL {@code .abrunden()}, SPEC § 11.1) zur Ziel-Art —
+     * Richtung {@code RoundingMode.FLOOR} (gegen −∞).
+     *
+     * @param target beim Lowering aufgelöstes Rundungsziel.
+     * @return abgerundete {@link FinDslNumber} in der Ziel-Art.
+     */
+    public FinDslNumber abrunden(Type target) {
+        return round(target, RoundingMode.FLOOR);
+    }
 
+    /**
+     * Aufrunden (FinDSL {@code .aufrunden()}, SPEC § 11.1) zur Ziel-Art —
+     * Richtung {@code RoundingMode.CEILING} (gegen +∞).
+     *
+     * @param target beim Lowering aufgelöstes Rundungsziel.
+     * @return aufgerundete {@link FinDslNumber} in der Ziel-Art.
+     */
+    public FinDslNumber aufrunden(Type target) {
+        return round(target, RoundingMode.CEILING);
+    }
+
+    /**
+     * Gemeinsame Rundungsmechanik für {@link #abrunden}/{@link #aufrunden}
+     * (Spiegel {@code scalarRoundingValue}).
+     *
+     * @param target Ziel-Art (Prozent/Cent/Euro/Ganzzahl).
+     * @param mode   Rundungsrichtung (FLOOR/CEILING).
+     * @return gerundete {@link FinDslNumber}; wirft bei unzulässigem Ziel.
+     */
     private FinDslNumber round(Type target, RoundingMode mode) {
         return switch (target) {
             // recv.value.mul(100).toDecimalPlaces(0,mode).div(100).
@@ -254,10 +430,10 @@ public record FinDslNumber(BigDecimal value, Type type) {
             // Divisor MC_DIV ist nur Robustheits-Spiegel zu decimal.js
             // (das hier ebenfalls exakt terminiert) — keine Divergenz.
             case Prozent -> new FinDslNumber(
-                value.multiply(HUNDERT).setScale(0, mode).divide(HUNDERT, MC_DIV),
-                Type.Prozent);
-            case Cent     -> new FinDslNumber(value.setScale(2, mode), Type.Cent);
-            case Euro     -> new FinDslNumber(value.setScale(0, mode), Type.Euro);
+                    value.multiply(HUNDERT).setScale(0, mode).divide(HUNDERT, MC_DIV),
+                    Type.Prozent);
+            case Cent -> new FinDslNumber(value.setScale(2, mode), Type.Cent);
+            case Euro -> new FinDslNumber(value.setScale(0, mode), Type.Euro);
             case Ganzzahl -> new FinDslNumber(value.setScale(0, mode), Type.Ganzzahl);
             default -> throw new FinDslRuntimeError("Rundung: unzulässiges Ziel " + target);
         };
@@ -265,22 +441,36 @@ public record FinDslNumber(BigDecimal value, Type type) {
 
     // --- Deutsche Darstellung (values.ts:297-371) -------------------------
 
-    /** {@code formatGerman}: `.` Tausender, `,` Dezimaltrenner. */
+    /**
+     * Deutsche Zahldarstellung (Spiegel {@code formatGerman}): {@code .}
+     * als Tausender-, {@code ,} als Dezimaltrenner.
+     *
+     * @param v              darzustellender Wert.
+     * @param fractionDigits feste Nachkommastellen oder {@code null} =
+     *                       natürliche (trailing zeros entfernt).
+     * @return die formatierte Zeichenkette.
+     */
     static String germanFormat(BigDecimal v, Integer fractionDigits) {
         boolean neg = v.signum() < 0;
         BigDecimal abs = v.abs();
         String fixed = fractionDigits == null
-            ? abs.stripTrailingZeros().toPlainString()
-            : abs.setScale(fractionDigits, RoundingMode.HALF_UP).toPlainString();
+                ? abs.stripTrailingZeros().toPlainString()
+                : abs.setScale(fractionDigits, RoundingMode.HALF_UP).toPlainString();
         int dot = fixed.indexOf('.');
-        String intPart  = dot < 0 ? fixed : fixed.substring(0, dot);
-        String fracPart = dot < 0 ? ""    : fixed.substring(dot + 1);
+        String intPart = dot < 0 ? fixed : fixed.substring(0, dot);
+        String fracPart = dot < 0 ? "" : fixed.substring(dot + 1);
         String grouped = groupThousands(intPart);
         String body = fracPart.isEmpty() ? grouped : grouped + "," + fracPart;
         return neg ? "-" + body : body;
     }
 
-    /** Ganzteil zu Dreiergruppen mit `.` (deterministisch, kein Regex). */
+    /**
+     * Gruppiert den Ganzteil zu Dreiergruppen mit {@code .}
+     * (deterministisch, kein Regex).
+     *
+     * @param intPart Ziffernfolge des Ganzteils (ohne Vorzeichen).
+     * @return gruppierte Zeichenkette.
+     */
     private static String groupThousands(String intPart) {
         StringBuilder sb = new StringBuilder();
         int n = intPart.length();
@@ -291,16 +481,27 @@ public record FinDslNumber(BigDecimal value, Type type) {
         return sb.toString();
     }
 
-    /** {@code valueToString} numerisch (values.ts:363-370) — für Interpolation. */
+    /**
+     * Textdarstellung für String-Interpolation (Spiegel
+     * {@code values.ts valueToString}, 363-370) — art-abhängig.
+     *
+     * @return deutsche Darstellung inkl. {@code %} bei {@link Type#Prozent}.
+     */
     public String asText() {
         return switch (type) {
-            case Prozent  -> germanFormat(value.multiply(HUNDERT), null) + " %";
-            case Cent     -> germanFormat(value.multiply(HUNDERT), null);
+            case Prozent -> germanFormat(value.multiply(HUNDERT), null) + " %";
+            case Cent -> germanFormat(value.multiply(HUNDERT), null);
             case EuroCent -> germanFormat(value, 2);
             case Euro, Ganzzahl, Dezimal -> germanFormat(value, null);
         };
     }
 
+    /**
+     * Debug-Darstellung ({@code FinDslNumber(<wert>, <art>)}) — NICHT die
+     * fachliche Darstellung (dafür {@link #asText()}).
+     *
+     * @return technische Zeichenkette für Logging/Diagnose.
+     */
     @Override
     public String toString() {
         return "FinDslNumber(" + value.toPlainString() + ", " + type + ")";

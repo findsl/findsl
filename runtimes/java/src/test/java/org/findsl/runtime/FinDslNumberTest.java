@@ -127,6 +127,21 @@ class FinDslNumberTest {
         void oneEuroNotEqualsOneCent() {
             assertFalse(FinDslNumber.euro("1").equalsValue(FinDslNumber.cent("0.01")));
         }
+
+        @Test
+        @DisplayName("compareValue: Ordnung < / = / > (Spiegel valuesCompare)")
+        void compareValueOrdnung() {
+            assertTrue(FinDslNumber.euro("1").compareValue(FinDslNumber.euro("2")) < 0);
+            assertTrue(FinDslNumber.euro("2").compareValue(FinDslNumber.euro("1")) > 0);
+            assertEquals(0, FinDslNumber.euro("3").compareValue(FinDslNumber.euro("3")));
+        }
+
+        @Test
+        @DisplayName("compareValue: art-agnostisch, Euro-kanonisch (1 € = 100 ct)")
+        void compareValueArtAgnostisch() {
+            assertEquals(0, FinDslNumber.euro("1").compareValue(FinDslNumber.cent("1")));
+            assertTrue(FinDslNumber.cent("0.01").compareValue(FinDslNumber.euro("1")) < 0);
+        }
     }
 
     @Nested

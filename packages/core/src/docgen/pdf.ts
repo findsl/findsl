@@ -41,6 +41,7 @@ import type {
 import type { DocModel, DeclDoc } from './model.js';
 import { groupDecls } from './markdown.js';
 import { tokenizeFindsl, type TokenKind } from './findsl-tokens.js';
+import { installMathRules, ensureMathJax, texToSvg } from './math.js';
 import type { DocKopf } from './kopf.js';
 
 export interface PdfOptions {
@@ -103,6 +104,10 @@ const TK: Record<TokenKind, { color: string; bold?: boolean; italics?: boolean }
 const CONTENT_W = 495;
 
 const MD = new MarkdownIt({ html: false, linkify: true, typographer: false });
+// Gemeinsame Math-Parser-Rules (wie HTML); der PDF-Token-Walk erkennt
+// `math_block`/`math_inline` selbst (Block → echtes SVG via MathJax,
+// Inline → TeX-Fallback, da pdfmake kein Inline-SVG im Textfluss kann).
+installMathRules(MD);
 
 /**
  * FinDSL-Quelltext → farbige pdfmake-Text-Runs (geteilter Tokenizer).
@@ -226,6 +231,14 @@ function inlineSpans(children: ReadonlyArray<Token>): Content[] {
             case 'link_close': link = undefined; break;
             case 'softbreak': out.push({ text: ' ' }); break;
             case 'hardbreak': out.push({ text: '\n' }); break;
+            // Inline-Mathe: pdfmake kann kein SVG im fließenden Text-
+            // Array platzieren → lesbarer TeX-Fallback in Code-Stil.
+            // (HTML rendert Inline-Mathe voll via KaTeX; Block-Mathe
+            // ist auch im PDF echtes SVG. Siehe SPEC § 4.x.)
+            case 'math_inline': out.push({
+                text: t.content, style: 'code',
+                ...(link ? { link, color: C.accent } : {}),
+            }); break;
             default: break;
         }
     }
@@ -258,6 +271,16 @@ function mdContent(src: string): Content[] {
                 margin: [0, 2, 0, 6],
             });
             i += 2;
+        } else if (t.type === 'math_block') {
+            // Block-Mathe: echtes Vektor-SVG (MathJax); Breite auf den
+            // Satzspiegel begrenzt, Seitenverhältnis bleibt (nur width).
+            const { svg, width } = texToSvg(t.content, true);
+            out.push({
+                svg,
+                width: Math.min(width, CONTENT_W),
+                alignment: 'center',
+                margin: [0, 6, 0, 10],
+            });
         } else if (t.type === 'fence' || t.type === 'code_block') {
             out.push(codeBlock(t.content.replace(/\n$/, '')));
         } else if (t.type === 'bullet_list_open' || t.type === 'ordered_list_open') {
@@ -616,6 +639,9 @@ export async function renderPdf(model: DocModel, opts: PdfOptions = {}): Promise
         pdfmakeUrlResolverCjs,
     );
     const printer = new PdfPrinter(FONTS, vfs, new URLResolver(vfs));
+    // MathJax einmalig initialisieren, bevor der synchrone Token-Walk
+    // in buildPdfDoc → mdContent → texToSvg läuft (Block-Mathe → SVG).
+    await ensureMathJax();
     const pdfDoc = await printer.createPdfKitDocument(buildPdfDoc(model, opts));
     return await new Promise<Buffer>((resolve, reject) => {
         const chunks: Buffer[] = [];

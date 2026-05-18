@@ -1603,6 +1603,48 @@ fn estGrundtarif(...) ...
 
 Schlägt eine Zeile fehl, ist der Doc veraltet — der Build bricht ab.
 
+### 9.5 Mathematische Notation
+
+Doc-Kommentar-Prosa darf mathematische Formeln in TeX-Notation
+enthalten. Geltungsbereich: `--…--`-Datei-/Deklarations-Doc-Kommentare,
+`@param`-/`@rückgabe`-Beschreibungen sowie längere Feld-Beschreibungen
+(§ 9.3).
+
+- **Inline:** `$ … $` — kurze Formel im Fließtext.
+- **Block:** `$$ … $$` — abgesetzte Formel (ein- oder mehrzeilig).
+
+**Erkennungsregel (normativ):**
+
+1. `$$ … $$` wird **vor** `$ … $` erkannt.
+2. Ein öffnendes `$` zählt nur, wenn ihm **kein** Whitespace
+   unmittelbar folgt; das schließende `$` nur, wenn ihm **kein**
+   Whitespace unmittelbar vorausgeht und **keine Ziffer** folgt.
+   Dadurch bleiben `5 $`, `100 $` und ein einzelnes `$` **literal**.
+3. `\$` ist stets ein literales Dollarzeichen (keine Formel).
+4. Ein ungepaartes `$`/`$$` bleibt **wörtlich** (verschluckt keinen
+   Folgetext).
+5. In Code-Spans (`` `…` ``) und Code-Fences (` ``` `) wird Mathe
+   **nicht** interpretiert (bleibt literal).
+
+**Rendering-Zusicherung:**
+
+| Format   | Verhalten                                                   |
+| -------- | ----------------------------------------------------------- |
+| Markdown | roh/kanonisch (`$…$`/`$$…$$` unverändert; GitHub-renderbar)  |
+| HTML     | KaTeX-gerendert, self-contained (CSS+Fonts inline), Light/Dark |
+| PDF      | Block-Mathe als echtes Vektor-SVG; Inline-Mathe als TeX-Fallback in Code-Schrift (pdfmake platziert kein SVG im Textfluss) |
+
+Die Ausgabe ist **idempotent** (erneuter Lauf ⇒ byte-identisch).
+Der unterstützte Makro-Umfang ist der KaTeX-Standard; ungültiges TeX
+wird als Fehlerhinweis dargestellt, nicht als Build-Abbruch
+(`strict:'ignore'`, `trust:false`).
+
+**Abgrenzung:** Mathe-Notation ist reine **Doku-Konvention** und hat
+**keinen** Einfluss auf Grammatik, Parsing oder Auswertung. `$…$` in
+einem Doc-Kommentar ist unabhängig von der `${…}`-String-Interpolation
+(§ 2) in FinDSL-Quelltext — letztere wird zur Laufzeit ausgewertet,
+erstere nur vom Doc-Generator gerendert.
+
 ---
 
 ## 10. Tests

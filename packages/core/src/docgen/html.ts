@@ -14,6 +14,8 @@ import MarkdownIt from 'markdown-it';
 import type { DocModel } from './model.js';
 import { renderMarkdown, kopfMarkdown, slug, groupDecls } from './markdown.js';
 import { tokenizeFindsl } from './findsl-tokens.js';
+import { installMathRules, renderMathHtml } from './math.js';
+import { KATEX_CSS } from './katex-assets.js';
 import type { DocKopf } from './kopf.js';
 
 export interface HtmlOptions {
@@ -124,6 +126,14 @@ function md(): MarkdownIt {
         }
         return `<pre><code>${escapeHtml(t.content)}</code></pre>\n`;
     };
+    // Mathe-Parser-Rules (gemeinsam mit PDF) + KaTeX-HTML-Renderer.
+    // Die Renderer-Rules emittieren HTML direkt (wie `fence`/`kw_open`)
+    // und sind daher von `html:false` unberührt; Fremd-HTML im
+    // Prosatext bleibt weiterhin escaped.
+    installMathRules(m);
+    m.renderer.rules.math_inline = (tk, i) => renderMathHtml(tk[i].content, false);
+    m.renderer.rules.math_block = (tk, i) =>
+        `<div class="math-block">${renderMathHtml(tk[i].content, true)}</div>\n`;
     return m;
 }
 
@@ -435,7 +445,7 @@ export function renderHtml(model: DocModel, opts: HtmlOptions = {}): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(titel)}</title>
-<style>${THEME}</style>
+<style>${THEME}${KATEX_CSS}.katex{color:inherit}.math-block{margin:1em 0;overflow-x:auto}</style>
 </head>
 <body>
 <input type="checkbox" id="nav-toggle" aria-hidden="true">

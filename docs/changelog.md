@@ -2,6 +2,26 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-18 — **Mathematische Notation in
+Doku-Kommentaren (Issue #6)**. `$…$`/`$$…$$` in `--…--`-Doc-Prosa,
+`@param`/`@rückgabe`, §-4.15-Feldtexten (SPEC § 9.5, normativ). Eine
+gemeinsame Schicht `docgen/math.ts`: KaTeX server-seitig für HTML
+(CSS+woff2-Fonts via `scripts/gen-katex-css.mjs` →
+`docgen/katex-assets.ts` ins THEME inlined → self-contained), MathJax
+tex→SVG (liteAdaptor, lazy, `fontCache:'none'` + stabile IDs) für
+PDF-**Block**-Mathe als `{svg}`-Vektorknoten; PDF-**Inline** als
+TeX-Code-Fallback (pdfmake platziert kein SVG im Textfluss — bewusste
+Werkzeug-Grenze). Markdown unverändert kanonisch. Schutz vor
+§-Linkify via `quelle.ts PROTECT_RE`; `model.ts parseDocTags`
+behandelt mehrzeilige `$$` wie Fences. **Keine Grammatik-/Trias-
+Änderung** (`DOC_COMMENT` opak; `$`≠`${…}`). Back-Compat verifiziert:
+`kst/kraftst/gewst` MD byte-identisch, PDF inhaltsgleich, HTML-Content
+unverändert (nur KaTeX-`<style>` ergänzt). `est` trägt jetzt eine
+Demo-Formel. Teststand **793 grün** (55 Dateien, +15 Math), Bundle-
+Smoke 4/4 (esbuild bündelt katex+mathjax-full). Hinweis: Sandbox-Node
+18 kann das Projekt nicht ausführen — lokal mit Node 22 verifiziert
+(CI nutzt ohnehin Node 22).*
+
 *Letzte Aktualisierung: 2026-05-17 — **`est` mit den neuen Listen-
 Konstrukten erweitert: § 32 Abs. 6 / § 33 / § 10b mehr-entitätig**.
 Nach dem Interpreter-Ausbau überprüft, welche `est`-Skalar-Eingaben nur

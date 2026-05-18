@@ -193,6 +193,21 @@ abgerundet zu verstehen (durch den `Euro`-Typ bereits ganzzahlig). Der
 sich ergebende Steuerbetrag wird nach Satz 6 auf den nächsten vollen
 Euro abgerundet.
 
+Mit den Hilfsgrößen $y = \frac{\text{zvE} - \text{GFB}}{10000}$ (Zone 2)
+und $z = \frac{\text{zvE} - \text{ZONE\_2}}{10000}$ (Zone 3) lautet der
+Tarif zonenweise:
+
+$$
+\text{ESt}(\text{zvE}) =
+\begin{cases}
+0 & \text{zvE} \le \text{GFB} \\
+(a_2\,y + b_2)\,y & \text{Zone 2} \\
+(a_3\,z + b_3)\,z + c_3 & \text{Zone 3} \\
+0{,}42 \cdot \text{zvE} - C_4 & \text{Zone 4} \\
+0{,}45 \cdot \text{zvE} - C_5 & \text{Zone 5}
+\end{cases}
+$$
+
 @param zve zu versteuerndes Einkommen in vollen Euro (geprüfte
            Eingabe, ≥ 0; negativ → `abbruch`)
 @rückgabe  tarifliche Einkommensteuer in vollen Euro (Grundtarif)

@@ -323,3 +323,31 @@ sichtbar (der Server hat kein Terminal).
 
 ---
 
+## Mathematische Notation in Doku-Kommentaren (Issue #6, SPEC § 9.5)
+
+`$…$`/`$$…$$` in Doc-Kommentar-Prosa. **Keine Grammatik-/Trias-
+Änderung:** `DOC_COMMENT` ist ein einzelnes sichtbares Token; `$`
+kollidiert nicht mit dem Lexer, `${…}`-Interpolation ist Laufzeit
+(Quelltext), unabhängig. Eine gemeinsame Schicht (`docgen/math.ts`)
+speist alle drei Renderer; das Modell trägt **rohes `$…$`-Markdown**
+(Fixpunkt wie §-Links ⇒ Idempotenz trivial, kein Sentinel-Roundtrip).
+Schutz vor §-Linkify/Highlighter via `quelle.ts PROTECT_RE` (wie
+Code-Spans).
+
+**Designentscheidungen:**
+
+- **HTML = KaTeX server-seitig**, CSS **und** woff2-Fonts als `data:`-URI
+  ins bestehende `THEME`-`<style>` inlined (Generator
+  `scripts/gen-katex-css.mjs` → `docgen/katex-assets.ts`). Bewusst
+  ~360 KiB pro HTML — erhält das harte „eine Datei, kein externes
+  Asset, offline"-Prinzip; Volltreue browserunabhängig.
+- **PDF = MathJax tex→SVG** (liteAdaptor, kein Browser), lazy geladen,
+  `fontCache:'none'` + inhaltsabhängiger ID-Präfix ⇒ byte-stabil.
+  **Block** = echter `{svg}`-Vektorknoten. **Inline** = TeX-Fallback in
+  Code-Schrift, weil pdfmake **kein** SVG im fließenden Text-Array
+  platzieren kann (reale Werkzeug-Grenze, bewusst akzeptiert; HTML
+  rendert Inline voll). Kompromiss vor Mikro-Layout-Akrobatik.
+- **Markdown** unverändert (kanonisch, GitHub-renderbar).
+
+---
+

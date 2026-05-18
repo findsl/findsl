@@ -12,6 +12,7 @@
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",
     "test": "vitest run",
+    "codegen:difftest": "node scripts/codegen-difftest.mjs",
     "dist": "npm run build && npm run bundle",
     "binary": "npm run bundle && node scripts/build-binary.mjs",
     "all": "npm run langium:generate && npm run build && npm run bundle && npm test"

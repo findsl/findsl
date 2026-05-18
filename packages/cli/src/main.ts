@@ -11,7 +11,7 @@
  * Subkommandos:
  *   parse       — Datei parsen, Diagnose ausgeben
  *   test        — Akzeptanztests aus prüfe-Blöcken ausführen
- *   uebersetze  — Codegen in Zielsprache          (TODO)
+ *   codegen     — Zielsprachencode erzeugen (--lang; Phase 0: java-Gerüst)
  *   docgen      — Dokumentation generieren
  */
 
@@ -484,6 +484,109 @@ Beispiele:
         console.log(`✓ ${model.modules.length} Module, ${decls} Deklarationen → `
             + written.map((w) => path.basename(w)).join(', '));
         process.exit(0);
+    });
+
+program
+    .command('codegen')
+    .description('Erzeugt Zielsprachencode aus .findsl (Issue #7). '
+        + 'Phase 0: java-Gerüst (kompilierbare leere Klasse je Modul) — '
+        + 'Member-Bodies folgen in Phase 1. Semantik-Orakel: Interpreter.')
+    .argument('<pfade...>',
+        'beliebig viele Ziele: Dateien, Verzeichnisse (rekursiv) oder '
+        + 'Glob-Muster wie "examples/**/*.findsl" (quoten!)')
+    .option('-l, --lang <sprache>', 'Zielsprache (java)', 'java')
+    .option('-o, --out <verzeichnis>', 'Ausgabeverzeichnis', 'out/java')
+    .addHelpText('after', `
+Beispiele:
+  $ findsl codegen examples/kst/kst.findsl -l java -o /tmp/findsl-java
+  $ findsl codegen examples --lang java`)
+    .action(async (
+        pfade: string[],
+        options: { lang: string; out: string },
+    ) => {
+        const {
+            istUnterstuetzteSprache, GEPLANTE_SPRACHEN,
+            lowerProgram, emitJavaModule,
+        } = await import('@findsl/core/codegen/index.js');
+
+        const lang = options.lang.toLowerCase();
+        if (!istUnterstuetzteSprache(lang)) {
+            const geplant = (GEPLANTE_SPRACHEN as ReadonlyArray<string>).includes(lang)
+                ? ` "${lang}" ist als Folge-Ticket geplant, aber noch nicht implementiert.`
+                : '';
+            console.error(`✗ Zielsprache "${options.lang}" nicht unterstützt `
+                + `(verfügbar: java).${geplant}`);
+            process.exit(1);
+        }
+
+        const services = createFindslServices(NodeFileSystem).Findsl;
+        const { files, missing } = await resolveTargets(pfade);
+        for (const m of missing) {
+            console.error(`✗ Kein Treffer / keine Datei: ${m}`);
+        }
+        if (files.length === 0) {
+            console.error(`✗ Keine .findsl-Dateien gefunden (${pfade.join(', ')}).`);
+            process.exit(1);
+        }
+
+        const outDir = path.resolve(options.out);
+        await fs.mkdir(outDir, { recursive: true });
+        const written: string[] = [];
+        // Klassenname → Quelldatei: schützt vor stillem Überschreiben bei
+        // Namens-Kollision (Phase 0 mappt nur den Basenamen; Phase 3 macht
+        // den Java-Namen pfad-deterministisch, ADR8).
+        const seen = new Map<string, string>();
+        let failures = 0;
+
+        for (const absFile of files) {
+            const content = await fs.readFile(absFile, 'utf-8');
+            const document = services.shared.workspace.LangiumDocumentFactory.fromString(
+                content, URI.file(absFile),
+            );
+            await services.shared.workspace.DocumentBuilder.build(
+                [document], { validation: false },
+            );
+            // Parse-Fehler VOR AST-Nutzung prüfen (analog `test`): ein
+            // syntaktisch kaputter Input darf ab Phase 1 nicht still ein
+            // Teil-IR emittieren.
+            const parseErrors = (document.diagnostics ?? []).filter((d) => d.severity === 1);
+            if (parseErrors.length > 0) {
+                console.error(`✗ ${disp(absFile)}: Parse-/Validierungsfehler `
+                    + `(${parseErrors.length}) — Codegen übersprungen.`);
+                failures++;
+                continue;
+            }
+            const prog = document.parseResult.value as Program;
+            // ADR8 voll in Phase 1; Phase 0: deterministischer, kollisions-
+            // armer Klassenname aus dem Dateibasenamen. javaPackage wird in
+            // Phase 3 pfad-deterministisch (commonBase/displayId).
+            const base = path.basename(absFile, '.findsl');
+            let className = base.replace(/[^A-Za-z0-9_]/g, '_');
+            if (!/^[A-Za-z_]/.test(className)) className = '_' + className;
+            className = className.charAt(0).toUpperCase() + className.slice(1);
+            const kollision = seen.get(className);
+            if (kollision !== undefined) {
+                console.error(`✗ ${disp(absFile)}: Klassenname-Kollision `
+                    + `"${className}.java" (bereits aus ${disp(kollision)}) — `
+                    + `übersprungen. Phase 3 macht den Namen pfad-deterministisch.`);
+                failures++;
+                continue;
+            }
+            seen.set(className, absFile);
+            const ir = lowerProgram(prog, {
+                javaPackage: 'org.findsl.generated',
+                className,
+            });
+            const target = path.join(outDir, `${className}.java`);
+            await fs.writeFile(target, emitJavaModule(ir), 'utf-8');
+            written.push(target);
+        }
+
+        if (written.length > 0) {
+            console.log(`✓ ${written.length} Modul(e) → ${lang} `
+                + `(${disp(outDir)}/) — Phase 0: Klassengerüst, Member folgen (Phase 1).`);
+        }
+        process.exit(failures > 0 || missing.length > 0 ? 1 : 0);
     });
 
 program.parseAsync(process.argv);

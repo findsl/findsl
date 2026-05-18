@@ -75,20 +75,32 @@ describe('Math-Rendering MD/HTML/PDF (Issue #6)', () => {
         expect(renderHtml(model, { stand: 'x' })).toBe(renderHtml(model, { stand: 'x' }));
     });
 
-    it('Phase 5 — PDF: Block-Mathe als echtes SVG-Content, Inline als TeX-Fallback', () => {
+    it('Phase 5 — PDF: Block- UND Inline-Mathe sind echte SVG', () => {
         const doc = buildPdfDoc(model);
-        const hasSvg = findChild(
+        // Block-Mathe: zentriertes SVG (mdContent setzt alignment).
+        const hasBlockSvg = findChild(
             doc.content,
-            (n) => typeof n.svg === 'string' && (n.svg as string).includes('<svg'),
+            (n) => typeof n.svg === 'string' && (n.svg as string).includes('<svg')
+                && n.alignment === 'center',
         );
-        expect(hasSvg).toBe(true);
-        // Inline-TeX-Fallback (Code-Stil) trägt die TeX-Quelle.
-        const hasInlineTex = findChild(
+        expect(hasBlockSvg).toBe(true);
+        // Inline-Mathe: echtes SVG im Flow-Layout (eigener Zeilen-
+        // umbruch) — kenntlich an numerischer `height` (layoutFlow).
+        const hasInlineSvg = findChild(
             doc.content,
-            (n) => n.style === 'code' && typeof n.text === 'string'
-                && (n.text as string).includes('c^2'),
+            (n) => typeof n.svg === 'string' && (n.svg as string).includes('<svg')
+                && typeof n.height === 'number',
         );
-        expect(hasInlineTex).toBe(true);
+        expect(hasInlineSvg).toBe(true);
+        // Kein Roh-TeX irgendwo im Textfluss.
+        const hasRawTex = findChild(
+            doc.content,
+            (n) => typeof n.text === 'string'
+                && ((n.text as string).includes('\\cdot')
+                    || (n.text as string).includes('c^2')
+                    || (n.text as string).includes('\\frac')),
+        );
+        expect(hasRawTex).toBe(false);
     });
 
     it('Phase 5 — PDF docDefinition idempotent (stabile SVG-IDs)', () => {

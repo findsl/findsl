@@ -420,15 +420,15 @@ program
         + 'oder Glob-Muster wie "examples/**/*.findsl" — Muster in '
         + 'Anführungszeichen setzen, sonst expandiert die Shell sie selbst')
     .option('-f, --format <fmt>', 'md | html | pdf | all', 'all')
-    .option('-o, --out <ziel>', 'Ausgabe-Basisname (ohne Endung)', 'doku')
+    .option('-o, --out <ziel>', 'Ausgabe-Basisname (ohne Endung)', 'doc')
     .option('-k, --kopf <datei>', 'Markdown-Datei mit Front-Matter für '
         + 'Titelseite/Einleitung (fehlt sie, werden Titel/Untertitel '
         + 'aus dem ersten Modul abgeleitet)')
     .addHelpText('after', `
 Beispiele:
-  $ findsl docgen examples/kst -o examples/kst/out/kstg-doku -k examples/kst/kstg-doku.kopf.md
+  $ findsl docgen examples/kst -o examples/kst/out/kstg-doc -k examples/kst/kstg-doc.kopf.md
   $ findsl docgen examples -f pdf -o /tmp/findsl-gesamt
-  $ findsl docgen 'examples/**/*.findsl' -f html -o /tmp/findsl-doku`)
+  $ findsl docgen 'examples/**/*.findsl' -f html -o /tmp/findsl-doc`)
     .action(async (
         pfade: string[],
         options: { format: string; out: string; kopf?: string },

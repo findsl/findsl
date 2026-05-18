@@ -125,10 +125,10 @@ prüfe "§ 2 EStG — Kaskade mit § 32 Abs. 6 / § 33 / § 10b (Listen)" {
         // GdE 60.000. zumutbare Belastung (2 Kinder, Stufen 2/3/4 %):
         //   2%·15.340 + 3%·(51.130−15.340) + 4%·(60.000−51.130)
         //   = 306,80 + 1.073,70 + 354,80 = 1.735,30
-        // agB abziehbar = abrundenEuro(nichtNeg(5.000 − 1.735,30)) = 3.264
+        // agB abziehbar = nichtNeg(5.000 − 1.735,30).abrunden() = 3.264
         // Spenden abziehbar = min(2.000; 20%·60.000=12.000) = 2.000
         // SA = 4.000 + 2.000 = 6.000
-        // KFB = abrundenEuro((3.414+1.464)·1·12/12·100% ·2 Kinder) = 9.756
+        // KFB = ((3.414+1.464)·1·12/12·100% ·2 Kinder).abrunden() = 9.756
         // Einkommen = 60.000 − 6.000 − 3.264 = 50.736
         // zvE = 50.736 − 9.756 = 40.980 → Grundtarif = 7.521
         var e: EinkommensteuerErgebnis = BerechneEinkommensteuer(EinkommensteuerFall(
@@ -149,7 +149,7 @@ prüfe "§ 2 EStG — Kaskade mit § 32 Abs. 6 / § 33 / § 10b (Listen)" {
     testfall "Fall S — Splitting, 3 Kinder (eines halbjährig), Spenden gekappt" {
         // SdE = 100.000 → GdE 100.000. zumutbar (3 Kinder, 1/1/2 %):
         //   1%·15.340 + 1%·35.790 + 2%·48.870 = 153,40+357,90+977,40 = 1.488,70
-        // agB abziehbar = abrundenEuro(8.000 − 1.488,70) = 6.511
+        // agB abziehbar = (8.000 − 1.488,70).abrunden() = 6.511
         // Spenden abziehbar = min(30.000; max(20%·100.000=20.000; 0)) = 20.000
         // KFB Splitting faktor 2: 2·4.878·2 + 4.878·2·6/12 = 19.512 + 4.878 = 24.390
         // Einkommen = 100.000 − 20.000 − 6.511 = 73.489

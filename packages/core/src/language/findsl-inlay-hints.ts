@@ -52,6 +52,7 @@ import {
     isLambda,
     isLetStmt,
     isNumberLiteral,
+    isParenChain,
     isParam,
     isUnaryOp,
     isWaehleExpr,
@@ -251,7 +252,11 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
             return;
         }
         if (isCast(expr)) return;                          // `als`: bewusst aus
-        if (isNumberLiteral(expr) || isCallChain(expr)) emitLeaf();
+        // `ParenChain` (`(a*b).abrunden()`) ist wie `CallChain` ein
+        // Leaf: ein Geld-Symbol am Ergebnis (Typ aus dem Type-Checker).
+        if (isNumberLiteral(expr) || isCallChain(expr) || isParenChain(expr)) {
+            emitLeaf();
+        }
     }
 
     /**

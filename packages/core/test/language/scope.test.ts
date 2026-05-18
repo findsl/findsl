@@ -180,14 +180,10 @@ describe('reportImportIssues', () => {
         expect(msgs.some((m) => /"Tarifart" ist eine eingebaute Definition/.test(m))).toBe(true);
     });
 
-    it('Import einer eingebauten Funktion ist ein Fehler', async () => {
-        const program = await parseSource(
-            'verwende {abrundenEuro} aus "./a.b"\n',
-        );
-        const msgs: string[] = [];
-        reportImportIssues(program, (_node, message) => msgs.push(message));
-        expect(msgs.some((m) => /"abrundenEuro" ist eine eingebaute Definition/.test(m))).toBe(true);
-    });
+    // (Entfernt 2026-05-18: freie Builtin-Funktionen gibt es nicht mehr —
+    // § 11 ist Empfänger-Methode. Builtin-Import-Fehler bleibt durch den
+    // Typ-Fall „Tarifart" und den Aufzählungs-Wert-Fall „Grundtarif"
+    // abgedeckt.)
 
     it('Import eines eingebauten Aufzählungs-Werts ist ein Fehler', async () => {
         const program = await parseSource(

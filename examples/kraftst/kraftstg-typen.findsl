@@ -220,7 +220,7 @@ aufgerundet (§ 9 KraftStG: „für je … oder einen Teil davon").
 fn Einheiten(wert: Ganzzahl, teiler: Ganzzahl): Ganzzahl =
     wähle {
         falls wert <= 0 -> 0
-        sonst           -> aufrunden(wert / teiler)
+        sonst           -> ((wert / teiler) als Dezimal).aufrunden()
     }
 
 --

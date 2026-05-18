@@ -131,7 +131,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@62"
+                "$ref": "#/rules@63"
               },
               "arguments": []
             }
@@ -155,7 +155,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -174,7 +174,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@64"
+                    "$ref": "#/rules@65"
                   },
                   "arguments": []
                 }
@@ -248,7 +248,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@63"
+                "$ref": "#/rules@64"
               },
               "arguments": []
             },
@@ -290,7 +290,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -384,7 +384,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -457,7 +457,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -607,7 +607,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -686,7 +686,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -763,7 +763,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -842,7 +842,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -858,7 +858,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -877,7 +877,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@64"
+                    "$ref": "#/rules@65"
                   },
                   "arguments": []
                 }
@@ -930,7 +930,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@62"
+                "$ref": "#/rules@63"
               },
               "arguments": []
             }
@@ -979,7 +979,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@62"
+                "$ref": "#/rules@63"
               },
               "arguments": []
             }
@@ -1038,7 +1038,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -1268,7 +1268,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -2117,14 +2117,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@56"
-            },
-            "arguments": []
-          },
-          {
-            "$type": "RuleCall",
-            "rule": {
-              "$ref": "#/rules@47"
+              "$ref": "#/rules@57"
             },
             "arguments": []
           },
@@ -2138,7 +2131,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@53"
+              "$ref": "#/rules@49"
             },
             "arguments": []
           },
@@ -2146,6 +2139,20 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "$type": "RuleCall",
             "rule": {
               "$ref": "#/rules@54"
+            },
+            "arguments": []
+          },
+          {
+            "$type": "RuleCall",
+            "rule": {
+              "$ref": "#/rules@55"
+            },
+            "arguments": []
+          },
+          {
+            "$type": "RuleCall",
+            "rule": {
+              "$ref": "#/rules@39"
             },
             "arguments": []
           },
@@ -2164,31 +2171,70 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "arguments": []
           },
           {
-            "$type": "Group",
-            "elements": [
-              {
-                "$type": "Keyword",
-                "value": "("
-              },
-              {
-                "$type": "RuleCall",
-                "rule": {
-                  "$ref": "#/rules@24"
-                },
-                "arguments": []
-              },
-              {
-                "$type": "Keyword",
-                "value": ")"
-              }
-            ]
+            "$type": "RuleCall",
+            "rule": {
+              "$ref": "#/rules@40"
+            },
+            "arguments": []
+          }
+        ]
+      },
+      "entry": false,
+      "fragment": false,
+      "parameters": []
+    },
+    {
+      "$type": "ParserRule",
+      "name": "ParenExpr",
+      "inferredType": {
+        "$type": "InferredType",
+        "name": "Expr"
+      },
+      "definition": {
+        "$type": "Group",
+        "elements": [
+          {
+            "$type": "Keyword",
+            "value": "("
           },
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@39"
+              "$ref": "#/rules@24"
             },
             "arguments": []
+          },
+          {
+            "$type": "Keyword",
+            "value": ")"
+          },
+          {
+            "$type": "Group",
+            "elements": [
+              {
+                "$type": "Action",
+                "inferredType": {
+                  "$type": "InferredType",
+                  "name": "ParenChain"
+                },
+                "feature": "receiver",
+                "operator": "="
+              },
+              {
+                "$type": "Assignment",
+                "feature": "chain",
+                "operator": "+=",
+                "terminal": {
+                  "$type": "RuleCall",
+                  "rule": {
+                    "$ref": "#/rules@41"
+                  },
+                  "arguments": []
+                },
+                "cardinality": "+"
+              }
+            ],
+            "cardinality": "?"
           }
         ]
       },
@@ -2344,7 +2390,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -2356,7 +2402,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@40"
+                "$ref": "#/rules@41"
               },
               "arguments": []
             },
@@ -2377,14 +2423,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@41"
-            },
-            "arguments": []
-          },
-          {
-            "$type": "RuleCall",
-            "rule": {
-              "$ref": "#/rules@43"
+              "$ref": "#/rules@42"
             },
             "arguments": []
           },
@@ -2406,6 +2445,13 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "$type": "RuleCall",
             "rule": {
               "$ref": "#/rules@46"
+            },
+            "arguments": []
+          },
+          {
+            "$type": "RuleCall",
+            "rule": {
+              "$ref": "#/rules@47"
             },
             "arguments": []
           }
@@ -2442,7 +2488,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@42"
+                    "$ref": "#/rules@43"
                   },
                   "arguments": []
                 }
@@ -2461,7 +2507,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
                     "terminal": {
                       "$type": "RuleCall",
                       "rule": {
-                        "$ref": "#/rules@42"
+                        "$ref": "#/rules@43"
                       },
                       "arguments": []
                     }
@@ -2503,7 +2549,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@64"
+                    "$ref": "#/rules@65"
                   },
                   "arguments": []
                 }
@@ -2557,7 +2603,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -2592,7 +2638,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -2790,7 +2836,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@49"
+                "$ref": "#/rules@50"
               },
               "arguments": []
             },
@@ -2815,14 +2861,14 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@50"
+              "$ref": "#/rules@51"
             },
             "arguments": []
           },
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@51"
+              "$ref": "#/rules@52"
             },
             "arguments": []
           }
@@ -2856,7 +2902,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@52"
+                "$ref": "#/rules@53"
               },
               "arguments": []
             }
@@ -2875,7 +2921,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@52"
+                    "$ref": "#/rules@53"
                   },
                   "arguments": []
                 }
@@ -3000,7 +3046,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -3066,7 +3112,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
                 "terminal": {
                   "$type": "RuleCall",
                   "rule": {
-                    "$ref": "#/rules@55"
+                    "$ref": "#/rules@56"
                   },
                   "arguments": []
                 }
@@ -3085,7 +3131,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
                     "terminal": {
                       "$type": "RuleCall",
                       "rule": {
-                        "$ref": "#/rules@55"
+                        "$ref": "#/rules@56"
                       },
                       "arguments": []
                     }
@@ -3153,7 +3199,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "terminal": {
               "$type": "RuleCall",
               "rule": {
-                "$ref": "#/rules@64"
+                "$ref": "#/rules@65"
               },
               "arguments": []
             }
@@ -3195,13 +3241,6 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
           {
             "$type": "RuleCall",
             "rule": {
-              "$ref": "#/rules@57"
-            },
-            "arguments": []
-          },
-          {
-            "$type": "RuleCall",
-            "rule": {
               "$ref": "#/rules@58"
             },
             "arguments": []
@@ -3217,6 +3256,13 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
             "$type": "RuleCall",
             "rule": {
               "$ref": "#/rules@60"
+            },
+            "arguments": []
+          },
+          {
+            "$type": "RuleCall",
+            "rule": {
+              "$ref": "#/rules@61"
             },
             "arguments": []
           }
@@ -3236,7 +3282,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
         "terminal": {
           "$type": "RuleCall",
           "rule": {
-            "$ref": "#/rules@61"
+            "$ref": "#/rules@62"
           },
           "arguments": []
         }
@@ -3255,7 +3301,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
         "terminal": {
           "$type": "RuleCall",
           "rule": {
-            "$ref": "#/rules@62"
+            "$ref": "#/rules@63"
           },
           "arguments": []
         }

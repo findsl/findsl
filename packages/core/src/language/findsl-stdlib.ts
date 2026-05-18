@@ -45,12 +45,13 @@ export const BUILTIN_ENUM_DEFS: ReadonlyArray<BuiltinEnumDef> =
 export const BUILTIN_FUNCTION_DEFS: ReadonlyArray<BuiltinFunctionDef> =
     builtins.functions;
 
-/** Eine Listen-/Bereich-Methode (SPEC § 11.2) — reine LSP-Metadaten
- *  (Label/Signatur/Doc) für Completion & Hover. Die eigentliche
- *  Typ-Substitution lebt im Type-Checker (`findsl-types.listMethod`),
- *  da sie generisch ist (Element-Typ T, U/A aus Lambda) und sich nicht
- *  flach deklarieren lässt — dieser Katalog ist NUR die Namensquelle. */
-export interface ListMethodDef {
+/** Eine eingebaute Methode (SPEC § 11.1/§ 11.2/§ 11.5) — reine
+ *  LSP-Metadaten (Label/Signatur/Doc) für Completion & Hover. Die
+ *  eigentliche Typ-Logik lebt im Type-Checker (`findsl-types`:
+ *  `listMethod`/`scalarRoundingMethod`/`textMethod`), da sie
+ *  kontext-/generik-abhängig ist — diese Kataloge sind NUR die
+ *  Namens-/Doc-Quelle. */
+export interface BuiltinMethodDef {
     readonly name:      string;
     readonly signature: string;
     readonly doc:       string;
@@ -58,7 +59,7 @@ export interface ListMethodDef {
     readonly property:  boolean;
 }
 
-export const LIST_METHOD_DEFS: ReadonlyArray<ListMethodDef> = [
+export const LIST_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
     { name: 'länge',          signature: 'Ganzzahl',                                property: true,  doc: 'Anzahl der Elemente.' },
     { name: 'leer',           signature: 'Wahrheitswert',                           property: true,  doc: 'wahr, wenn die Liste keine Elemente hat.' },
     { name: 'kopf',           signature: 'T',                                       property: true,  doc: 'Erstes Element (Laufzeitfehler bei leerer Liste).' },
@@ -72,6 +73,35 @@ export const LIST_METHOD_DEFS: ReadonlyArray<ListMethodDef> = [
     { name: 'summe',          signature: '() -> T',                                 property: false, doc: 'Summe der Elemente (numerisch); leere Liste → 0.' },
     { name: 'größtes',        signature: '() -> T',                                 property: false, doc: 'Größtes Element (Fehler bei leerer Liste).' },
     { name: 'kleinstes',      signature: '() -> T',                                 property: false, doc: 'Kleinstes Element (Fehler bei leerer Liste).' },
+];
+
+/**
+ * Skalar-Rundungs-Methoden (SPEC § 11.1) auf `EuroCent`/`Dezimal`.
+ * Reine LSP-Metadaten (Label/Signatur/Doc) für Completion & Hover; die
+ * kontextgetriebene Zielauflösung (`EuroCent` → `Euro`/`Cent` aus dem
+ * erwarteten Typ; `Dezimal` → `Ganzzahl`) lebt im Type-Checker
+ * (`findsl-types.scalarRoundingMethod`). Dieser Katalog ist NUR die
+ * Namens-/Doc-Quelle. */
+export const SCALAR_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
+    { name: 'abrunden',  signature: '() -> Euro|Cent|Ganzzahl', property: false, doc: 'Rundet **ab** (Richtung −∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`). SPEC § 11.1.' },
+    { name: 'aufrunden', signature: '() -> Euro|Cent|Ganzzahl', property: false, doc: 'Rundet **auf** (Richtung +∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`); „je angefangene Einheit"-Tarife. SPEC § 11.1.' },
+];
+
+/** Text-Methoden (SPEC § 11.5). Properties (`länge`/`leer`/`alsText`)
+ *  ohne `()`, sonst Aufruf-Methoden. Typ-Logik in
+ *  `findsl-types.textMethod`. Die `.alsText(format = …)`-Variante ist in
+ *  v1.0 NICHT enthalten (SPEC § 11.5 Status). */
+export const TEXT_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
+    { name: 'länge',              signature: 'Ganzzahl',                  property: true,  doc: 'Anzahl Unicode-Zeichen.' },
+    { name: 'leer',               signature: 'Wahrheitswert',             property: true,  doc: 'wahr, wenn die Länge 0 ist.' },
+    { name: 'alsText',            signature: 'Text',                      property: true,  doc: 'Identitäts-Konversion (Default-Formatierung).' },
+    { name: 'einrückungEntfernen',signature: '() -> Text',                property: false, doc: 'Entfernt den gemeinsamen Whitespace-Prefix aller Zeilen.' },
+    { name: 'alsGroßbuchstaben',  signature: '() -> Text',                property: false, doc: 'Komplette Großschreibung.' },
+    { name: 'alsKleinbuchstaben', signature: '() -> Text',                property: false, doc: 'Komplette Kleinschreibung.' },
+    { name: 'beginntMit',         signature: '(prefix: Text) -> Wahrheitswert', property: false, doc: 'Präfix-Test.' },
+    { name: 'endetMit',           signature: '(suffix: Text) -> Wahrheitswert', property: false, doc: 'Suffix-Test.' },
+    { name: 'enthält',            signature: '(teil: Text) -> Wahrheitswert',   property: false, doc: 'Substring-Test.' },
+    { name: 'geteiltAn',          signature: '(trenner: Text) -> Liste<Text>',  property: false, doc: 'Split an der Trennzeichenfolge.' },
 ];
 
 /** Aufzählungs-Wert → enthaltender Aufzählungs-Name (`Grundtarif` → `Tarifart`). */

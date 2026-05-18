@@ -74,6 +74,8 @@ import {
     BUILTIN_FUNCTION_DEFS,
     BUILTIN_PRIMITIVE_TYPES,
     LIST_METHOD_DEFS,
+    SCALAR_METHOD_DEFS,
+    TEXT_METHOD_DEFS,
     isBuiltinName,
 } from './findsl-stdlib.js';
 import {
@@ -353,8 +355,8 @@ export class FindslCompletionProvider extends DefaultCompletionProvider {
         // Empfänger ist `Liste<T>`/`Bereich<T>` (ggf. nullable) → die
         // 12 §-11.2-Methoden anbieten (Auffindbarkeit).
         const unwrapped = recv.kind === 'nullable' ? recv.inner : recv;
-        if (unwrapped.kind === 'list') {
-            for (const m of LIST_METHOD_DEFS) {
+        const offer = (defs: ReadonlyArray<typeof LIST_METHOD_DEFS[number]>) => {
+            for (const m of defs) {
                 acceptor(context, {
                     label: m.name,
                     kind: CompletionItemKind.Method,
@@ -363,6 +365,17 @@ export class FindslCompletionProvider extends DefaultCompletionProvider {
                     insertText: m.property ? m.name : `${m.name}(`,
                     sortText: SORT_LOCAL + m.name,
                 });
+            }
+        };
+        if (unwrapped.kind === 'list') {
+            offer(LIST_METHOD_DEFS);                       // § 11.2
+        } else if (unwrapped.kind === 'primitive') {
+            // § 11.1 Skalar-Rundung auf EuroCent/Dezimal; § 11.5 Text.
+            if (unwrapped.name === 'EuroCent' || unwrapped.name === 'Dezimal'
+                || unwrapped.name === 'Prozent') {
+                offer(SCALAR_METHOD_DEFS);
+            } else if (unwrapped.name === 'Text') {
+                offer(TEXT_METHOD_DEFS);
             }
         }
     }

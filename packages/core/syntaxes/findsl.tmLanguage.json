@@ -70,7 +70,7 @@
     },
     {
       "name": "support.function.builtin.findsl",
-      "match": "\\b(abrundenEuro|aufrundenEuro|abrundenCent|aufrundenCent|aufrunden|abrunden)\\b(?=\\s*\\()"
+      "match": "\\b()\\b(?=\\s*\\()"
     },
     {
       "name": "support.type.builtin.findsl",

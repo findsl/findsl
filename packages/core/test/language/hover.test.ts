@@ -142,15 +142,10 @@ datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
 });
 
 describe('Hover auf Builtins', () => {
-    it('abrundenEuro-Aufruf zeigt die Builtin-Beschreibung', async () => {
-        const src = `fn f(x: EuroCent): Euro = abrundenEuro(x)
-`;
-        const h = await hoverAt(src, 'abrundenEuro(x)');
-        const md = content(h);
-        expect(md).toContain('fn abrundenEuro');
-        expect(md).toContain('Rundet auf volle Euro');
-        expect(md).toContain('PAP 2025');
-    });
+    // (Entfernt 2026-05-18: freie Builtin-Funktion `abrundenEuro` gibt es
+    // nicht mehr — § 11.1 ist die Methode `.abrunden()`. Methoden-Builtins
+    // erhalten — wie die § 11.2-Listenmethoden — keine eigene Hover-Karte;
+    // Parität gewahrt. Aufzählungs-/Typ-Hover bleibt unten getestet.)
 
     it('Builtin-Aufzählung Tarifart', async () => {
         const src = `fn f(art: Tarifart): Tarifart = art

@@ -27,6 +27,7 @@
  */
 
 import { Decimal } from 'decimal.js';
+import type { AstNode } from 'langium';
 
 import {
     AbbruchSignal,
@@ -54,7 +55,6 @@ import {
     type Value,
 } from './values.js';
 import { Environment, type AusgabeSink } from './environment.js';
-import { registerBuiltins } from './builtins.js';
 import {
     isAbbruchExpr,
     isAufzaehlungDecl,
@@ -68,6 +68,7 @@ import {
     isFieldAccess,
     isForceUnwrap,
     isFuerExpr,
+    isFunktionBody,
     isFunktionDecl,
     isIndex,
     isKonstDecl,
@@ -78,6 +79,7 @@ import {
     isNullCheck,
     isNullLiteral,
     isNumberLiteral,
+    isParenChain,
     isPruefeDecl,
     isRange,
     isSafeFieldAccess,
@@ -91,6 +93,7 @@ import {
     type CallArg,
     type ChainOp,
     type CallChain,
+    type ParenChain,
     type DatensatzDecl,
     type Expr,
     type FuerExpr,
@@ -143,7 +146,9 @@ export function interpretProgram(
     filePath?: string,
 ): InterpretedModule {
     const env = new Environment(null, sink);
-    registerBuiltins((name, value) => env.define(name, value));
+    // Keine freien Builtin-Funktionen mehr (seit 2026-05-18): § 11-Stdlib
+    // ist Empfänger-Methode (Dispatch in `applyChainOp`/`scalarRoundingValue`
+    // /`textMethodValue`/`listMethodValue`), kein Environment-Symbol.
 
     applyImports(program, env, registry, filePath);
 
@@ -287,6 +292,8 @@ export function evalExpr(expr: Expr, env: Environment): Value {
     }
 
     if (isCallChain(expr)) return evalCallChain(expr, env);
+
+    if (isParenChain(expr)) return evalParenChain(expr, env);
 
     if (isLambda(expr)) {
         if (expr.params.length === 0) {
@@ -478,15 +485,15 @@ function applyMoneyAnnotation(v: Value, type: unknown, was: string): Value {
     if (name === 'Euro' && !cast.value.isInteger()) {
         throw new InterpretError(
             `${was}: Euro-Wert "${formatGerman(cast.value)}" ist nicht `
-            + `ganzzahlig — explizite Rundung nötig (abrundenEuro/`
-            + `aufrundenEuro, SPEC § 3.2.2).`,
+            + `ganzzahlig — explizite Rundung nötig (\`.abrunden()\`/`
+            + `\`.aufrunden()\` mit Euro-Kontext, SPEC § 11.1).`,
         );
     }
     if (name === 'Cent' && !cast.value.mul(100).isInteger()) {
         throw new InterpretError(
             `${was}: Cent-Wert "${formatGerman(cast.value.mul(100))}" ist `
-            + `nicht ganzzahlig — explizite Rundung nötig (abrundenCent/`
-            + `aufrundenCent, SPEC § 3.2.2).`,
+            + `nicht ganzzahlig — explizite Rundung nötig (\`.abrunden()\`/`
+            + `\`.aufrunden()\` mit Cent-Kontext, SPEC § 11.1).`,
         );
     }
     return cast;
@@ -683,8 +690,27 @@ function evalCallChain(cc: CallChain, env: Environment): Value {
     if (!cc.name) {
         throw new InterpretError('CallChain ohne Wurzel-Identifier.');
     }
-    let current: Value = resolveAtom(cc.name, env);
-    for (const op of cc.chain) {
+    return evalChainOps(resolveAtom(cc.name, env), cc.chain, env);
+}
+
+/**
+ * Geklammerter Ausdruck mit Postfix-Kette (`(a * b).abrunden()`). Der
+ * Empfänger ist ein beliebiger Ausdruck; die Ketten-Auswertung ist
+ * identisch zu `evalCallChain` (eine Ketten-Logik, SPEC `paren_expr`).
+ */
+function evalParenChain(pc: ParenChain, env: Environment): Value {
+    if (!pc.receiver) {
+        throw new InterpretError('ParenChain ohne Empfänger-Ausdruck.');
+    }
+    return evalChainOps(evalExpr(pc.receiver, env), pc.chain, env);
+}
+
+/** Wendet eine Kette von ChainOps nacheinander auf den Empfängerwert an. */
+function evalChainOps(
+    start: Value, chain: ReadonlyArray<ChainOp>, env: Environment,
+): Value {
+    let current = start;
+    for (const op of chain) {
         current = applyChainOp(current, op, env);
     }
     return current;
@@ -713,6 +739,19 @@ function applyChainOp(base: Value, op: ChainOp, env: Environment): Value {
 
     if (isFieldAccess(op)) {
         if (!op.name) throw new InterpretError('FieldAccess ohne Namen.');
+        if (base.kind === 'numeric'
+            && (op.name === 'abrunden' || op.name === 'aufrunden')) {
+            return scalarRoundingValue(base, op.name, op);
+        }
+        if (base.kind === 'string') {
+            const tm = textMethodValue(base, op.name);
+            if (tm === undefined) {
+                throw new InterpretError(
+                    `Text hat keine Methode "${op.name}" (SPEC § 11.5).`,
+                );
+            }
+            return tm;
+        }
         if (base.kind === 'list') return listMethodValue(base, op.name);
         return readField(base, op.name);
     }
@@ -900,6 +939,158 @@ function listMethodValue(list: ListValue, name: string): Value {
             });
         default:
             throw new InterpretError(`Liste hat keine Methode "${name}" (SPEC § 11.2).`);
+    }
+}
+
+/**
+ * Skalar-Rundung (SPEC § 11.1) als Aufruf-Methode (`.abrunden()`/
+ * `.aufrunden()`): liefert einen `BuiltinValue`, den das folgende `()`-
+ * Kettenglied auswertet (gleiche Mechanik wie `listMethodValue`-Aufruf-
+ * methoden). `Dezimal` → `Ganzzahl` (kontextfrei). `EuroCent` → Ziel
+ * `Euro`/`Cent` aus dem lokalen AST-Kontext-Walk (Bindungs-/Cast-/fn-
+ * Rückgabe-Annotation; Default `Euro`) — type-checker-unabhängig, der
+ * statische Checker hat die Zielexistenz bereits verifiziert. Wert ist
+ * Euro-kanonisch; `toDecimalPlaces` wie in `builtins.rundung`. Andere
+ * Tags → `InterpretError` (Laufzeit-Netz; statisch schon verboten).
+ */
+function scalarRoundingValue(
+    recv: NumericValue, name: string, opNode: AstNode,
+): Value {
+    const mode = name === 'abrunden' ? Decimal.ROUND_FLOOR : Decimal.ROUND_CEIL;
+    // Prozent → volle Prozent, Einheit bleibt (kontextfrei). Anders als
+    // der EuroCent/Dezimal-Fall ist der `Prozent`-Tag hier zuverlässig:
+    // ein statisch Prozent-typisierter Empfänger ist zur Laufzeit stets
+    // Prozent (Prozent-Arithmetik erhält den Tag; kein leere-`summe()`-
+    // Degenerat für einen Skalar). Intern Bruch → Magnitude (×100)
+    // runden → zurück als Bruch (÷100), Tag `Prozent`.
+    if (recv.tag === 'Prozent') {
+        return new BuiltinValue(`Prozent.${name}`, () =>
+            NumericValue.prozent(
+                recv.value.mul(100).toDecimalPlaces(0, mode).div(100)));
+    }
+    // BEWUSST tag-agnostisch (≙ frühere freie `abrundenEuro`/`abrunden`):
+    // der Interpreter ist abseits des Geldmodells untypisiert, der
+    // Laufzeit-Tag des Empfängers kann (z. B. leere `.summe()` → D1
+    // `Ganzzahl`, Prozent-Zwischen-Tags) vom statischen Typ abweichen.
+    // Die Empfänger-Restriktion (`EuroCent`/`Dezimal`) ist bereits ein
+    // STATISCHER Phase-1-Gate (Type-Checker); zur Laufzeit zählt nur der
+    // Euro-kanonische `value` + das maßgebliche Ziel aus dem Kontext —
+    // exakt die alte freie-Funktions-Semantik (`value.toDecimalPlaces`
+    // + Ziel-Tag), daher wertgleich zum Vor-Migrations-Verhalten.
+    const target = governingMoneyTarget(opNode);
+    if (target === undefined) {
+        // Kein Geld-Kontext ⇒ Dezimal-Empfänger-Fall → `Ganzzahl`.
+        return new BuiltinValue(`Ganzzahl.${name}`, () =>
+            NumericValue.ganzzahl(recv.value.toDecimalPlaces(0, mode)));
+    }
+    const nk = target === 'Cent' ? 2 : 0;
+    const make = target === 'Cent' ? NumericValue.cent : NumericValue.euro;
+    return new BuiltinValue(`${target}.${name}`, () =>
+        make(recv.value.toDecimalPlaces(nk, mode)));
+}
+
+/**
+ * Lokaler AST-Kontext-Walk: bestimmt das EuroCent-Rundungsziel
+ * (`Euro`/`Cent`) aus der nächsten maßgeblichen Geld-Annotation —
+ * `als`-Cast, Bindungs-Annotation (`konst`/`var`) oder Rückgabetyp der
+ * umschließenden Funktion. Läuft durch ausdrucks-interne Eltern
+ * (`BinaryOp`/`ParenChain`/`Wenn`/`wähle`-Arm/`UnaryOp`/`Cast`-Wert)
+ * weiter hoch — auch transparent durch `CallArg`/`Call` (eine Rundung
+ * als Funktionsargument findet so die umschließende Bindung/fn-Rückgabe).
+ * `undefined` ⇒ keine maßgebliche Geld-Annotation gefunden (der Aufrufer
+ * entscheidet den Default — EuroCent-Empfänger ⇒ `Euro` als dominanter
+ * Fall; Ganzzahl-Empfänger ⇒ Ganzzahl-Identität). Bewusste, durch den
+ * statischen Type-Checker abgesicherte Grenze: liegt der EINZIGE Kontext
+ * im Parametertyp der aufgerufenen Funktion (nicht in einer sichtbaren
+ * Annotation/Cast/fn-Rückgabe darüber), greift der Default — im realen
+ * Korpus kommt das nicht vor (Aggregat 122/122).
+ */
+function governingMoneyTarget(node: AstNode): 'Euro' | 'Cent' | undefined {
+    let cur: AstNode = node;
+    for (;;) {
+        const c = cur.$container as AstNode | undefined;
+        if (!c) return undefined;
+        if (isCast(c) && c.value === cur) {
+            const m = moneyAnnotationName(c.targetType);
+            if (m === 'Euro' || m === 'Cent') return m;
+        } else if (isKonstDecl(c) && c.value === cur) {
+            const m = moneyAnnotationName(c.type);
+            if (m === 'Euro' || m === 'Cent') return m;
+        } else if (isLetStmt(c) && c.value === cur) {
+            const m = c.type ? moneyAnnotationName(c.type) : undefined;
+            if (m === 'Euro' || m === 'Cent') return m;
+        } else if (isFunktionBody(c)) {
+            const fd = c.$container;
+            const m = isFunktionDecl(fd) ? moneyAnnotationName(fd.returnType) : undefined;
+            if (m === 'Euro' || m === 'Cent') return m;
+        }
+        cur = c;
+    }
+}
+
+/** Gemeinsamen führenden Whitespace-Prefix nicht-leerer Zeilen entfernen. */
+function dedentText(s: string): string {
+    const lines = s.split('\n');
+    let min: number | undefined;
+    for (const ln of lines) {
+        if (ln.trim() === '') continue;
+        const lead = ln.length - ln.replace(/^[ \t]+/, '').length;
+        min = min === undefined ? lead : Math.min(min, lead);
+    }
+    if (min === undefined || min === 0) return s;       // all-blank bzw. keine Einrückung
+    return lines.map((ln) => (ln.trim() === '' ? ln : ln.slice(min))).join('\n');
+}
+
+/**
+ * Text-Argument einer § 11.5-Aufruf-Methode. `v` kann bei Teil-Parse
+ * (FinDSLs häufigste Bug-Quelle) oder fehlendem Argument `undefined`
+ * sein — dann ein geordneter `InterpretError` statt eines nativen
+ * `TypeError` (der den InterpretError-Pfad umginge).
+ */
+function asText(name: string, v: Value | undefined): string {
+    if (!v || v.kind !== 'string') {
+        throw new InterpretError(
+            `Text.${name}: Text-Argument erwartet, erhalten ${v ? v.kind : 'keines'}.`,
+        );
+    }
+    return v.value;
+}
+
+/**
+ * Text-Methoden (SPEC § 11.5). `länge`/`leer`/`alsText` sind
+ * Eigenschaften (direkter Wert); der Rest sind Aufruf-Methoden
+ * (`BuiltinValue`, vom folgenden `()` ausgeführt). `undefined` ⇒
+ * unbekannte Methode (Aufrufer wirft „Text hat keine Methode …").
+ * `.alsText(format = …)` ist v1.0 nicht implementiert (SPEC § 11.5).
+ */
+function textMethodValue(s: StringValue, name: string): Value | undefined {
+    switch (name) {
+        case 'länge':   return NumericValue.ganzzahl([...s.value].length);
+        case 'leer':    return s.value.length === 0 ? WAHR : FALSCH;
+        case 'alsText': return s;
+        case 'einrückungEntfernen':
+            return new BuiltinValue('Text.einrückungEntfernen', () =>
+                new StringValue(dedentText(s.value)));
+        case 'alsGroßbuchstaben':
+            return new BuiltinValue('Text.alsGroßbuchstaben', () =>
+                new StringValue(s.value.toUpperCase()));
+        case 'alsKleinbuchstaben':
+            return new BuiltinValue('Text.alsKleinbuchstaben', () =>
+                new StringValue(s.value.toLowerCase()));
+        case 'beginntMit':
+            return new BuiltinValue('Text.beginntMit', (a) =>
+                s.value.startsWith(asText(name, a[0])) ? WAHR : FALSCH);
+        case 'endetMit':
+            return new BuiltinValue('Text.endetMit', (a) =>
+                s.value.endsWith(asText(name, a[0])) ? WAHR : FALSCH);
+        case 'enthält':
+            return new BuiltinValue('Text.enthält', (a) =>
+                s.value.includes(asText(name, a[0])) ? WAHR : FALSCH);
+        case 'geteiltAn':
+            return new BuiltinValue('Text.geteiltAn', (a) =>
+                new ListValue(s.value.split(asText(name, a[0])).map((p) => new StringValue(p))));
+        default:
+            return undefined;
     }
 }
 

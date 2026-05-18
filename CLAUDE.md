@@ -39,8 +39,12 @@ verbindlich [`GESETZ-ZU-FINDSL.md`](GESETZ-ZU-FINDSL.md) lesen (schrittweise
 Arbeitsanweisung). Vorlagen: `examples/kst/` (klein), `examples/kraftst/`
 (groß, Modul-Dekomposition), `examples/gewst/` (Verrechnungslogik).
 
-**Teststand (Stand 2026-05-17, verifiziert):** 778 Tests grün, 54 Dateien,
-Bundle-Smoke 4/4. Beispielmodule: `kst` · `kraftst` · `gewst` · `est`.
+**Teststand (Stand 2026-05-18, verifiziert):** 836 Tests grün, 56 Dateien,
+Bundle-Smoke 4/4, Aggregat 122/122. Beispielmodule: `kst` · `kraftst` ·
+`gewst` · `est`. **§ 11-Stdlib = Empfänger-Methoden** (`.abrunden()`/
+`.aufrunden()` kontextgetrieben, § 11.5-Text-Methoden); freie Rundungs-
+funktionen entfernt; Postfix-Kette auf `( … )` (`ParenChain`). Details:
+[docs/changelog.md](docs/changelog.md) (2026-05-18).
 
 ---
 

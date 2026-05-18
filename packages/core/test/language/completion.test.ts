@@ -54,8 +54,10 @@ fn tarif(zve: Euro): Euro = ‸
         expect(l).toContain('zve');            // Parameter
         expect(l).toContain('GFB');            // Top-Level-Konstante
         expect(l).toContain('tarif');          // Funktion selbst (Rekursion)
-        expect(l).toContain('abrundenEuro');   // Builtin-Funktion
         expect(l).toContain('Grundtarif');     // Builtin-Aufzählungs-Wert
+        // Keine freien Builtin-Funktionen mehr (§ 11 = Methoden) → in
+        // Ausdrucksposition wird kein `abrunden` o. ä. vorgeschlagen.
+        expect(l).not.toContain('abrunden');
     });
 
     it('schlägt lokale var-Bindung und eigene Aufzählungs-Werte vor', async () => {
@@ -71,11 +73,23 @@ fn f(x: Ganzzahl): Ganzzahl {
         expect(l).toContain('Rot');    // eigener Aufzählungs-Wert
     });
 
-    it('liefert Builtin-Funktion mit Signatur als detail', async () => {
-        const items = await complete(`fn f(b: EuroCent): Euro = ‸
+    it('Member-Completion bietet § 11.1-Skalar-Methoden auf EuroCent', async () => {
+        const items = await complete(`fn f(b: EuroCent): Euro = b.‸
 `);
-        const ar = items.find((i) => i.label === 'abrundenEuro');
-        expect(ar?.detail).toBe('fn abrundenEuro(betrag: EuroCent): Euro');
+        const l = labels(items);
+        expect(l).toContain('abrunden');
+        expect(l).toContain('aufrunden');
+        const ab = items.find((i) => i.label === 'abrunden');
+        expect(ab?.detail).toContain('()');     // Aufruf-Methode
+    });
+
+    it('Member-Completion bietet § 11.5-Text-Methoden auf Text', async () => {
+        const items = await complete(`fn f(s: Text): Ganzzahl = s.‸
+`);
+        const l = labels(items);
+        expect(l).toContain('länge');
+        expect(l).toContain('einrückungEntfernen');
+        expect(l).toContain('alsText');
     });
 });
 

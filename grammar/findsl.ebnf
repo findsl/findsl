@@ -99,13 +99,17 @@ atom               ::= literal
                      | lambda
                      | list_literal
                      | abbruch_expr
-                     | "(" expr ")"
+                     | paren_expr
                      | call_chain
 
 (* Begründeter, nicht abfangbarer Programmabbruch; Typ: Bottom `never` *)
 abbruch_expr       ::= "abbruch" "(" expr ")"
 
 list_literal       ::= "[" arg_list? "]" type_args?
+
+(* Geklammerter Ausdruck, optional mit Postfix-Kette: `(a * b).abrunden()`,
+   `(liste).länge`, `(wert)[0]`. Ohne folgende Kette = nur Klammer-Gruppierung. *)
+paren_expr         ::= "(" expr ")" chain_op*
 
 call_chain         ::= IDENT chain_op*
 chain_op           ::= "(" arg_list? ")"

@@ -36,19 +36,23 @@ Kopf/Seitenzahlen, Anhang aus `collectAbbruchSites()`), `quelle.ts`
 `pdfmake`. **Phase 2 (optional, offen):** Starlight-Site-Export als
 zusätzlicher Modus (kanonisches MD bleibt Quelle).
 
-**(c) OFFENE DISKUSSION — Standard-Bibliothek, Built-Ins & deren
-Syntax (vom Nutzer angefordert 2026-05-16, NICHT jetzt umsetzen).**
-Größere Design-Diskussion über Umfang/Form der Stdlib und Built-Ins
-sowie deren Aufruf-/Methoden-Syntax. Noch nichts entscheiden oder
-implementieren — erst die Diskussion führen, wenn der Nutzer sie
-aufmacht. Konkrete Saat-Fragen:
-- `Text.einrückungEntfernen()` funktioniert nicht (Methoden-Built-in
-  auf `Text`?).
-- Braucht es ein `.alsText`-Built-in, oder reicht `als Text`
-  (Cast-Konsistenz statt eigener Methode)?
-- Allgemein: Built-ins als freie Funktionen vs. Methoden-Syntax
-  (`x.methode()`); Namensraum/Erweiterbarkeit; SPEC § 11 Stdlib-Umfang.
-Status: **Grundsatzdiskussion weiterhin offen**, keine Bewertung.
+**(c) ✓ ENTSCHIEDEN & UMGESETZT 2026-05-18 — Stdlib = Empfänger-
+Methoden, kontextgetrieben.** Die Grundsatzdiskussion (angefordert
+2026-05-16) wurde geführt und vollständig implementiert:
+- Built-ins sind **Methoden** (`x.methode()`), nicht freie Funktionen
+  — eine einheitliche Dispatch-Architektur (§ 11.2 Liste, § 11.5 Text,
+  § 11.1 Skalar-Rundung); freie Rundungsfunktionen **hart entfernt**
+  (kein Doppel-Mechanismus, konsistent § 4.10/§ 4.18-Linie).
+- `.abrunden()`/`.aufrunden()`: nur `EuroCent` (Ziel `Euro`/`Cent` aus
+  dem Kontext) / `Dezimal` (→ `Ganzzahl`); SPEC § 11.1.
+- `Text.einrückungEntfernen()` und die weiteren § 11.5-Text-Methoden:
+  **implementiert**.
+- `.alsText`: als **Property** implementiert (Identität/Default-
+  Format); `.alsText(format = …)` bleibt v1.0-offen (eigene
+  Designrunde, SPEC § 11.5-Status).
+- Grammatik-Trias erweitert: Postfix auf `( Expr )` (`ParenChain`) →
+  beliebiger Ausdruck als Methoden-Empfänger.
+Details: [changelog.md](changelog.md) (2026-05-18).
 
 **Teilentscheidung 2026-05-17 (Nutzer):** Generische Zahl-Rundung
 `aufrunden(Dezimal): Ganzzahl` / `abrunden(Dezimal): Ganzzahl` wurde

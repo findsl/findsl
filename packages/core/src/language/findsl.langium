@@ -210,8 +210,17 @@ Atom infers Expr:
     | Lambda
     | ListLiteral
     | AbbruchExpr
-    | '(' Expr ')'
+    | ParenExpr
     | CallChain;
+
+// Geklammerter Ausdruck, optional mit Postfix-Kette (`(a * b).abrunden()`,
+// `(liste).länge`, `(wert)[0]`). Ohne folgende Kette bleibt der Knoten
+// der innere Ausdruck (transparent — kein Wrapper, kein AST-Ripple); erst
+// eine tatsächlich folgende `ChainOp+` erzeugt den `ParenChain`-Knoten
+// (`receiver` = innerer Ausdruck). Spiegelt `call_chain` für Nicht-Name-
+// Empfänger; ChainOp ist identisch zu CallChain (eine Kettenlogik).
+ParenExpr infers Expr:
+    '(' Expr ')' ({infer ParenChain.receiver=current} chain+=ChainOp+)?;
 
 
 // === Abbruch (begründeter, nicht abfangbarer Programmabbruch) ===

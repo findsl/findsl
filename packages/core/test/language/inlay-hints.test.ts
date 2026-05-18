@@ -125,10 +125,12 @@ prüfe "P" {
         expect(labels(types(hs))).toContain('€');
     });
 
-    it('Builtin abrundenEuro: "€" (EuroCent) + "betrag:"', async () => {
-        const hs = await hints(`fn f(b: EuroCent): Euro = abrundenEuro(123,45)
+    it('§ 11.1-Methode `.abrunden()`: ParenChain-Ergebnis bekommt "€"', async () => {
+        // Kein Parameter-Name-Hint mehr (parameterlose Methode); der
+        // type-checker-getriebene Geld-Einheit-Hint am Rundungsergebnis
+        // (Euro) bleibt — ParenChain ist wie CallChain ein Geld-Leaf.
+        const hs = await hints(`fn f(b: Euro): Euro = (b * 5%).abrunden()
 `);
-        expect(labels(param(hs))).toContain('betrag:');
         expect(labels(types(hs))).toContain('€');
     });
 

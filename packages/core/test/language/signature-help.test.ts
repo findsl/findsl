@@ -74,15 +74,10 @@ fn r(): Euro = f(‸)
 });
 
 describe('SignatureHelp: Builtins & Konstruktoren', () => {
-    it('Builtin-Funktion abrundenEuro', async () => {
-        const h = await sig(`fn f(b: EuroCent): Euro = abrundenEuro(‸)
-`);
-        const s = h!.signatures[0];
-        expect(s.label).toBe('fn abrundenEuro(betrag: EuroCent): Euro');
-        expect(s.parameters).toHaveLength(1);
-        const [a, b] = s.parameters![0].label as [number, number];
-        expect(s.label.slice(a, b)).toBe('betrag: EuroCent');
-    });
+    // (Entfernt 2026-05-18: freie Builtin-Funktion `abrundenEuro` gibt es
+    // nicht mehr — § 11.1 ist die parameterlose Methode `.abrunden()`.
+    // Methoden-Builtins haben — wie § 11.2-Listenmethoden — keine eigene
+    // SignatureHelp; Parität gewahrt.)
 
     it('Datensatz-Konstruktor', async () => {
         const h = await sig(`datensatz Fall(betrag: Euro, satz: Prozent)

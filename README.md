@@ -29,8 +29,9 @@ Vollständige Diskussion in [`SPEC.md`](SPEC.md), Kapitel 1.3.
 2. **Reine Funktionen, kein globaler Zustand.** Eingaben als Parameter,
    Ausgaben als Rückgabewerte. Keine Mutation, keine Seiteneffekte.
 3. **Einheiten und Präzision im Typsystem.** `Euro`, `Cent`, `EuroCent`,
-   `Prozent` sind verschiedene Typen. Rundung ist explizit
-   (`abrundenEuro(...)`, `aufrundenCent(...)`).
+   `Prozent` sind verschiedene Typen. Rundung ist explizit über
+   Methoden (`betrag.abrunden()`, `wert.aufrunden()`; Ziel aus dem
+   Kontext, SPEC § 11.1).
 4. **Gesetzliche Quelle als Pflicht-Annotation.** Jede Konstante und jede
    normgebundene Regel trägt `@Quelle("§ ...")`.
 5. **Veranlagungsjahr im Datei-/Pfadnamen.** Jahres-spezifische Regeln
@@ -119,7 +120,7 @@ Solidaritätszuschlag auf die festgesetzte Einkommensteuer.
 @Quelle("§ 3 Absatz 1, § 4 SolzG 1995")
 fn Solidaritaetszuschlag(est: Euro): Euro = wähle {
     falls est < FREIGRENZE + 1 -> 0
-    sonst                      -> abrundenEuro(SOLI_SATZ * est)
+    sonst                      -> (SOLI_SATZ * est).abrunden()
 }
 
 prüfe "§§ 3, 4 SolzG — Nullzone & Satz" {

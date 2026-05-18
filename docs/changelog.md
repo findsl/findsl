@@ -2,7 +2,36 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
-*Letzte Aktualisierung: 2026-05-18 — **Mathematische Notation in
+*Letzte Aktualisierung: 2026-05-18 — **§ 11-Stdlib auf Empfänger-
+Methoden umgestellt (Grundsatzentscheidung § 8c, kontextgetrieben).**
+Freie Rundungsfunktionen `abrundenEuro/aufrundenEuro/abrundenCent/
+aufrundenCent/abrunden/aufrunden` ersetzt durch Methoden `.abrunden()`/
+`.aufrunden()` (SPEC § 11.1): nur auf `EuroCent` (Ziel `Euro`/`Cent`
+aus dem Kontext — Annotation/`als`-Cast/fn-Rückgabetyp; kein Kontext →
+statischer Fehler) oder `Dezimal` (→ `Ganzzahl`). § 11.5-Text-Methoden
+(`.länge`/`.leer`/`.alsText`/`.einrückungEntfernen()`/`.alsGroß-/
+Kleinbuchstaben()`/`.beginntMit/endetMit/enthält()`/`.geteiltAn()`)
+implementiert (`.alsText(format=…)` bleibt v1.0-offen). **Grammatik-
+Trias erweitert:** Postfix-Kette auf geklammertem Ausdruck
+(`paren_expr ::= "(" expr ")" chain_op*`, neuer `ParenChain`-Knoten;
+transparent ohne Kette) — `(satz * basis).abrunden()` ist jetzt
+ausdrückbar (Kern-Tarifmuster); gemeinsamer Ketten-Walker für
+`CallChain`+`ParenChain` in Type-Checker (`walkChain`) und Interpreter
+(`evalChainOps`). Kontextgetriebene Zielauflösung: Type-Checker via
+bidirektionalem `expected` (inkl. `als`-Cast als Kontextquelle 2);
+Interpreter type-checker-unabhängig via lokalem AST-Kontext-Walk
+(`governingMoneyTarget`), **tag-agnostisch** = wertgleich zur früheren
+freien Form (Laufzeit-Tag ≠ statischer Typ z. B. leere `.summe()` → D1
+`Ganzzahl` kippt nicht). Freie Funktionen **hart entfernt** (kein
+Doppel-Mechanismus). Alle 17 `.findsl`-Quellstellen + Fixtures/Prosa
+(README/GESETZ/`.test`-Kommentare) migriert. **Nachtrag (Nutzer):
+`.abrunden()`/`.aufrunden()` zusätzlich auf `Prozent` zulässig → volle
+`Prozent`, Einheit bleibt, kontextfrei (analog `EuroCent→Euro`;
+`42,7%.abrunden()` → `42 %`); zulässige Empfänger nun EuroCent/Dezimal/
+Prozent.** **836 vitest grün, 56 Dateien, Aggregat 122/122 (kst 23 ·
+kraftst 34 · gewst 43 · est 22), Bundle-Smoke 7/7, tsc/`langium:generate`
+sauber, Beispiele parsen clean.** Davor (ebenfalls 2026-05-18):
+**Mathematische Notation in
 Doku-Kommentaren (Issue #6)**. `$…$`/`$$…$$` in `--…--`-Doc-Prosa,
 `@param`/`@rückgabe`, §-4.15-Feldtexten (SPEC § 9.5, normativ). Eine
 gemeinsame Schicht `docgen/math.ts`: KaTeX server-seitig für HTML
@@ -20,9 +49,7 @@ unverändert (nur KaTeX-`<style>` ergänzt). `est` trägt jetzt eine
 Demo-Formel. Teststand **793 grün** (55 Dateien, +15 Math), Bundle-
 Smoke 4/4 (esbuild bündelt katex+mathjax-full). Hinweis: Sandbox-Node
 18 kann das Projekt nicht ausführen — lokal mit Node 22 verifiziert
-(CI nutzt ohnehin Node 22).*
-
-*Letzte Aktualisierung: 2026-05-17 — **`est` mit den neuen Listen-
+(CI nutzt ohnehin Node 22). Davor: **`est` mit den neuen Listen-
 Konstrukten erweitert: § 32 Abs. 6 / § 33 / § 10b mehr-entitätig**.
 Nach dem Interpreter-Ausbau überprüft, welche `est`-Skalar-Eingaben nur
 *Tooling-Kompromiss* waren (vs. echtes „anderes Recht/Verfahren").

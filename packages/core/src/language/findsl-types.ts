@@ -47,6 +47,7 @@ import {
     isNullCheck,
     isNullLiteral,
     isNumberLiteral,
+    isParenChain,
     isPruefeDecl,
     isRange,
     isSafeFieldAccess,
@@ -474,8 +475,16 @@ function inferImpl(expr: Expr, env: TypeEnv, ctx: TypeContext, report: Reporter)
     }
 
     if (isCast(expr)) {
-        const inner = infer(expr.value, env, ctx, report);
         const target = resolveTypeAnnotation(expr.targetType, ctx);
+        // `als`-Cast ist SPEC-§11.1-Kontextquelle 2: das Cast-Ziel in
+        // eine Ketten-Empfänger-Rundung fädeln (`e.abrunden() als Cent`).
+        // Nur für Ketten — sonst `infer` unverändert (keine Cast-
+        // Semantik-Änderung; `checkCastLegal` bleibt maßgeblich).
+        const inner = isCallChain(expr.value)
+            ? inferCallChain(expr.value, env, ctx, report, target)
+            : isParenChain(expr.value)
+                ? inferParenChain(expr.value, env, ctx, report, target)
+                : infer(expr.value, env, ctx, report);
         checkCastLegal(inner, target, expr, report);
         return target;
     }
@@ -497,6 +506,8 @@ function inferImpl(expr: Expr, env: TypeEnv, ctx: TypeContext, report: Reporter)
     }
 
     if (isCallChain(expr)) return inferCallChain(expr, env, ctx, report);
+
+    if (isParenChain(expr)) return inferParenChain(expr, env, ctx, report);
 
     if (isLambda(expr)) {
         if (expr.params.length === 0) {
@@ -902,6 +913,7 @@ function ensureWahrheit(node: AstNode, t: Type, report: Reporter): void {
 function inferCallChain(
     cc: { name?: string; chain: ReadonlyArray<AstNode & { $type: string }> },
     env: TypeEnv, ctx: TypeContext, report: Reporter,
+    expected?: Type,
 ): Type {
     if (!cc.name) return TUnknown;
     let current = env.lookup(cc.name) ?? ctx.globals.lookup(cc.name);
@@ -930,15 +942,48 @@ function inferCallChain(
         }
     }
 
-    for (let k = 0; k < cc.chain.length; k++) {
-        const op = cc.chain[k];
+    return walkChain(current, cc.chain, cc as unknown as AstNode, env, ctx, report, expected);
+}
+
+/**
+ * Geklammerter Ausdruck mit Postfix-Kette (`(a * b).abrunden()`). Der
+ * Empfänger ist ein beliebiger Ausdruck statt eines Namens; der
+ * Ketten-Walker ist identisch zu `inferCallChain` (eine Ketten-Logik,
+ * SPEC `paren_expr`). Teil-Parse: fehlender `receiver` → `unknown`.
+ */
+function inferParenChain(
+    pc: { receiver?: Expr; chain: ReadonlyArray<AstNode & { $type: string }> },
+    env: TypeEnv, ctx: TypeContext, report: Reporter,
+    expected?: Type,
+): Type {
+    if (!pc.receiver) return TUnknown;
+    const start = infer(pc.receiver, env, ctx, report);
+    return walkChain(start, pc.chain, pc as unknown as AstNode, env, ctx, report, expected);
+}
+
+/**
+ * Gemeinsamer Ketten-Walker für `CallChain` (Namens-Empfänger) und
+ * `ParenChain` (geklammerter Ausdruck als Empfänger). `start` ist der
+ * Typ des Empfängers; `node` dient nur der Diagnose-Verortung beim
+ * Aufruf-Glied.
+ */
+function walkChain(
+    start: Type,
+    chain: ReadonlyArray<AstNode & { $type: string }>,
+    node: AstNode,
+    env: TypeEnv, ctx: TypeContext, report: Reporter,
+    expected?: Type,
+): Type {
+    let current = start;
+    for (let k = 0; k < chain.length; k++) {
+        const op = chain[k];
 
         // Listen-/Bereich-Methoden (SPEC § 11.2): nur wenn der Empfänger
         // eine Liste ist — Record-/Enum-/unknown-Basen laufen unverändert
         // durch die bestehenden Zweige. Call-Methoden konsumieren das
         // unmittelbar folgende Call-Kettenglied.
         if (current.kind === 'list' && isFieldAccess(op) && op.name) {
-            const next = cc.chain[k + 1];
+            const next = chain[k + 1];
             const callOp = next && isCall(next) ? next : undefined;
             const r = listMethod(current.element, op.name, callOp, env, ctx, report);
             if (r === undefined) {
@@ -952,8 +997,48 @@ function inferCallChain(
             continue;
         }
 
+        // Skalar-Rundungs-Methoden (SPEC § 11.1): `.abrunden()`/
+        // `.aufrunden()` auf primitivem Empfänger. EuroCent → Ziel
+        // Euro/Cent aus `expected` (nur wenn diese Methode das LETZTE
+        // wertgebende Kettenglied ist — sonst ist der Kontext nicht der
+        // der Rundung). Dezimal → immer Ganzzahl. Sonstige Primitive →
+        // Empfänger-Fehler. Record-/Listen-Felder namens „abrunden"
+        // bleiben unberührt (nur `current.kind === 'primitive'`).
+        if (current.kind === 'primitive' && isFieldAccess(op)
+            && (op.name === 'abrunden' || op.name === 'aufrunden')) {
+            const next = chain[k + 1];
+            const callOp = next && isCall(next) ? next : undefined;
+            const afterIdx = callOp ? k + 2 : k + 1;
+            const isTerminal = afterIdx >= chain.length;
+            current = scalarRoundingMethod(
+                current, op.name, isTerminal ? expected : undefined,
+                op as unknown as AstNode, report,
+            );
+            if (callOp) k++;                      // folgendes () konsumieren
+            continue;
+        }
+
+        // Text-Methoden (SPEC § 11.5). Nach der Skalar-Rundung, damit
+        // `.abrunden` auf Text die präzise Empfänger-Diagnose bekommt
+        // (nicht „Text hat keine Methode abrunden").
+        if (current.kind === 'primitive' && current.name === 'Text'
+            && isFieldAccess(op) && op.name) {
+            const next = chain[k + 1];
+            const callOp = next && isCall(next) ? next : undefined;
+            const r = textMethod(op.name, callOp, op as unknown as AstNode, env, ctx, report);
+            if (r === undefined) {
+                report(op as unknown as AstNode,
+                    `Text hat keine Methode "${op.name}" (SPEC § 11.5).`);
+                current = TUnknown;
+            } else {
+                current = r.type;
+                if (r.consumedCall) k++;
+            }
+            continue;
+        }
+
         if (isCall(op)) {
-            current = applyCall(current, op.args, env, ctx, report, cc as unknown as AstNode);
+            current = applyCall(current, op.args, env, ctx, report, node);
         } else if (isIndex(op)) {
             if (op.index) checkAgainstAnnotation(op.index, TGanzzahl, env, ctx, report);
             if (current.kind === 'list') {
@@ -1041,6 +1126,89 @@ function listMethod(
         case 'größtes':
         case 'kleinstes':
             return { type: elem, consumedCall: had };
+        default:
+            return undefined;
+    }
+}
+
+/**
+ * Skalar-Rundung (SPEC § 11.1). `recv` = Empfängertyp. Vertrag:
+ *  - `Dezimal`  → `Ganzzahl` (kontextfrei, einziges sinnvolles Ziel).
+ *  - `EuroCent` → `Euro` ODER `Cent`, bestimmt aus `expected`
+ *    (bidirektionale Inferenz). Fehlt der Kontext → Fehler.
+ *  - sonst → Empfänger-Fehler (keine Nachkommastellen — nichts zu runden).
+ *  - `unknown` (Teil-Parse) → `unknown`, kein Folge-Diagnose-Rauschen.
+ */
+function scalarRoundingMethod(
+    recv: Type, name: string, expected: Type | undefined,
+    node: AstNode, report: Reporter,
+): Type {
+    if (recv.kind === 'unknown') return TUnknown;
+    if (recv.kind === 'primitive' && recv.name === 'Dezimal') return TGanzzahl;
+    // Prozent → volle Prozent (Einheit bleibt, kontextfrei — analog
+    // EuroCent→Euro, nur ein sinnvolles Ziel; SPEC § 11.1).
+    if (recv.kind === 'primitive' && recv.name === 'Prozent') return TProzent;
+    if (recv.kind === 'primitive' && recv.name === 'EuroCent') {
+        const tgt = roundingTarget(expected);
+        if (tgt) return tgt;
+        report(node,
+            `Zielgenauigkeit unbestimmt — \`.${name}()\` auf EuroCent `
+            + `braucht einen Euro-/Cent-Kontext (\`: Euro\`/\`: Cent\` `
+            + `annotieren oder \`als\` casten; SPEC § 11.1).`);
+        return TUnknown;
+    }
+    report(node,
+        `\`.${name}()\` nur auf EuroCent, Dezimal oder Prozent (Werte mit `
+        + `Nachkommastellen), erhalten ${typeToString(recv)} (SPEC § 11.1).`);
+    return TUnknown;
+}
+
+/** Euro/Cent aus dem erwarteten Typ als Rundungsziel; sonst `undefined`. */
+function roundingTarget(expected: Type | undefined): Type | undefined {
+    if (!expected) return undefined;
+    const e = unwrapNullable(expected);
+    if (e.kind === 'primitive' && (e.name === 'Euro' || e.name === 'Cent')) return e;
+    return undefined;
+}
+
+/**
+ * Text-Methoden (SPEC § 11.5). `länge`/`leer`/`alsText` sind
+ * Eigenschaften (kein `()`), der Rest Aufruf-Methoden. Die
+ * `.alsText(format = …)`-Variante ist in v1.0 nicht implementiert
+ * (Argumente → Hinweis, Ergebnis bleibt `Text`). `undefined` ⇒
+ * unbekannte Methode (Aufrufer meldet „Text hat keine Methode …").
+ */
+function textMethod(
+    name: string,
+    callOp: { args: ReadonlyArray<CallArg> } | undefined,
+    node: AstNode,
+    env: TypeEnv, ctx: TypeContext, report: Reporter,
+): { type: Type; consumedCall: boolean } | undefined {
+    const args = callOp?.args ?? [];
+    const had = !!callOp;
+    switch (name) {
+        case 'länge': return { type: TGanzzahl, consumedCall: false };
+        case 'leer':  return { type: TWahrheit, consumedCall: false };
+        case 'alsText':
+            if (args.length > 0) {
+                report(node,
+                    '`.alsText(format = …)` ist in v1.0 noch nicht '
+                    + 'implementiert; nur das parameterlose `.alsText` '
+                    + '(SPEC § 11.5).');
+            }
+            return { type: TText, consumedCall: had };
+        case 'einrückungEntfernen':
+        case 'alsGroßbuchstaben':
+        case 'alsKleinbuchstaben':
+            return { type: TText, consumedCall: had };
+        case 'beginntMit':
+        case 'endetMit':
+        case 'enthält':
+            if (args[0]) checkAgainstAnnotation(args[0].value, TText, env, ctx, report);
+            return { type: TWahrheit, consumedCall: had };
+        case 'geteiltAn':
+            if (args[0]) checkAgainstAnnotation(args[0].value, TText, env, ctx, report);
+            return { type: { kind: 'list', element: TText }, consumedCall: had };
         default:
             return undefined;
     }
@@ -1324,6 +1492,21 @@ function checkAgainstAnnotationImpl(
             }
             return { kind: 'function', params, result: resultT };
         }
+    }
+
+    // CallChain/ParenChain: erwarteten Typ in die Kette fädeln, damit
+    // die kontextgetriebene Skalar-Rundung (`EuroCent.abrunden()` →
+    // `Euro`/`Cent`, SPEC § 11.1) das Ziel sieht. Für alle anderen
+    // Ketten-Ops ist `expected` wirkungslos → verhaltensgleich zum
+    // bisherigen Default-Pfad (rein additiv).
+    if (isCallChain(expr) || isParenChain(expr)) {
+        const t = isCallChain(expr)
+            ? inferCallChain(expr, env, ctx, report, expected)
+            : inferParenChain(expr, env, ctx, report, expected);
+        if (!assignable(t, expected) && t.kind !== 'unknown' && expected.kind !== 'unknown') {
+            report(expr, `Erwartet ${typeToString(expected)}, erhalten ${typeToString(t)}.`);
+        }
+        return t;
     }
 
     // Default: infer + Subtyp-Check

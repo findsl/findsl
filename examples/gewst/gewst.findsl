@@ -687,7 +687,7 @@ Steuermessbetrag — siehe `berechneGewerbesteuer`).
 --
 @Quelle("§ 11 Absatz 1 Satz 3 GewStG")
 fn AbrundenAuf100(betrag: EuroCent): EuroCent =
-    (abrunden(betrag / ABRUNDUNG_11) * ABRUNDUNG_11) als EuroCent
+    ((betrag / ABRUNDUNG_11).abrunden() * ABRUNDUNG_11) als EuroCent
 
 --
 Roher Freibetrag nach **§ 11 Abs. 1 Satz 3 GewStG** je Rechtsform —

@@ -258,8 +258,9 @@ Diese Härtung gilt **nur für Konstanten**.
 Aufzählungen und Aufzählungs-Werten** *müssen* mit einem
 **Großbuchstaben** beginnen (Unicode-Großbuchstabe; führende
 Unterstriche für die `_Intern`-Konvention erlaubt). Verstoß ist ein
-**Fehler**. Eingebaute Funktionen (`abrundenEuro`, `aufrunden`, …)
-sind ein eigener fester Namensraum und nicht betroffen. `var`,
+**Fehler**. Eingebaute Methoden (`.abrunden()`, `.aufrunden()`,
+`.zuordnen()`, …) sind ein eigener fester Namensraum (lowerCamelCase
+per Konvention) und von dieser Regel nicht betroffen. `var`,
 Parameter und Datensatz-**Felder** behalten lowerCamelCase (nicht
 erzwungen).
 
@@ -521,8 +522,10 @@ Implizit nur in Richtung höherer Präzision:
 Euro → EuroCent → Cent
 ```
 
-Die Rückrichtung verlangt explizite Rundung mittels `abrundenEuro(...)`,
-`aufrundenEuro(...)`, `abrundenCent(...)` oder `aufrundenCent(...)`.
+Die Rückrichtung verlangt explizite Rundung über die Methoden
+`.abrunden()`/`.aufrunden()` auf einem `EuroCent`-Wert; die
+Zieleinheit (`Euro` oder `Cent`) ergibt sich aus dem Kontext
+([§ 11.1](#111-rundungs-methoden)).
 
 #### 3.2.3 Arithmetik
 
@@ -740,10 +743,11 @@ Funktionstypen sind **first-class** — können als Parameter, Variablen
 und Rückgabewerte verwendet werden.
 
 ```findsl
+fn AufVolleEuro(x: EuroCent): Euro = x.abrunden()
 fn anwenden(f: (EuroCent) -> Euro, x: EuroCent): Euro = f(x)
 
-anwenden(123,45, abrundenEuro)                                 // benannte Funktion
-anwenden(123,45, { x -> aufrundenEuro(x + 0,5) })             // Lambda
+anwenden(123,45, AufVolleEuro)                                // benannte Funktion
+anwenden(123,45, { x -> x.aufrunden() })                      // Lambda (Ziel Euro aus f-Typ)
 ```
 
 ### 3.13 Bidirektionale Typinferenz
@@ -767,7 +771,7 @@ GFB + 1                            // 1 → Euro (aus Kontext GFB:Euro)
 1 + 2                              // beide → Ganzzahl (kein Geldkontext)
 1 + 2 als Euro                     // 1 → Euro (rechte Seite explizit Euro)
 
-abrundenEuro(123,45)               // 123,45 → EuroCent (Parameter-Typ)
+(123,45).abrunden() als Euro       // 123,45 → EuroCent (Empfänger-Anforderung)
 
 var z: Dezimal = (zve - GFB) / 10.000
 //   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Resultattyp Dezimal aus Annotation
@@ -957,10 +961,10 @@ wähle {
 Vergleicht ein Subjekt mit mehreren Patterns:
 
 ```findsl
-wähle (stkl) {
+fn Kinderfreibetrag(stkl: Steuerklasse, zkf: EuroCent): Euro = wähle (stkl) {
     falls I, II      -> 0
-    falls III        -> abrundenEuro(zkf * KFB_SATZ_III)
-    falls IV, V, VI  -> abrundenEuro(zkf * KFB_SATZ_IV_VI)
+    falls III        -> (zkf * KFB_SATZ_III).abrunden()
+    falls IV, V, VI  -> (zkf * KFB_SATZ_IV_VI).abrunden()
 }
 ```
 
@@ -1306,7 +1310,7 @@ Wenn der ganze Funktionsrumpf ein Ausdruck ist:
 fn name(p: T): R = ausdruck
 
 fn estSplitting(zve: Euro): Euro =
-    2 * estGrundtarif(abrundenEuro(zve / 2))
+    2 * estGrundtarif((zve / 2).abrunden())
 ```
 
 #### 6.2.3 Default-Parameter
@@ -1757,16 +1761,35 @@ einen `abbruch` aus, scheitert er (mit Anzeige der Begründung).
 
 ## 11. Standard-Bibliothek
 
-### 11.1 Rundungsfunktionen
+### 11.1 Rundungs-Methoden
 
-| Funktion              | Signatur                       | Wirkung                 |
-| --------------------- | ------------------------------ | ----------------------- |
-| `abrundenEuro(x)`     | `(EuroCent\|Cent) -> Euro`     | Floor zum vollen Euro   |
-| `aufrundenEuro(x)`    | `(EuroCent\|Cent) -> Euro`     | Ceiling zum vollen Euro |
-| `abrundenCent(x)`     | `(EuroCent) -> Cent`           | Floor zum vollen Cent   |
-| `aufrundenCent(x)`    | `(EuroCent) -> Cent`           | Ceiling zum vollen Cent |
-| `abrunden(x)`         | `(Dezimal) -> Ganzzahl`        | Floor zur Ganzzahl (−∞) |
-| `aufrunden(x)`        | `(Dezimal) -> Ganzzahl`        | Ceiling zur Ganzzahl (+∞); für „je angefangene Einheit"-Tarife (z. B. KraftStG § 9) |
+`.abrunden()` (Floor, Richtung −∞) und `.aufrunden()` (Ceiling,
+Richtung +∞) sind **Methoden** auf Werten **mit Nachkommastellen** —
+also auf `EuroCent`, `Dezimal` und `Prozent`. Auf allen anderen
+Typen (`Euro`, `Cent`, `Ganzzahl`, `Text`, …) ist ihr Aufruf ein
+**Fehler**: ohne Nachkommastellen gibt es nichts zu runden.
+
+| Empfänger  | Methode                      | Ergebnistyp            | Wirkung                                   |
+| ---------- | ---------------------------- | ---------------------- | ----------------------------------------- |
+| `EuroCent` | `.abrunden()`/`.aufrunden()` | `Euro` **oder** `Cent` | Floor/Ceiling zur vollen Zieleinheit      |
+| `Dezimal`  | `.abrunden()`/`.aufrunden()` | `Ganzzahl`             | Floor/Ceiling zur Ganzzahl; `.aufrunden()` für „je angefangene Einheit"-Tarife (z. B. KraftStG § 9) |
+| `Prozent`  | `.abrunden()`/`.aufrunden()` | `Prozent`              | Floor/Ceiling zur **vollen Prozent** (Einheit bleibt); z. B. `42,7%.abrunden()` → `42 %`, `5,5%.aufrunden()` → `6 %` |
+
+**Zielbestimmung bei `EuroCent`-Empfänger.** Welche Zieleinheit gilt —
+voller `Euro` oder voller `Cent` —, ergibt sich aus dem erwarteten Typ
+(bidirektionale Inferenz, dieselben Kontextquellen wie in
+[§ 3.13](#313-bidirektionale-typinferenz)):
+
+1. Typ-Annotation einer Bindung — `var/konst x: Euro = e.abrunden()`
+2. Expliziter `als`-Cast — `e.abrunden() als Cent`
+3. Rückgabetyp der umgebenden Funktion — `fn F(…): Euro = e.abrunden()`
+4. Geld-Operandentyp eines Vergleichs (§ 3.13 Punkt 4)
+
+Fehlt ein solcher Kontext, ist der Aufruf ein **Fehler**
+(„Zielgenauigkeit unbestimmt — `: Euro`/`: Cent` annotieren oder `als`
+casten"). FinDSL rät die Einheit nicht. Bei `Dezimal`-Empfänger ist
+`Ganzzahl`, bei `Prozent`-Empfänger `Prozent` (volle Prozent) das
+einzige sinnvolle Ziel — kein Kontext nötig.
 
 ### 11.2 Listen-Methoden
 
@@ -1822,12 +1845,16 @@ Siehe [§ 3.7](#37-aufzählungen).
 - Alle Typen haben implizit eine `.alsText`-Methode mit deutscher
   Default-Formatierung (siehe Tabelle in [§ 2.7.6](#276-text-literale)).
 - Wer abweichende Formatierung braucht, ruft `.alsText(format = …)`
-  mit einem Format-Bezeichner auf. Verfügbare Bezeichner:
+  mit einem Format-Bezeichner auf. Vorgesehene Bezeichner:
   - `"ohneEinheit"` — nur Zahl (Geldtypen haben ohnehin **kein**
     Suffix; betrifft also v. a. das `%` von `Prozent`)
   - `"reinAscii"`   — keine Tausenderpunkte/Komma-Dezimaltrenner
   - `"langform"`    — ausgeschriebene Form, z. B. "12 096 Euro"
-  - (weitere folgen, sind in v1.0 noch nicht endgültig fixiert)
+
+  > **v1.0-Status:** Die parameterlose `.alsText` ist verfügbar. Die
+  > `.alsText(format = …)`-Variante samt Bezeichner-Katalog ist in
+  > v1.0 **noch nicht implementiert** und nicht endgültig fixiert
+  > (eigene Designrunde offen).
 
 ---
 
@@ -1961,12 +1988,17 @@ atom               ::= literal
                      | lambda
                      | list_literal
                      | abbruch_expr
-                     | "(" expr ")"
+                     | paren_expr
                      | call_chain
 
 abbruch_expr       ::= "abbruch" "(" expr ")"
 
 list_literal       ::= "[" arg_list? "]" type_args?
+
+(* Geklammerter Ausdruck, optional mit Postfix-Kette:
+   `(a * b).abrunden()`, `(liste).länge`, `(wert)[0]`.
+   Ohne folgende chain_op* = reine Klammer-Gruppierung. *)
+paren_expr         ::= "(" expr ")" chain_op*
 
 call_chain         ::= IDENT chain_op*
 chain_op           ::= "(" arg_list? ")"                                              (* Funktions-/Methodenaufruf *)

@@ -46,7 +46,8 @@ Grenze):**
 
 **Modellierungs-Entscheidung (Statut schweigt):** jede listen-
 abgeleitete Kategorie-Abzugssumme (Kinderfreibetrag, abziehbare agB,
-abziehbare Spenden) wird auf **volle Euro abgerundet** (`abrundenEuro`),
+abziehbare Spenden) wird auf **volle Euro abgerundet** (`.abrunden()`
+mit Euro-Kontext),
 bevor sie in die Euro-Kaskade eingeht — deterministisch, konsistent mit
 § 32a Abs. 1 Satz 1 (zvE auf volle Euro), fiskuskonservativ.
 --
@@ -218,14 +219,16 @@ fn EstGrundtarif(zve: Euro): Euro = wähle {
     falls zve < GFB + 1               -> 0
     falls zve < ZONE_2_OBERGRENZE + 1 -> {
         var y: Dezimal = (zve - GFB) / ZEHNTAUSEND
-        abrunden((ZONE_2_PROGRESSION * y + ZONE_2_LINEAR) * y) als Euro
+        var roh: Dezimal = (ZONE_2_PROGRESSION * y + ZONE_2_LINEAR) * y
+        roh.abrunden() als Euro
     }
     falls zve < ZONE_3_OBERGRENZE + 1 -> {
         var z: Dezimal = (zve - ZONE_2_OBERGRENZE) / ZEHNTAUSEND
-        abrunden((ZONE_3_PROGRESSION * z + ZONE_3_LINEAR) * z + ZONE_3_KONSTANTE) als Euro
+        var roh: Dezimal = (ZONE_3_PROGRESSION * z + ZONE_3_LINEAR) * z + ZONE_3_KONSTANTE
+        roh.abrunden() als Euro
     }
-    falls zve < ZONE_4_OBERGRENZE + 1 -> abrundenEuro(ZONE_4_SATZ * zve - ZONE_4_ABZUG)
-    sonst                             -> abrundenEuro(ZONE_5_SATZ * zve - ZONE_5_ABZUG)
+    falls zve < ZONE_4_OBERGRENZE + 1 -> (ZONE_4_SATZ * zve - ZONE_4_ABZUG).abrunden()
+    sonst                             -> (ZONE_5_SATZ * zve - ZONE_5_ABZUG).abrunden()
 }
 
 --
@@ -243,7 +246,7 @@ auf volle Euro abgerundet.
 fn EstSplitting(zve: Euro): Euro = wähle {
     falls zve < 0 als Euro -> abbruch("§ 32a Absatz 5 EStG: gemeinsam zu versteuerndes Einkommen darf nicht negativ sein (zvE=${zve})")
     sonst                  -> {
-        var halbesZve: Euro = abrunden(zve / 2) als Euro
+        var halbesZve: Euro = (zve / 2).abrunden() als Euro
         2 * EstGrundtarif(halbesZve)
     }
 }
@@ -423,7 +426,7 @@ Euro abgerundet (Modellierungs-Entscheidung, s. Datei-Doc).
 --
 @Quelle("§ 32 Absatz 6 EStG")
 fn KinderfreibetragGesamt(kinder: Liste<Kind>): Euro =
-    abrundenEuro(
+    (
     kinder.zuordnen( {
             k ->
             (KINDERFREIBETRAG + BEA_FREIBETRAG)
@@ -431,8 +434,8 @@ fn KinderfreibetragGesamt(kinder: Liste<Kind>): Euro =
                 * (k.berücksichtigteMonate / ZWOELF)
                 * k.auslandsfaktor
         }
-    ).summe(),
-)
+    ).summe()
+    ).abrunden()
 
 --
 Zumutbare Belastung (§ 33 Absatz 3 EStG) — **staffelweise** über die
@@ -494,10 +497,10 @@ zwangsläufigen Aufwendungen, soweit sie die zumutbare Belastung
 @Quelle("§ 33 Absatz 1 EStG")
 fn AbziehbareAussergewoehnlicheBelastungen(fall: EinkommensteuerFall, gde: Euro): Euro =
     _NichtNegativ(
-    abrundenEuro(
+    (
         (fall.aussergewoehnlicheAufwendungen.summe() als EuroCent)
-            - ZumutbareBelastung(gde, fall.kinder.länge, fall.tarifart),
-    ),
+            - ZumutbareBelastung(gde, fall.kinder.länge, fall.tarifart)
+    ).abrunden(),
 )
 
 --
@@ -513,8 +516,8 @@ Euro abgerundet.
 @Quelle("§ 10b Absatz 1 EStG")
 fn AbziehbareSpenden(fall: EinkommensteuerFall, gde: Euro): Euro = {
     var hoechstbetrag: Euro = _Groesseres(
-        abrundenEuro(SPENDEN_HB_GDE * gde),
-        abrundenEuro(SPENDEN_HB_UMSATZ * fall.umsaetzeUndLoehne),
+        (SPENDEN_HB_GDE * gde).abrunden(),
+        (SPENDEN_HB_UMSATZ * fall.umsaetzeUndLoehne).abrunden(),
     )
     _Hoechstens(fall.spenden.summe(), hoechstbetrag)
 }

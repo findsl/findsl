@@ -29,9 +29,11 @@ describe('Großschreibung — gültige Namen', () => {
             + 'aufzählung Ampel { Rot, Gelb, Gruen }\n',
         )).toEqual([]);
     });
-    it('Builtins (lowerCamel) im Aufruf sind unberührt', async () => {
+    it('Builtin-Methoden (lowerCamel) im Aufruf sind unberührt', async () => {
+        // `.abrunden()` ist ein FieldAccess-Name, keine Funktions-/
+        // Datensatz-Deklaration → die Großschreibungs-Regel greift nicht.
         expect(await errs(
-            '@Quelle("x")\nkonst R: Euro = abrundenEuro(2,50)\n',
+            '@Quelle("x")\nkonst R: Euro = (2,50 als EuroCent).abrunden()\n',
         )).toEqual([]);
     });
 });

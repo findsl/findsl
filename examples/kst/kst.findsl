@@ -262,7 +262,7 @@ fn KörperschaftsteuerBetrag(
     veranlagungszeitraum: Ganzzahl,
 ): Euro = wähle {
     falls zuVersteuerndesEinkommen <= 0 -> 0
-    sonst -> abrundenEuro(zuVersteuerndesEinkommen * KstSatz(veranlagungszeitraum))
+    sonst -> (zuVersteuerndesEinkommen * KstSatz(veranlagungszeitraum)).abrunden()
 }
 
 --
@@ -279,7 +279,7 @@ ist der Anpassungssatz 0 % (keine Verordnung in Kraft → unverändert).
 --
 @Quelle("§ 23 Absatz 2 KStG")
 fn Anwenden23Abs2(körperschaftsteuer: Euro, anpassung: Prozent): Euro =
-    körperschaftsteuer + abrundenEuro(körperschaftsteuer * anpassung)
+    körperschaftsteuer + (körperschaftsteuer * anpassung).abrunden()
 
 // ===========================================================================
 // Gesamtberechnung

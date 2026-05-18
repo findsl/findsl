@@ -26,46 +26,6 @@
       "quelle": "§ 39b EStG (SPEC § 3.7)"
     }
   ],
-  "functions": [
-    {
-      "name": "abrundenEuro",
-      "signature": "fn abrundenEuro(betrag: EuroCent): Euro",
-      "result": "Euro",
-      "doc": "Rundet auf volle Euro **ab** (Richtung minus Unendlich). PAP-Konvention für die abgerundete Bemessungsgrundlage und Tarif-Zwischenergebnisse.",
-      "quelle": "PAP 2025 Standard"
-    },
-    {
-      "name": "aufrundenEuro",
-      "signature": "fn aufrundenEuro(betrag: EuroCent): Euro",
-      "result": "Euro",
-      "doc": "Rundet auf volle Euro **auf** (Richtung plus Unendlich).",
-      "quelle": "PAP 2025 Standard"
-    },
-    {
-      "name": "abrundenCent",
-      "signature": "fn abrundenCent(betrag: EuroCent): Cent",
-      "result": "Cent",
-      "doc": "Rundet auf volle Cent ab."
-    },
-    {
-      "name": "aufrundenCent",
-      "signature": "fn aufrundenCent(betrag: EuroCent): Cent",
-      "result": "Cent",
-      "doc": "Rundet auf volle Cent auf."
-    },
-    {
-      "name": "aufrunden",
-      "signature": "fn aufrunden(wert: Dezimal): Ganzzahl",
-      "result": "Ganzzahl",
-      "doc": "Rundet eine Zahl auf die nächste Ganzzahl **auf** (Richtung plus Unendlich). Für „je angefangene Einheit\"-Tarife — z. B. KraftStG § 9 (je 100 cm³ Hubraum oder einen Teil davon).",
-      "quelle": "SPEC § 11"
-    },
-    {
-      "name": "abrunden",
-      "signature": "fn abrunden(wert: Dezimal): Ganzzahl",
-      "result": "Ganzzahl",
-      "doc": "Rundet eine Zahl auf die nächste Ganzzahl **ab** (Richtung minus Unendlich).",
-      "quelle": "SPEC § 11"
-    }
-  ]
+  "_functions_comment": "Seit 2026-05-18 KEINE freien Builtin-Funktionen mehr: § 11.1-Rundung ist eine Empfänger-Methode (`.abrunden()`/`.aufrunden()`), § 11.5 Text-Methoden. Methoden-Kataloge: findsl-stdlib.ts SCALAR_METHOD_DEFS/TEXT_METHOD_DEFS/LIST_METHOD_DEFS. Dispatch: findsl-types.ts (Typ) + interpreter.ts (Wert).",
+  "functions": []
 }

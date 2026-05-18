@@ -78,7 +78,7 @@ export type FindslKeywordNames =
 export type FindslTokenNames = FindslTerminalNames | FindslKeywordNames;
 
 export interface AbbruchExpr extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'AbbruchExpr';
     grund?: Expr;
 }
@@ -163,7 +163,7 @@ export function isBeispiel(item: unknown): item is Beispiel {
 }
 
 export interface BinaryOp extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'BinaryOp';
     left: Expr;
     op: '*' | '+' | '-' | '/' | 'oder' | 'und' | CmpOp;
@@ -209,7 +209,7 @@ export function isBlockStmt(item: unknown): item is BlockStmt {
 }
 
 export interface BoolLiteral extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'BoolLiteral';
     value?: 'falsch' | 'wahr';
 }
@@ -224,7 +224,7 @@ export function isBoolLiteral(item: unknown): item is BoolLiteral {
 }
 
 export interface Call extends langium.AstNode {
-    readonly $container: CallChain;
+    readonly $container: CallChain | ParenChain;
     readonly $type: 'Call';
     args: Array<CallArg>;
 }
@@ -256,7 +256,7 @@ export function isCallArg(item: unknown): item is CallArg {
 }
 
 export interface CallChain extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'CallChain';
     chain: Array<ChainOp>;
     name?: string;
@@ -273,7 +273,7 @@ export function isCallChain(item: unknown): item is CallChain {
 }
 
 export interface Cast extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'Cast';
     targetType: Type;
     value: Expr;
@@ -341,7 +341,7 @@ export function isDeclPrefix(item: unknown): item is DeclPrefix {
     return reflection.isInstance(item, DeclPrefix.$type);
 }
 
-export type Expr = AbbruchExpr | BinaryOp | CallChain | Cast | FuerExpr | Lambda | ListLiteral | Literal | NullCheck | Range | UnaryOp | WaehleExpr | WennExpr;
+export type Expr = AbbruchExpr | BinaryOp | CallChain | Cast | FuerExpr | Lambda | ListLiteral | Literal | NullCheck | ParenChain | Range | UnaryOp | WaehleExpr | WennExpr;
 
 export const Expr = {
     $type: 'Expr'
@@ -388,7 +388,7 @@ export function isField(item: unknown): item is Field {
 }
 
 export interface FieldAccess extends langium.AstNode {
-    readonly $container: CallChain;
+    readonly $container: CallChain | ParenChain;
     readonly $type: 'FieldAccess';
     name?: string;
 }
@@ -403,7 +403,7 @@ export function isFieldAccess(item: unknown): item is FieldAccess {
 }
 
 export interface ForceUnwrap extends langium.AstNode {
-    readonly $container: CallChain;
+    readonly $container: CallChain | ParenChain;
     readonly $type: 'ForceUnwrap';
 }
 
@@ -416,7 +416,7 @@ export function isForceUnwrap(item: unknown): item is ForceUnwrap {
 }
 
 export interface FuerExpr extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'FuerExpr';
     body?: BlockExpr;
     iter?: string;
@@ -528,7 +528,7 @@ export function isImportItem(item: unknown): item is ImportItem {
 }
 
 export interface Index extends langium.AstNode {
-    readonly $container: CallChain;
+    readonly $container: CallChain | ParenChain;
     readonly $type: 'Index';
     index?: Expr;
 }
@@ -564,7 +564,7 @@ export function isKonstDecl(item: unknown): item is KonstDecl {
 }
 
 export interface Lambda extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'Lambda';
     params: Array<LambdaParam>;
     result?: Expr;
@@ -619,7 +619,7 @@ export function isLetStmt(item: unknown): item is LetStmt {
 }
 
 export interface ListLiteral extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'ListLiteral';
     items: Array<Expr>;
     typeArgs?: TypeArgs;
@@ -663,7 +663,7 @@ export function isNamedType(item: unknown): item is NamedType {
 }
 
 export interface NullCheck extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'NullCheck';
     negated: boolean;
     value: Expr;
@@ -680,7 +680,7 @@ export function isNullCheck(item: unknown): item is NullCheck {
 }
 
 export interface NullLiteral extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'NullLiteral';
 }
 
@@ -693,7 +693,7 @@ export function isNullLiteral(item: unknown): item is NullLiteral {
 }
 
 export interface NumberLiteral extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'NumberLiteral';
     value: string;
 }
@@ -724,6 +724,23 @@ export const Param = {
 
 export function isParam(item: unknown): item is Param {
     return reflection.isInstance(item, Param.$type);
+}
+
+export interface ParenChain extends langium.AstNode {
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $type: 'ParenChain';
+    chain: Array<ChainOp>;
+    receiver: Expr;
+}
+
+export const ParenChain = {
+    $type: 'ParenChain',
+    chain: 'chain',
+    receiver: 'receiver'
+} as const;
+
+export function isParenChain(item: unknown): item is ParenChain {
+    return reflection.isInstance(item, ParenChain.$type);
 }
 
 export type Pattern = Expr;
@@ -774,7 +791,7 @@ export function isPruefeDecl(item: unknown): item is PruefeDecl {
 }
 
 export interface Range extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'Range';
     exclusive: boolean;
     from: Expr;
@@ -795,7 +812,7 @@ export function isRange(item: unknown): item is Range {
 }
 
 export interface SafeFieldAccess extends langium.AstNode {
-    readonly $container: CallChain;
+    readonly $container: CallChain | ParenChain;
     readonly $type: 'SafeFieldAccess';
     name?: string;
 }
@@ -825,7 +842,7 @@ export function isSonstArm(item: unknown): item is SonstArm {
 }
 
 export interface StringLiteral extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'StringLiteral';
     value: string;
 }
@@ -892,7 +909,7 @@ export function isTypeAtom(item: unknown): item is TypeAtom {
 }
 
 export interface UnaryOp extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'UnaryOp';
     op: '-' | 'nicht';
     operand: Expr;
@@ -919,7 +936,7 @@ export function isWaehleArm(item: unknown): item is WaehleArm {
 }
 
 export interface WaehleExpr extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'WaehleExpr';
     arms: Array<WaehleArm>;
     subject?: Expr;
@@ -936,7 +953,7 @@ export function isWaehleExpr(item: unknown): item is WaehleExpr {
 }
 
 export interface WennExpr extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'WennExpr';
     condition?: Expr;
     else?: Expr;
@@ -994,6 +1011,7 @@ export type FindslAstType = {
     NullLiteral: NullLiteral
     NumberLiteral: NumberLiteral
     Param: Param
+    ParenChain: ParenChain
     Pattern: Pattern
     Program: Program
     PruefeDecl: PruefeDecl
@@ -1484,6 +1502,19 @@ export class FindslAstReflection extends langium.AbstractAstReflection {
                 }
             },
             superTypes: []
+        },
+        ParenChain: {
+            name: ParenChain.$type,
+            properties: {
+                chain: {
+                    name: ParenChain.chain,
+                    defaultValue: []
+                },
+                receiver: {
+                    name: ParenChain.receiver
+                }
+            },
+            superTypes: [Expr.$type]
         },
         Pattern: {
             name: Pattern.$type,

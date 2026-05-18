@@ -66,13 +66,11 @@ describe('Semantic-Tokens: Builtins (defaultLibrary)', () => {
         expect(has(v!.tokenModifiers, 'defaultLibrary')).toBe(true);
     });
 
-    it('Builtin-Funktion im Aufruf', async () => {
-        const toks = await decode(`fn f(b: EuroCent): Euro = abrundenEuro(b)
-`);
-        const fn = pick(toks, 'abrundenEuro', 'function');
-        expect(fn).toBeDefined();
-        expect(has(fn!.tokenModifiers, 'defaultLibrary')).toBe(true);
-    });
+    // (Entfernt 2026-05-18: freie Builtin-Funktion `abrundenEuro` gibt es
+    // nicht mehr — § 11.1 ist die Methode `.abrunden()`. Methoden-Builtin-
+    // Namen werden — wie die § 11.2-Listenmethoden-Namen — nicht eigens
+    // als `function`/`defaultLibrary` getokent; Parität gewahrt. Builtin-
+    // Primitive/Aufzählungen oben bleiben abgedeckt.)
 });
 
 describe('Semantic-Tokens: Deklarationen', () => {

@@ -7,7 +7,7 @@ Hand aus dem Gesetzeswortlaut gerechnet (KStG 1977, Stand 4.2.2026):
 - § 23 Abs. 1 KStG: 2027 → 15 %, 2028 → 14 %, … , ab 2032 → 10 %.
 - § 24 KStG: 5.000 €, höchstens i.H.d. Einkommens; Ausschluss → 0.
 - § 7 Abs. 2 KStG: zvE = Einkommen − § 24 − § 25.
-- § 23 Abs. 1 × § 31 S. 2: KSt = abrunden(zvE × Satz).
+- § 23 Abs. 1 × § 31 S. 2: KSt = (zvE × Satz).abrunden().
 
 Diese Datei enthält ausschließlich die `prüfe`-Blöcke.
 --

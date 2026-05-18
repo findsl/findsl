@@ -17,6 +17,7 @@
     "all": "npm run langium:generate && npm run build && npm run bundle && npm test"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.7",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "~20.16.0",
     "@types/pdfmake": "^0.3.2",

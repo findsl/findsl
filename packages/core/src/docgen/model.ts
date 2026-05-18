@@ -114,6 +114,7 @@ function parseDocTags(doc: string): {
     const params: ParamDoc[] = [];
     let returns: string | undefined;
     let fence = false;
+    let mathBlock = false;
     let active: { kind: 'param' | 'return'; name?: string; parts: string[] } | null = null;
     const flush = (): void => {
         if (!active) return;
@@ -128,6 +129,12 @@ function parseDocTags(doc: string): {
     for (const ln of doc.split('\n')) {
         if (/^\s*```/.test(ln)) { flush(); fence = !fence; proseLines.push(ln); continue; }
         if (fence) { proseLines.push(ln); continue; }
+        // Mehrzeilige `$$…$$`-Mathe wie Fences behandeln: Zeilen darin
+        // sind Prosa und dürfen `@param`/`@rückgabe` NICHT triggern
+        // (eine ungerade `$$`-Anzahl öffnet/schließt den Block).
+        const dd = (ln.match(/\$\$/g) ?? []).length;
+        if (mathBlock) { proseLines.push(ln); if (dd % 2 === 1) mathBlock = false; continue; }
+        if (dd % 2 === 1) { flush(); mathBlock = true; proseLines.push(ln); continue; }
         const pm = ln.match(/^@param\s+(\S+)\s*(.*)$/u);
         const rm = ln.match(/^@rückgabe\s*(.*)$/u);
         if (pm) { flush(); active = { kind: 'param', name: pm[1], parts: pm[2] ? [pm[2]] : [] }; continue; }

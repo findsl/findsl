@@ -122,12 +122,17 @@ export function parseQuelleRefs(raw: string): QuelleRef[] {
 
 /**
  * Geschützte Markdown-Regionen, in denen NICHT verlinkt wird:
- * gefencter Code (```…```), Inline-Code (`…`) und bereits bestehende
- * Links (`[…](…)`). Die Link-Alternative sorgt zugleich für
- * Idempotenz: ein bereits erzeugter `[§ …](url)` wird beim erneuten
- * Lauf als geschützt erkannt und nicht doppelt umschlossen.
+ * gefencter Code (```…```), Block-Mathe (`$$…$$`), Inline-Code (`…`),
+ * Inline-Mathe (`$…$`, normative Regel SPEC § 4.x) und bereits
+ * bestehende Links (`[…](…)`). Die Link-Alternative sorgt zugleich
+ * für Idempotenz: ein bereits erzeugter `[§ …](url)` wird beim
+ * erneuten Lauf als geschützt erkannt und nicht doppelt umschlossen;
+ * Mathe-Regionen werden — wie Code-Spans — unverändert durchgereicht,
+ * §-Refs innerhalb von Formeln also bewusst nicht verlinkt.
+ * Reihenfolge: Fence → Block-Mathe → Inline-Code → Inline-Mathe → Link.
  */
-const PROTECT_RE = /```[\s\S]*?```|`[^`]*`|\[[^\]]*\]\([^)]*\)/g;
+const PROTECT_RE =
+    /```[\s\S]*?```|\$\$[\s\S]*?\$\$|`[^`]*`|(?<!\\)\$(?!\s)[^$\n]+?(?<!\s)\$(?!\d)|\[[^\]]*\]\([^)]*\)/g;
 
 /** Verlinkt erkannte §-Referenzen in einem reinen Text-Abschnitt. */
 function linkifyPlain(s: string): string {

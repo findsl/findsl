@@ -27,7 +27,7 @@
  */
 
 import type { AstNode, LangiumDocument } from 'langium';
-import { GrammarUtils } from 'langium';
+import { CstUtils, GrammarUtils } from 'langium';
 import { AbstractFormatter, Formatting } from 'langium/lsp';
 import type { FormattingOptions, Range, TextEdit } from 'vscode-languageserver';
 import {
@@ -147,6 +147,54 @@ function rangesOverlap(a: Range, b: Range): boolean {
 /** Liegt `inner` vollständig in `outer`? */
 function rangeContains(outer: Range, inner: Range): boolean {
     return posCmp(outer.start, inner.start) <= 0 && posCmp(inner.end, outer.end) <= 0;
+}
+
+/**
+ * Formatter-Direktiven (SPEC § 2.3.1) — Match gegen den **ganzen**
+ * LINE_COMMENT-Text inkl. `//`; case-sensitiv, Zusatztext hebt auf.
+ */
+const RE_FMT_OFF = /^\/\/[ \t]*@formatter:off[ \t]*$/;
+const RE_FMT_ON = /^\/\/[ \t]*@formatter:on[ \t]*$/;
+
+/**
+ * Geschützte Bereiche aus `// @formatter:off` … `// @formatter:on`
+ * (SPEC § 2.3.1). Erkennung **token-basiert** über echte hidden
+ * LINE_COMMENT-Tokens ⇒ `//` in `"…"`/`"""…"""`/`${…}` ist nie eine
+ * Direktive. Region = ganze Zeilen inkl. beider Direktiv-Zeilen;
+ * `off` ohne `on` → bis Dateiende; Streu-`on` → ignoriert; ein
+ * zweites `off` in offener Region → No-op (keine Schachtelung). Ohne
+ * Direktive: leer ⇒ Filter ist Identität (byte-identisch zu vorher).
+ */
+function protectedRegions(document: LangiumDocument): Range[] {
+    const root = document.parseResult?.value?.$cstNode;
+    if (!root) return [];
+    const td = document.textDocument;
+    const comments = CstUtils.flattenCst(root)
+        .filter((n) => n.hidden && n.tokenType?.name === 'LINE_COMMENT')
+        .toArray()
+        .sort((a, b) => a.offset - b.offset);
+    const regions: Range[] = [];
+    let openLine: number | undefined;
+    for (const c of comments) {
+        const line = c.range.start.line;
+        if (RE_FMT_OFF.test(c.text)) {
+            if (openLine === undefined) openLine = line;       // verschachteltes off = No-op
+        } else if (RE_FMT_ON.test(c.text) && openLine !== undefined) {
+            regions.push({
+                start: { line: openLine, character: 0 },
+                end: { line: line + 1, character: 0 },         // inkl. EOL der on-Zeile
+            });
+            openLine = undefined;
+        }
+        // Streu-`on` (kein offenes `off`) → ignoriert
+    }
+    if (openLine !== undefined) {                              // off ohne on → bis EOF
+        regions.push({
+            start: { line: openLine, character: 0 },
+            end: td.positionAt(td.getText().length),
+        });
+    }
+    return regions;
 }
 
 /**
@@ -332,7 +380,16 @@ export class FindslFormatter extends AbstractFormatter {
         // separate Replace-Edits, da Langiums Token-Formatter Terminal-
         // INHALT nicht umformen kann. Überlappen die Gap-Edits von oben
         // nicht (eigenes Token-Range); Sicherheitscheck zusätzlich.
-        return [...edits, ...this.docTagEdits(document, edits, range)];
+        const all = [...edits, ...this.docTagEdits(document, edits, range)];
+        // `// @formatter:off`…`// @formatter:on` (SPEC § 2.3.1): jeden
+        // Edit verwerfen, dessen Range eine geschützte Region berührt
+        // ⇒ Quelltext dort byte-für-byte erhalten. Deckt ALLE Quellen
+        // ab (AST-Layout, erzwungene 4-Blank-Einrückung, docTagEdits),
+        // da alle hier zusammenlaufen. Ohne Direktive: leer ⇒ Identität.
+        const regions = protectedRegions(document);
+        return regions.length === 0
+            ? all
+            : all.filter((e) => !regions.some((p) => rangesOverlap(e.range, p)));
     }
 
     /** Replace-Edits, die `@param`/`@rückgabe` in Doc-Kommentaren ausrichten. */

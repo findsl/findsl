@@ -150,6 +150,49 @@ Zwei Formen ignorierbarer Kommentare:
 Kommentare dürfen überall stehen, wo Whitespace erlaubt ist.
 Verschachtelung von `/* */` ist *nicht* erlaubt.
 
+#### 2.3.1 Formatter-Direktiven
+
+Zwei besondere Zeilenkommentare steuern ausschließlich den **Formatter**:
+
+```findsl
+// @formatter:off
+…hier bleibt der Quelltext exakt erhalten…
+// @formatter:on
+```
+
+Ein Zeilenkommentar gilt als Direktive, wenn sein Inhalt — nach
+Entfernen des einleitenden `//` und Trimmen von Leerzeichen/Tabs —
+**exakt** der Zeichenfolge `@formatter:off` bzw. `@formatter:on`
+entspricht (Groß-/Kleinschreibung signifikant). Zusätzlicher Text in
+derselben Kommentarzeile hebt die Erkennung auf. Normativ (Match gegen
+den ganzen Kommentartext inkl. `//`):
+
+```
+OFF:  ^//[ \t]*@formatter:off[ \t]*$
+ON:   ^//[ \t]*@formatter:on[ \t]*$
+```
+
+Wirkung: Der Quelltext von der Zeile mit `@formatter:off` bis
+**einschließlich** der Zeile mit dem nächsten `@formatter:on` (beide
+Direktiv-Zeilen eingeschlossen) wird vom Formatter **byte-für-byte
+unverändert** gelassen — bei Dokument-, Bereichs- und Eingabe-
+Formatierung gleichermaßen. Fehlt ein schließendes `@formatter:on`,
+reicht der geschützte Bereich bis zum Dateiende. Ein `@formatter:on`
+ohne vorangehendes offenes `@formatter:off` ist wirkungslos; ein
+weiteres `@formatter:off` innerhalb einer bereits offenen Region ist
+wirkungslos (keine Schachtelung).
+
+Die Direktive ist eine **reine Formatter-Konvention**. Sie hat
+**keinerlei Einfluss** auf Lexer, Parser, Grammatik, Validierung oder
+Auswertung; der abgedeckte Quelltext wird normal geparst und
+ausgewertet. Sie steht in keinem Zusammenhang mit String-Interpolation
+`${…}` — ein `//` innerhalb eines String-Literals (`"…"`, `"""…"""`,
+`${…}`) ist kein Zeilenkommentar und kann daher keine Direktive sein.
+
+Die Unterdrückung ist **idempotent**: Da im geschützten Bereich nichts
+geändert wird, ändern wiederholte Formatierungen das Ergebnis nicht
+(`format(format(x)) = format(x)`).
+
 ### 2.4 Doc-Kommentare
 
 Doc-Kommentare beginnen und enden mit `--` (zwei Bindestrichen) auf

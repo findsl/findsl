@@ -600,3 +600,103 @@ describe('Formatter: Aufruf mit benannten Argumenten — Zwei-Spalten', () => {
         expect(await format(out)).toBe(out);          // idempotent
     });
 });
+
+describe('Formatter: @formatter:off / @formatter:on (SPEC § 2.3.1)', () => {
+    // Bereichs-Formatierung über den geteilten Chokepoint.
+    async function formatRange(src: string): Promise<string> {
+        const services = createFindslServices(NodeFileSystem).Findsl;
+        const doc = services.shared.workspace.LangiumDocumentFactory.fromString(
+            src, URI.parse('file:///fmt.findsl'),
+        );
+        services.shared.workspace.LangiumDocuments.addDocument(doc);
+        await services.shared.workspace.DocumentBuilder.build([doc], { validation: false });
+        const end = doc.textDocument.positionAt(src.length);
+        const edits = await services.lsp.Formatter!.formatDocumentRange(doc, {
+            textDocument: { uri: doc.uri.toString() },
+            options: { tabSize: 4, insertSpaces: true },
+            range: { start: { line: 0, character: 0 }, end },
+        });
+        return TextDocument.applyEdits(doc.textDocument, edits);
+    }
+
+    const OFF_BLOCK = '// @formatter:off\n'
+        + 'konst    Y   :   Euro   =    2\n'
+        + '// @formatter:on';
+
+    it('1 — Quelltext zwischen OFF/ON byte-für-byte erhalten, außen formatiert', async () => {
+        const out = await format(
+            'konst X: Euro =    1\n\n' + OFF_BLOCK + '\n\nkonst Z: Euro =   3\n',
+        );
+        expect(out).toContain('konst X: Euro = 1\n');     // außen kanonisch
+        expect(out).toContain('konst Z: Euro = 3');
+        expect(out).toContain(OFF_BLOCK);                 // innen byte-genau (inkl. Direktiv-Zeilen)
+    });
+
+    it('2 — idempotent mit OFF/ON-Region', async () => {
+        const src = 'konst A: Euro =  1\n' + OFF_BLOCK + '\n';
+        const once = await format(src);
+        expect(await format(once)).toBe(once);
+    });
+
+    it('3 — ohne Direktive: normale Formatierung unverändert (Fast-Path)', async () => {
+        const out = await format('konst    A   :   Euro   =    1\n');
+        expect(out).toContain('konst A: Euro = 1');
+    });
+
+    it('4 — OFF ohne ON: bis Dateiende geschützt, davor formatiert', async () => {
+        const out = await format(
+            'konst A: Euro =   1\n// @formatter:off\nkonst    B   :   Euro   =   2\n',
+        );
+        expect(out).toContain('konst A: Euro = 1\n');
+        expect(out).toContain('// @formatter:off\nkonst    B   :   Euro   =   2');
+    });
+
+    it('5 — Streu-ON ohne OFF: ganzes Dokument normal formatiert', async () => {
+        const out = await format('// @formatter:on\nkonst    C   :   Euro   =   3\n');
+        expect(out).toContain('konst C: Euro = 3');
+    });
+
+    it('6 — verschachteltes OFF…OFF…ON = genau eine Region', async () => {
+        const out = await format(
+            '// @formatter:off\nkonst    D:Euro=1\n// @formatter:off\nkonst    E:Euro=2\n'
+            + '// @formatter:on\nkonst F: Euro =   3\n',
+        );
+        expect(out).toContain(
+            '// @formatter:off\nkonst    D:Euro=1\n// @formatter:off\nkonst    E:Euro=2\n// @formatter:on',
+        );
+        expect(out).toContain('konst F: Euro = 3');
+    });
+
+    it('7 — `//` in String-Literal ist KEINE Direktive (token-basiert)', async () => {
+        const out = await format(
+            'konst S: Text = "// @formatter:off"\nkonst    G   :   Euro   =   1\n',
+        );
+        expect(out).toContain('konst G: Euro = 1');       // keine Region ⇒ formatiert
+    });
+
+    it('8 — Trailing-OFF nach Code: ab dieser ganzen Zeile geschützt', async () => {
+        const src = 'konst H: Euro =   1   // @formatter:off\nkonst    I:Euro=2\n// @formatter:on\n';
+        const out = await format(src);
+        expect(out).toContain('konst H: Euro =   1   // @formatter:off\nkonst    I:Euro=2');
+    });
+
+    it('9 — Range-Formatierung respektiert OFF-Region', async () => {
+        const out = await formatRange(
+            'konst X: Euro =   1\n' + OFF_BLOCK + '\nkonst Z: Euro =   3\n',
+        );
+        expect(out).toContain('konst X: Euro = 1\n');
+        expect(out).toContain(OFF_BLOCK);
+    });
+
+    it('10 — docTagEdits in OFF-Region unterdrückt, außerhalb ausgerichtet', async () => {
+        const inside = await format(
+            '// @formatter:off\n--\n@param x erstes\n@rückgabe ergebnis\n--\n'
+            + 'fn f(x: Euro): Euro = x\n// @formatter:on\n',
+        );
+        expect(inside).toContain('@param x erstes\n@rückgabe ergebnis');   // nicht ausgerichtet
+        const outside = await format(
+            '--\n@param x erstes\n@rückgabe ergebnis\n--\nfn f(x: Euro): Euro = x\n',
+        );
+        expect(outside).not.toContain('@param x erstes\n@rückgabe ergebnis'); // ausgerichtet
+    });
+});

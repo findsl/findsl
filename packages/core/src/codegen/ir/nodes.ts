@@ -32,20 +32,38 @@ export type IrExpr =
     | { readonly kind: 'numLit'; readonly factory: ZahlFactory; readonly arg: string }
     /** Lokale/Parameter-/konst-Referenz (Bezeichner verbatim). */
     | { readonly kind: 'ref'; readonly name: string }
-    /** Aufzählungs-Wert `EnumName.Value`. */
-    | { readonly kind: 'enumVal'; readonly enumName: string; readonly value: string }
+    /**
+     * Aufzählungs-Wert. Lokal/Builtin → `EnumName.Value`; cross-modul →
+     * `OwnerClass.EnumName.Value` (Enum ist nested-static der Owner-Klasse).
+     */
+    | { readonly kind: 'enumVal'; readonly enumName: string; readonly value: string; readonly ownerClass?: string }
     /** Record-Feldzugriff → Java-Accessor `receiver.name()`. */
     | { readonly kind: 'field'; readonly receiver: IrExpr; readonly name: string }
     /** Statischer Funktionsaufruf `name(args…)`. */
     | { readonly kind: 'call'; readonly name: string; readonly args: ReadonlyArray<IrExpr> }
-    /** Record-Konstruktion `new TypeName(args…)` — Args positionsaufgelöst. */
-    | { readonly kind: 'ctor'; readonly typeName: string; readonly args: ReadonlyArray<IrExpr> }
+    /**
+     * Record-Konstruktion `new TypeName(args…)` — Args positionsaufgelöst.
+     * Cross-modul → `new OwnerClass.TypeName(args…)` (nested-static Record).
+     */
+    | { readonly kind: 'ctor'; readonly typeName: string; readonly args: ReadonlyArray<IrExpr>; readonly ownerClass?: string }
+    /** Cross-Modul-Funktionsaufruf → `feldName.methode(args…)` (Komposition). */
+    | { readonly kind: 'crossCall'; readonly fieldName: string; readonly methodName: string; readonly args: ReadonlyArray<IrExpr> }
+    /** Cross-Modul-Konstantenreferenz → `OwnerClass.MEMBER` (static final). */
+    | { readonly kind: 'crossRef'; readonly ownerClass: string; readonly memberName: string }
+    /** Aufzählungs-(Un)gleichheit → Java-`==`/`!=` (Enum-Identität). */
+    | { readonly kind: 'enumCmp'; readonly op: '==' | '!='; readonly left: IrExpr; readonly right: IrExpr }
     /** Arithmetik → `left.add/sub/mul(right)`. */
     | { readonly kind: 'arith'; readonly op: '+' | '-' | '*'; readonly left: IrExpr; readonly right: IrExpr }
     /** Vergleich → boolean (`equalsValue`/`compareValue`). */
     | { readonly kind: 'cmp'; readonly op: '==' | '!=' | '<' | '<=' | '>' | '>='; readonly left: IrExpr; readonly right: IrExpr }
     /** Logisches `und` → `&&`. */
     | { readonly kind: 'and'; readonly left: IrExpr; readonly right: IrExpr }
+    /** Wahrheitswert-Literal `wahr`/`falsch` → Java `true`/`false`. */
+    | { readonly kind: 'bool'; readonly value: boolean }
+    /** Unäres `-` → `value.neg()` (Art bleibt erhalten, interpreter.ts:249). */
+    | { readonly kind: 'neg'; readonly value: IrExpr }
+    /** Unäres `nicht` → `!(value)` (interpreter.ts:251). */
+    | { readonly kind: 'not'; readonly value: IrExpr }
     /** `(receiver).abrunden()/.aufrunden()` — Ziel beim Lowering fixiert. */
     | { readonly kind: 'round'; readonly receiver: IrExpr; readonly mode: 'abrunden' | 'aufrunden'; readonly target: ZielTyp }
     /** `abbruch(grund)` → `throw new FinDslAbort(grund)` (grund i. d. R. `strInterp`). */
@@ -129,10 +147,62 @@ export type IrDecl =
         readonly info: IrDoc;
       };
 
+/**
+ * Importiertes Modul, dessen `fn` cross-modul aufgerufen wird →
+ * `private final ClassName fieldName = new ClassName();` (Komposition).
+ */
+export interface IrComposedModule {
+    readonly className: string;
+    readonly fieldName: string;
+    /** Java-Package des Zielmoduls (`undefined` = unbenannt) — Import nur bei Abweichung. */
+    readonly javaPackage: string | undefined;
+}
+
 export interface IrModule {
-    readonly javaPackage: string;
+    /** `undefined` = unbenanntes (Default-)Package — kein `package …;`. */
+    readonly javaPackage: string | undefined;
     readonly className: string;
     readonly decls: ReadonlyArray<IrDecl>;
+    /** Datei-Doc (`Program.fileDoc`) → Klassen-Javadoc. */
+    readonly info: IrDoc;
+    /** Kompositions-Felder (cross-modul `fn`), in `verwende`-Reihenfolge dedupliziert. */
+    readonly composedModules: ReadonlyArray<IrComposedModule>;
+}
+
+// ---------------------------------------------------------------------------
+// `prüfe`-Blöcke → JUnit5 (Phase 3, Inkrement 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ein `testfall` → eine JUnit-`@Test`-Methode. Spiegel
+ * `pruefe.ts runPruefeDecl` (128-180): `lets` (= `var`-Bindungen) werden
+ * vor der Auswertung gebunden; `assertion` (= `BlockExpr.result`) ergibt
+ * den Wahrheitswert (`!erwartetAbbruch` → `assertTrue`) bzw. löst den
+ * erwarteten `abbruch` aus (`erwartetAbbruch` → `assertThrows`).
+ */
+export interface IrTestCase {
+    /** `Beispiel.label` (roh) → `@DisplayName`. */
+    readonly label: string;
+    readonly erwartetAbbruch: boolean;
+    readonly lets: ReadonlyArray<IrLet>;
+    readonly assertion: IrExpr;
+}
+
+/** Ein `prüfe`-Block → `@Nested`-Klasse mit `@DisplayName(suiteName)`. */
+export interface IrTestSuite {
+    /** `PruefeDecl.name` (roh) → `@DisplayName`. */
+    readonly suiteName: string;
+    readonly cases: ReadonlyArray<IrTestCase>;
+}
+
+/** Eine `*.test.findsl` → eine JUnit5-Testklasse. */
+export interface IrTestModule {
+    /** `undefined` = unbenanntes (Default-)Package — kein `package …;`. */
+    readonly javaPackage: string | undefined;
+    readonly className: string;
+    /** SUT-Kompositions-Felder (`private final SUT sut = new SUT();`). */
+    readonly composedModules: ReadonlyArray<IrComposedModule>;
+    readonly suites: ReadonlyArray<IrTestSuite>;
     /** Datei-Doc (`Program.fileDoc`) → Klassen-Javadoc. */
     readonly info: IrDoc;
 }

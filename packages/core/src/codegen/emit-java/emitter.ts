@@ -14,7 +14,10 @@
  * `@Quelle` → Javadoc. Wert-/Tag-/Listen-Semantik liegt in der Runtime.
  */
 
-import type { IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrDoc } from '../ir/nodes.js';
+import type {
+    IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrDoc,
+    IrTestModule, IrTestCase,
+} from '../ir/nodes.js';
 
 const IND = '    ';
 
@@ -60,13 +63,27 @@ function emitExpr(e: IrExpr): string {
         case 'ref':
             return e.name;
         case 'enumVal':
-            return `${e.enumName}.${e.value}`;
+            // Cross-modul: Enum ist nested-static der Owner-Klasse.
+            return e.ownerClass !== undefined
+                ? `${e.ownerClass}.${e.enumName}.${e.value}`
+                : `${e.enumName}.${e.value}`;
         case 'field':
             return `${emitExpr(e.receiver)}.${e.name}()`;
         case 'call':
             return `${javaMethodName(e.name)}(${e.args.map(emitExpr).join(', ')})`;
-        case 'ctor':
-            return `new ${e.typeName}(${e.args.map(emitExpr).join(', ')})`;
+        case 'ctor': {
+            const qual = e.ownerClass !== undefined ? `${e.ownerClass}.` : '';
+            return `new ${qual}${e.typeName}(${e.args.map(emitExpr).join(', ')})`;
+        }
+        case 'crossCall':
+            return `${e.fieldName}.${javaMethodName(e.methodName)}`
+                + `(${e.args.map(emitExpr).join(', ')})`;
+        case 'crossRef':
+            return `${e.ownerClass}.${e.memberName}`;
+        case 'enumCmp': {
+            const l = emitExpr(e.left), r = emitExpr(e.right);
+            return e.op === '==' ? `${l} == ${r}` : `${l} != ${r}`;
+        }
         case 'arith': {
             const m = e.op === '+' ? 'add' : e.op === '-' ? 'sub' : 'mul';
             return `${emitExpr(e.left)}.${m}(${emitExpr(e.right)})`;
@@ -75,18 +92,26 @@ function emitExpr(e: IrExpr): string {
             return `${emitExpr(e.left)}.div(${emitExpr(e.right)})`;
         case 'cmp': {
             const l = emitExpr(e.left), r = emitExpr(e.right);
-            switch (e.op) {
+            const op: string = e.op;
+            switch (op) {
                 case '==': return `${l}.equalsValue(${r})`;
                 case '!=': return `!${l}.equalsValue(${r})`;
                 case '<':  return `${l}.compareValue(${r}) < 0`;
                 case '<=': return `${l}.compareValue(${r}) <= 0`;
                 case '>':  return `${l}.compareValue(${r}) > 0`;
                 case '>=': return `${l}.compareValue(${r}) >= 0`;
+                default:
+                    throw new Error(`Emit: unbekannter Vergleichsoperator "${op}".`);
             }
-            break;
         }
         case 'and':
             return `(${emitExpr(e.left)}) && (${emitExpr(e.right)})`;
+        case 'bool':
+            return e.value ? 'true' : 'false';
+        case 'neg':
+            return `${emitExpr(e.value)}.neg()`;
+        case 'not':
+            return `!(${emitExpr(e.value)})`;
         case 'round':
             return `${emitExpr(e.receiver)}.${e.mode}(FinDslNumber.Type.${e.target})`;
         case 'cast':
@@ -246,16 +271,179 @@ export function emitJavaModule(m: IrModule): string {
         .filter((t) => new RegExp(`\\b${t}\\b`).test(code))
         .map((t) => `import org.findsl.runtime.${t};`);
 
+    // Cross-Modul-Komposition: `import` NUR bei abweichendem Java-
+    // Package (gleiches Package — z. B. kraftst, alle Dateien im selben
+    // Verzeichnis — braucht keinen Import; nested-Typen ebenso).
+    const crossImports = m.composedModules
+        .filter((c) => c.javaPackage !== undefined && c.javaPackage !== m.javaPackage)
+        .map((c) => `import ${c.javaPackage}.${c.className};`);
+    const composedFields = m.composedModules.length > 0
+        ? [
+            ...m.composedModules.map(
+                (c) => `${IND}private final ${c.className} ${c.fieldName} `
+                    + `= new ${c.className}();`),
+            '',
+        ]
+        : [];
+
+    // Unbenanntes (Default-)Package, wenn die Quelldatei direkt im
+    // Basisverzeichnis liegt → KEIN `package …;` (ADR8). Sonst: Package
+    // = sanierter relativer Verzeichnispfad.
+    const pkgHeader = (m.javaPackage !== undefined && m.javaPackage !== '')
+        ? [`package ${m.javaPackage};`, '']
+        : [];
+
     return [
-        `package ${m.javaPackage};`,
-        '',
+        ...pkgHeader,
         'import javax.annotation.processing.Generated;',
         ...runtimeImports,
+        ...crossImports,
         '',
         ...classDoc,
         '@Generated(value = "findsl.Generator")',
         `public final class ${m.className} {`,
         '',
+        ...composedFields,
+        code,
+        '}',
+        '',
+    ].join('\n');
+}
+
+/** `var`-Bindungen eines testfall → `final <T> <n> = <expr>;`-Zeilen. */
+function emitTestLets(c: IrTestCase, indent: string): string[] {
+    return c.lets.map(
+        (l) => `${indent}final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`);
+}
+
+/**
+ * Plattet eine Top-Level-`und`-Kette in ihre Konjunkte (Quellreihen-
+ * folge). `a und b und c` ⇒ `[a,b,c]`. Semantik-erhaltend: alle müssen
+ * wahr sein (= `runPruefeDecl`-Pass); je Konjunkt ein `assertTrue`
+ * lokalisiert den ersten fehlschlagenden Teil in CI. Nur `and`-Knoten
+ * werden zerlegt — kein Abstieg in `not`/`cmp`/… (P2, kein Seiteneffekt).
+ */
+function flattenAnd(e: IrExpr): IrExpr[] {
+    return e.kind === 'and'
+        ? [...flattenAnd(e.left), ...flattenAnd(e.right)]
+        : [e];
+}
+
+/** Ein `testfall` → eine `@Test`-Methode (Spiegel runPruefeDecl). */
+function emitTestCase(c: IrTestCase, idx: number): string[] {
+    const I2 = IND + IND;       // Methoden-Ebene (in @Nested-Klasse)
+    const I3 = I2 + IND;        // Methodenrumpf
+    const head = [
+        `${I2}@Test`,
+        `${I2}@DisplayName(${javaString(c.label)})`,
+        `${I2}void testfall_${idx}() {`,
+    ];
+    let bodyLines: string[];
+    if (c.erwartetAbbruch) {
+        // Abbruch erwartet → gesamte Auswertung (lets + Ergebnis) im
+        // assertThrows-Lambda; Ergebnis als Ausdrucks-Statement (i. d. R.
+        // der abbrechende Aufruf), KEIN assertTrue.
+        const I4 = I3 + IND;
+        bodyLines = [
+            `${I3}assertThrows(FinDslAbort.class, () -> {`,
+            ...emitTestLets(c, I4),
+            `${I4}${emitExpr(c.assertion)};`,
+            `${I3}});`,
+        ];
+    } else {
+        // Top-Level-`und` → je Konjunkt ein assertTrue (Diagnose; alle
+        // müssen wahr sein = identische Pass/Fail-Semantik wie das eine
+        // boolesche Ergebnis im Orakel).
+        bodyLines = [
+            ...emitTestLets(c, I3),
+            ...flattenAnd(c.assertion).map((t) => `${I3}assertTrue(${emitExpr(t)});`),
+        ];
+    }
+    return [...head, ...bodyLines, `${I2}}`];
+}
+
+/** Rendert ein `IrTestModule` zu einer JUnit5-Java-Klasse (deterministisch). */
+export function emitJavaTestModule(m: IrTestModule): string {
+    const suites = m.suites.map((s, i) => {
+        const cases = s.cases.flatMap((c, j) => [
+            ...emitTestCase(c, j),
+            '',
+        ]);
+        if (cases.length > 0) cases.pop();          // letzte Leerzeile
+        return [
+            `${IND}@Nested`,
+            `${IND}@DisplayName(${javaString(s.suiteName)})`,
+            `${IND}class Pruefe_${i} {`,
+            '',
+            ...cases,
+            `${IND}}`,
+        ].join('\n');
+    });
+
+    const classDoc: string[] = [
+        '/**',
+        ' * Generierte JUnit5-Akzeptanztests aus FinDSL-`prüfe` — NICHT',
+        ' * manuell editieren. Soll-Verhalten = der FinDSL-Interpreter',
+        ' * (`pruefe.ts runPruefeDecl`); pass/fail/abbruch bit-genau.',
+    ];
+    const fileDoc = javadoc(m.info, '');
+    if (fileDoc.length) {
+        classDoc.push(' *', ...fileDoc.slice(1, -1));
+    }
+    classDoc.push(' */');
+
+    const code = suites.join('\n\n');
+    const hasAssert = m.suites.some((s) => s.cases.some((c) => !c.erwartetAbbruch));
+    const hasAbbruch = m.suites.some((s) => s.cases.some((c) => c.erwartetAbbruch));
+
+    // Bedarfsgesteuerte Runtime-Importe (wie emitJavaModule): nur was im
+    // Testrumpf namentlich vorkommt. `FinDslAbort` über `assertThrows`.
+    const runtimeImports = [
+        'FinDslNumber', 'FinDslListe', 'Tarifart', 'Steuerklasse',
+        'FinDslAbort', 'FinDslRuntimeError',
+    ]
+        .filter((t) => new RegExp(`\\b${t}\\b`).test(code))
+        .map((t) => `import org.findsl.runtime.${t};`);
+
+    const junitImports = [
+        'import org.junit.jupiter.api.DisplayName;',
+        'import org.junit.jupiter.api.Nested;',
+        'import org.junit.jupiter.api.Test;',
+    ];
+    if (hasAssert) junitImports.push('import static org.junit.jupiter.api.Assertions.assertTrue;');
+    if (hasAbbruch) junitImports.push('import static org.junit.jupiter.api.Assertions.assertThrows;');
+
+    // SUT-Komposition: `import` nur bei abweichendem Package (Testklasse
+    // liegt im selben Package wie das SUT → kein Import, `protected`
+    // `_`-Methoden erreichbar).
+    const crossImports = m.composedModules
+        .filter((c) => c.javaPackage !== undefined && c.javaPackage !== m.javaPackage)
+        .map((c) => `import ${c.javaPackage}.${c.className};`);
+    const composedFields = m.composedModules.length > 0
+        ? [
+            ...m.composedModules.map(
+                (c) => `${IND}private final ${c.className} ${c.fieldName} `
+                    + `= new ${c.className}();`),
+            '',
+        ]
+        : [];
+
+    const pkgHeader = (m.javaPackage !== undefined && m.javaPackage !== '')
+        ? [`package ${m.javaPackage};`, '']
+        : [];
+
+    return [
+        ...pkgHeader,
+        'import javax.annotation.processing.Generated;',
+        ...junitImports,
+        ...runtimeImports,
+        ...crossImports,
+        '',
+        ...classDoc,
+        '@Generated(value = "findsl.Generator")',
+        `public final class ${m.className} {`,
+        '',
+        ...composedFields,
         code,
         '}',
         '',

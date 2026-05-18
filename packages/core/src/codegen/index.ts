@@ -27,7 +27,10 @@ export function istUnterstuetzteSprache(s: string): s is ZielSprache {
     return (UNTERSTUETZTE_SPRACHEN as ReadonlyArray<string>).includes(s);
 }
 
-export { lowerProgram, type LowerContext } from './lower/lower.js';
-export { emitJavaModule } from './emit-java/emitter.js';
+export { lowerProgram, lowerTestProgram, type LowerContext } from './lower/lower.js';
+export { emitJavaModule, emitJavaTestModule } from './emit-java/emitter.js';
 export { render, type Doc } from './emit/doc.js';
-export type { IrModule, IrDecl } from './ir/nodes.js';
+export type { IrModule, IrDecl, IrTestModule } from './ir/nodes.js';
+export {
+    sanitizePackageSegment, derivePackage, deriveClassName, isTestFile,
+} from './path-naming.js';

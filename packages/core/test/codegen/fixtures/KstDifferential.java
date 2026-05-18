@@ -1,4 +1,6 @@
-package org.findsl.generated;
+// Unbenanntes (Default-)Package — die generierte Kst.java liegt seit
+// ADR8 ebenfalls im unbenannten Package (Quelldatei direkt im
+// Basisverzeichnis examples/kst).
 
 import org.findsl.runtime.FinDslNumber;
 

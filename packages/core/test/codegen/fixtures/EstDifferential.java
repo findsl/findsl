@@ -1,4 +1,6 @@
-package org.findsl.generated;
+// Unbenanntes (Default-)Package — die generierte Est.java liegt seit
+// ADR8 ebenfalls im unbenannten Package (Quelldatei direkt im
+// Basisverzeichnis examples/est).
 
 import java.util.List;
 

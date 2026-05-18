@@ -14,9 +14,12 @@ import { parseSource } from '../helpers/parse.js';
 import {
     render, concat, text, line, indent,
 } from '../../src/codegen/emit/doc.js';
-import { lowerProgram } from '../../src/codegen/lower/lower.js';
-import { emitJavaModule } from '../../src/codegen/emit-java/emitter.js';
-import { istUnterstuetzteSprache } from '../../src/codegen/index.js';
+import { lowerProgram, lowerTestProgram } from '../../src/codegen/lower/lower.js';
+import { emitJavaModule, emitJavaTestModule } from '../../src/codegen/emit-java/emitter.js';
+import {
+    istUnterstuetzteSprache,
+    sanitizePackageSegment, derivePackage, deriveClassName, isTestFile,
+} from '../../src/codegen/index.js';
 
 describe('Doc-Pretty-Printer (deterministisch)', () => {
     it('rendert Einrückung/Zeilen stabil und doppellauf-identisch', () => {
@@ -134,6 +137,196 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         expect(out1).toContain(' * @return  Betrag (§ 31 Satz 2).');
         expect(out1).toContain(' * @Quelle § 23 Absatz 1 KStG');
         expect((out1.match(/\{/g) ?? []).length).toBe((out1.match(/\}/g) ?? []).length);
+    });
+});
+
+describe('Pfad → Java-Package/Klassenname (ADR8, Phase 3)', () => {
+    it('deriveClassName: PascalCase, Trenner -/./_/Leerz., Ziffern-Schutz', () => {
+        expect(deriveClassName('kst')).toBe('Kst');
+        expect(deriveClassName('est')).toBe('Est');
+        expect(deriveClassName('kraftst.test')).toBe('KraftstTest');
+        expect(deriveClassName('kraftstg-tarif-leicht')).toBe('KraftstgTarifLeicht');
+        expect(deriveClassName('9x')).toBe('_9x');
+        expect(deriveClassName('   ')).toBe('_');
+    });
+
+    it('sanitizePackageSegment: invalide Zeichen→_, Ziffern-/Keyword-Schutz', () => {
+        expect(sanitizePackageSegment('kraftstg-tarif')).toBe('kraftstg_tarif');
+        expect(sanitizePackageSegment('2foo')).toBe('_2foo');
+        expect(sanitizePackageSegment('class')).toBe('class_');
+        expect(sanitizePackageSegment('a.b')).toBe('a_b');
+        expect(sanitizePackageSegment('')).toBe('_');
+    });
+
+    it('derivePackage: Wurzel→undefined, Segmente saniert+punktiert', () => {
+        expect(derivePackage('', '/')).toBeUndefined();
+        expect(derivePackage('.', '/')).toBeUndefined();
+        expect(derivePackage('sub', '/')).toBe('sub');
+        expect(derivePackage('a/b-c', '/')).toBe('a.b_c');
+        expect(derivePackage('a\\b', '\\')).toBe('a.b');         // Windows-sep
+    });
+
+    it('isTestFile erkennt prüfe-Testdateien', () => {
+        expect(isTestFile('kst.test.findsl')).toBe(true);
+        expect(isTestFile('kst.findsl')).toBe(false);
+    });
+
+    it('javaPackage=undefined → kein package-Statement (unbenanntes Package)', async () => {
+        const program = await parseSource(KST);
+        const out = emitJavaModule(
+            lowerProgram(program, { javaPackage: undefined, className: 'M' }));
+        expect(out).not.toMatch(/^package /m);
+        expect(out.startsWith('import javax.annotation.processing.Generated;'))
+            .toBe(true);
+    });
+});
+
+const X_TYPEN = `aufzählung Art { A, B }
+datensatz Sache(x: Ganzzahl)
+fn Helfer(n: Ganzzahl): Ganzzahl = n
+konst GRENZE: Ganzzahl = 5
+`;
+const X_NUTZER = `fn Pick(a: Art): Ganzzahl = wähle (a) {
+    falls A -> Helfer(1)
+    falls B -> Helfer(2)
+}
+fn EqTest(a: Art): Wahrheitswert = a == A
+fn Floated(n: Ganzzahl): Ganzzahl = n + wähle { falls n > 0 -> 1 sonst -> 0 }
+fn Build(): Sache = Sache(7)
+fn UseKonst(): Ganzzahl = GRENZE
+`;
+
+describe('Cross-Modul-Komposition (Phase 3, Inkrement 2)', () => {
+    async function lowerNutzer() {
+        const typenProg = await parseSource(X_TYPEN);
+        const nutzerProg = await parseSource(X_NUTZER);
+        const ctx = {
+            javaPackage: 'pkg.nutzer',
+            className: 'Nutzer',
+            imports: [{
+                program: typenProg,
+                className: 'Typen',
+                javaPackage: 'pkg.typen',
+                bindings: ['Art', 'A', 'B', 'Sache', 'Helfer', 'GRENZE']
+                    .map((n) => ({ localName: n, sourceName: n })),
+            }],
+        };
+        return lowerProgram(nutzerProg, ctx);
+    }
+    const fn = (ir: ReturnType<typeof lowerProgram>, name: string) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (ir.decls.find((d) => d.kind === 'fn' && d.name === name) as any);
+
+    it('lowert Cross-Symbole korrekt (crossCall/enumVal-owner/ctor/crossRef/enumCmp)', async () => {
+        const ir = await lowerNutzer();
+        expect(ir.composedModules).toEqual([
+            { className: 'Typen', fieldName: 'typen', javaPackage: 'pkg.typen' },
+        ]);
+        const pick = fn(ir, 'Pick');
+        expect(pick.body.expr.kind).toBe('waehle');
+        expect(pick.body.expr.arms[0].patterns[0]).toEqual(
+            { kind: 'enumVal', enumName: 'Art', value: 'A', ownerClass: 'Typen' });
+        expect(pick.body.expr.arms[0].result).toEqual({
+            kind: 'crossCall', fieldName: 'typen', methodName: 'Helfer',
+            args: [{ kind: 'numLit', factory: 'ganzzahl', arg: '1' }],
+        });
+        expect(fn(ir, 'EqTest').body.expr).toEqual({
+            kind: 'enumCmp', op: '==',
+            left: { kind: 'ref', name: 'a' },
+            right: { kind: 'enumVal', enumName: 'Art', value: 'A', ownerClass: 'Typen' },
+        });
+        // `n + wähle{…}` → `wähle` in Ergebnisposition gehoben (P2).
+        expect(fn(ir, 'Floated').body.expr.kind).toBe('waehle');
+        const build = fn(ir, 'Build').body.expr;
+        expect(build.kind).toBe('ctor');
+        expect(build.typeName).toBe('Sache');
+        expect(build.ownerClass).toBe('Typen');
+        expect(fn(ir, 'UseKonst').body.expr).toEqual(
+            { kind: 'crossRef', ownerClass: 'Typen', memberName: 'GRENZE' });
+        // Cross-Typ-Qualifizierung im Parameter.
+        expect(fn(ir, 'Pick').params[0].javaType).toBe('Typen.Art');
+    });
+
+    it('emittiert Komposition + qualifizierte Cross-Referenzen + Cross-Package-Import', async () => {
+        const out = emitJavaModule(await lowerNutzer());
+        expect(out).toContain('import pkg.typen.Typen;');           // anderes Package
+        expect(out).toContain('private final Typen typen = new Typen();');
+        expect(out).toContain('typen.helfer(');                     // lowerCamel-Cross-Aufruf
+        expect(out).toContain('a == Typen.Art.A');                  // enumCmp + owner
+        expect(out).toContain('new Typen.Sache(');                  // nested-static ctor
+        expect(out).toContain('Typen.GRENZE');                      // static konst
+        expect(out).toContain('pick(Typen.Art a)');                 // qualifizierter Param
+    });
+});
+
+const T_SUT = `fn Doppel(n: Ganzzahl): Ganzzahl = n + n
+fn NurPositiv(n: Ganzzahl): Ganzzahl = wähle {
+    falls n < 0 -> abbruch("negativ")
+    sonst -> n
+}
+`;
+const T_TEST = `prüfe "Doppel-Block" {
+    testfall "2*3 → 6" { Doppel(3) == 6 }
+    testfall "nicht-falsch ist wahr" { nicht falsch }
+    testfall "negativ → abbruch" erwartet abbruch {
+        var n: Ganzzahl = -1
+        NurPositiv(n)
+    }
+}
+`;
+
+describe('prüfe → JUnit5 (Phase 3, Inkrement 3)', () => {
+    async function lowerTest() {
+        const sut = await parseSource(T_SUT);
+        const test = await parseSource(T_TEST);
+        return lowerTestProgram(test, {
+            javaPackage: 'kst', className: 'KstTest',
+            imports: [{
+                program: sut, className: 'Kst', javaPackage: 'kst',
+                bindings: ['Doppel', 'NurPositiv']
+                    .map((n) => ({ localName: n, sourceName: n })),
+            }],
+        });
+    }
+
+    it('lowert prüfe/testfall (Spiegel runPruefeDecl) + bool/neg/not', async () => {
+        const ir = await lowerTest();
+        expect(ir.composedModules).toEqual([
+            { className: 'Kst', fieldName: 'kst', javaPackage: 'kst' },
+        ]);
+        expect(ir.suites).toHaveLength(1);
+        expect(ir.suites[0].suiteName).toBe('Doppel-Block');
+        const [c0, c1, c2] = ir.suites[0].cases;
+        expect(c0).toMatchObject({ label: '2*3 → 6', erwartetAbbruch: false, lets: [] });
+        expect(c0.assertion.kind).toBe('cmp');
+        expect(c1.assertion).toEqual({ kind: 'not', value: { kind: 'bool', value: false } });
+        expect(c2.erwartetAbbruch).toBe(true);
+        expect(c2.lets[0]).toEqual({
+            name: 'n', javaType: 'FinDslNumber',
+            expr: { kind: 'neg', value: { kind: 'numLit', factory: 'ganzzahl', arg: '1' } },
+        });
+        expect(c2.assertion).toEqual({
+            kind: 'crossCall', fieldName: 'kst', methodName: 'NurPositiv',
+            args: [{ kind: 'ref', name: 'n' }],
+        });
+    });
+
+    it('emittiert @Nested/@Test/@DisplayName, assertTrue, assertThrows, Komposition', async () => {
+        const out = emitJavaTestModule(await lowerTest());
+        expect(out).toContain('package kst;');
+        expect(out).toContain('import org.junit.jupiter.api.Test;');
+        expect(out).toContain('import static org.junit.jupiter.api.Assertions.assertTrue;');
+        expect(out).toContain('import static org.junit.jupiter.api.Assertions.assertThrows;');
+        expect(out).toContain('private final Kst kst = new Kst();');
+        expect(out).toContain('@Nested');
+        expect(out).toContain('@DisplayName("Doppel-Block")');
+        expect(out).toContain('@DisplayName("2*3 \\u2192 6")'.replace('\\u2192', '→'));
+        expect(out).toContain('void testfall_0() {');
+        expect(out).toContain('assertTrue(kst.doppel(');
+        expect(out).toContain('assertTrue(!(false))');
+        expect(out).toContain('assertThrows(FinDslAbort.class, () -> {');
+        expect(out).toContain('final FinDslNumber n = FinDslNumber.ganzzahl("1").neg();');
+        expect(out).toContain('kst.nurPositiv(n);');
     });
 });
 

@@ -11,7 +11,7 @@
  * Subkommandos:
  *   parse       — Datei parsen, Diagnose ausgeben
  *   test        — Akzeptanztests aus prüfe-Blöcken ausführen
- *   codegen     — Zielsprachencode erzeugen (--lang; Phase 1+2: kst/est)
+ *   codegen     — Zielsprachencode erzeugen (--lang; Basisverz. rekursiv)
  *   docgen      — Dokumentation generieren
  */
 
@@ -489,25 +489,32 @@ Beispiele:
 program
     .command('codegen')
     .description('Erzeugt Zielsprachencode aus .findsl (Issue #7). '
-        + 'Phase 1+2: kst/est-Konstruktsatz (Skalar/Geld/wähle + Listen/'
-        + 'Lambda/Cast/Interpolation) → bit-genaues Java. Orakel: Interpreter.')
-    .argument('<pfade...>',
-        'beliebig viele Ziele: Dateien, Verzeichnisse (rekursiv) oder '
-        + 'Glob-Muster wie "examples/**/*.findsl" (quoten!)')
+        + 'Erwartet EIN Basisverzeichnis, ermittelt rekursiv alle '
+        + '*.findsl; das Java-Package ist der relative Verzeichnispfad '
+        + '(Verzeichnisse = Package-Struktur). Orakel: der Interpreter '
+        + '(bit-genau).')
+    .argument('<basisverzeichnis>',
+        'Wurzelverzeichnis; rekursiv nach *.findsl durchsucht. Eine '
+        + 'Datei direkt darin → unbenanntes (Default-)Package; '
+        + 'Unterverzeichnisse → Package-Segmente. Kein -p/--package.')
     .option('-l, --lang <sprache>', 'Zielsprache (java)', 'java')
-    .option('-o, --out <verzeichnis>', 'Ausgabeverzeichnis', 'out/java')
-    .option('-p, --package <name>', 'Ziel-Java-Package', 'org.findsl.generated')
+    .option('-o, --out <verzeichnis>', 'Ausgabeverzeichnis (Hauptklassen)', 'out/java')
+    .option('-t, --test-out <verzeichnis>',
+        'Ausgabeverzeichnis für generierte JUnit-Tests aus prüfe-Blöcken '
+        + '(Standard: --out — wie src/test/java vs. src/main/java)')
     .addHelpText('after', `
 Beispiele:
-  $ findsl codegen examples/kst/kst.findsl -l java -o /tmp/findsl-java
+  $ findsl codegen examples/kst -l java -o /tmp/findsl-java
+  $ findsl codegen examples -o src/main/java -t src/test/java
   $ findsl codegen examples --lang java`)
     .action(async (
-        pfade: string[],
-        options: { lang: string; out: string; package: string },
+        basisverzeichnis: string,
+        options: { lang: string; out: string; testOut?: string },
     ) => {
         const {
             istUnterstuetzteSprache, GEPLANTE_SPRACHEN,
-            lowerProgram, emitJavaModule,
+            lowerProgram, lowerTestProgram, emitJavaModule, emitJavaTestModule,
+            derivePackage, deriveClassName, isTestFile,
         } = await import('@findsl/core/codegen/index.js');
 
         const lang = options.lang.toLowerCase();
@@ -520,25 +527,60 @@ Beispiele:
             process.exit(1);
         }
 
-        const services = createFindslServices(NodeFileSystem).Findsl;
-        const { files, missing } = await resolveTargets(pfade);
-        for (const m of missing) {
-            console.error(`✗ Kein Treffer / keine Datei: ${m}`);
+        const baseDir = path.resolve(basisverzeichnis);
+        let baseStat;
+        try {
+            baseStat = await fs.stat(baseDir);
+        } catch {
+            console.error(`✗ Basisverzeichnis nicht gefunden: ${disp(baseDir)}`);
+            process.exit(1);
         }
+        if (!baseStat.isDirectory()) {
+            console.error(`✗ ${disp(baseDir)} ist eine Datei — `
+                + 'codegen erwartet ein Basisverzeichnis (rekursiv).');
+            process.exit(1);
+        }
+
+        const { collectImportBindings } = await import(
+            '@findsl/core/language/import-path.js');
+
+        const services = createFindslServices(NodeFileSystem).Findsl;
+        const { files } = await resolveTargets([baseDir]);
         if (files.length === 0) {
-            console.error(`✗ Keine .findsl-Dateien gefunden (${pfade.join(', ')}).`);
+            console.error(`✗ Keine .findsl-Dateien unter ${disp(baseDir)} gefunden.`);
             process.exit(1);
         }
 
         const outDir = path.resolve(options.out);
+        // Tests landen wie src/test/java vs. src/main/java separat;
+        // ohne --test-out fällt es aufs Hauptverzeichnis zurück.
+        const testOutDir = options.testOut
+            ? path.resolve(options.testOut)
+            : outDir;
         await fs.mkdir(outDir, { recursive: true });
-        const written: string[] = [];
-        // Klassenname → Quelldatei: schützt vor stillem Überschreiben bei
-        // Namens-Kollision (Phase 0 mappt nur den Basenamen; Phase 3 macht
-        // den Java-Namen pfad-deterministisch, ADR8).
-        const seen = new Map<string, string>();
         let failures = 0;
 
+        interface Mod {
+            readonly absFile: string;
+            readonly program: Program;
+            readonly className: string;
+            readonly javaPackage: string | undefined;
+        }
+        // Eine `verwende`-Quelle, nach Zieldatei gruppiert (Durchgang 2
+        // = Module, Durchgang 2b = Testmodule — identischer Shape).
+        interface ImportEntry {
+            program: Program;
+            className: string;
+            javaPackage: string | undefined;
+            bindings: { localName: string; sourceName: string }[];
+        }
+
+        // Durchgang 1: ALLE Dateien parsen (Cross-Modul-Importe brauchen
+        // das Ziel-Programm zur Symbol-Klassifikation). Schlüssel =
+        // absoluter Pfad (= `resolveImportPath`-Schlüssel, Orakel).
+        // Module → main-out; `*.test.findsl` → JUnit nach test-out.
+        const modules = new Map<string, Mod>();
+        const testModules = new Map<string, Mod>();
         for (const absFile of files) {
             const content = await fs.readFile(absFile, 'utf-8');
             const document = services.shared.workspace.LangiumDocumentFactory.fromString(
@@ -547,9 +589,6 @@ Beispiele:
             await services.shared.workspace.DocumentBuilder.build(
                 [document], { validation: false },
             );
-            // Parse-Fehler VOR AST-Nutzung prüfen (analog `test`): ein
-            // syntaktisch kaputter Input darf ab Phase 1 nicht still ein
-            // Teil-IR emittieren.
             const parseErrors = (document.diagnostics ?? []).filter((d) => d.severity === 1);
             if (parseErrors.length > 0) {
                 console.error(`✗ ${disp(absFile)}: Parse-/Validierungsfehler `
@@ -557,37 +596,191 @@ Beispiele:
                 failures++;
                 continue;
             }
-            const prog = document.parseResult.value as Program;
-            // ADR8 voll in Phase 1; Phase 0: deterministischer, kollisions-
-            // armer Klassenname aus dem Dateibasenamen. javaPackage wird in
-            // Phase 3 pfad-deterministisch (commonBase/displayId).
-            const base = path.basename(absFile, '.findsl');
-            let className = base.replace(/[^A-Za-z0-9_]/g, '_');
-            if (!/^[A-Za-z_]/.test(className)) className = '_' + className;
-            className = className.charAt(0).toUpperCase() + className.slice(1);
-            const kollision = seen.get(className);
+            const program = document.parseResult.value as Program;
+            // ADR8: Package = sanierter relativer Verzeichnispfad zur
+            // Basis; Klassenname = PascalCase des Datei-Basenamens
+            // (`kst.test` → `KstTest`). Wurzeldatei → unbenanntes Package.
+            const relDir = path.relative(baseDir, path.dirname(absFile));
+            const rec: Mod = {
+                absFile,
+                program,
+                className: deriveClassName(path.basename(absFile, '.findsl')),
+                javaPackage: derivePackage(relDir, path.sep),
+            };
+            (isTestFile(path.basename(absFile)) ? testModules : modules).set(absFile, rec);
+        }
+
+        // Durchgang 2: lowern + emittieren (mit aufgelösten Cross-Modul-
+        // Importen). Iterationsreihenfolge = `files` (sortiert) → determ.
+        const written: string[] = [];
+        // Voll-qualifizierter Name (Package + Klasse) → Quelldatei:
+        // schützt vor stillem Überschreiben bei Kollision.
+        const seen = new Map<string, string>();
+        for (const mod of modules.values()) {
+            const fqcn = (mod.javaPackage ?? '') + '.' + mod.className;
+            const kollision = seen.get(fqcn);
             if (kollision !== undefined) {
-                console.error(`✗ ${disp(absFile)}: Klassenname-Kollision `
-                    + `"${className}.java" (bereits aus ${disp(kollision)}) — `
-                    + `übersprungen. Phase 3 macht den Namen pfad-deterministisch.`);
+                console.error(`✗ ${disp(mod.absFile)}: Namens-Kollision `
+                    + `"${fqcn.replace(/^\./, '')}" (bereits aus `
+                    + `${disp(kollision)}) — übersprungen.`);
                 failures++;
                 continue;
             }
-            seen.set(className, absFile);
-            const ir = lowerProgram(prog, {
-                javaPackage: options.package,
-                className,
-            });
-            const target = path.join(outDir, `${className}.java`);
-            await fs.writeFile(target, emitJavaModule(ir), 'utf-8');
+            seen.set(fqcn, mod.absFile);
+
+            // `verwende`-Bindungen je Zieldatei gruppieren (Erst-
+            // Auftritts-Reihenfolge = `verwende`-Reihenfolge → determ.
+            // Kompositions-Feld-Ordnung).
+            const byPath = new Map<string, ImportEntry>();
+            let importError = false;
+            for (const b of collectImportBindings(mod.program)) {
+                if (!b.resolvedPath) {
+                    console.error(`✗ ${disp(mod.absFile)}: Import `
+                        + `"${b.rawSource}" nicht auflösbar.`);
+                    importError = true;
+                    break;
+                }
+                const target = modules.get(b.resolvedPath);
+                if (target === undefined) {
+                    console.error(`✗ ${disp(mod.absFile)}: Import-Ziel `
+                        + `${disp(b.resolvedPath)} liegt nicht unter dem `
+                        + 'Basisverzeichnis oder ist fehlerhaft.');
+                    importError = true;
+                    break;
+                }
+                let entry = byPath.get(b.resolvedPath);
+                if (entry === undefined) {
+                    entry = {
+                        program: target.program,
+                        className: target.className,
+                        javaPackage: target.javaPackage,
+                        bindings: [],
+                    };
+                    byPath.set(b.resolvedPath, entry);
+                }
+                entry.bindings.push({ localName: b.localName, sourceName: b.sourceName });
+            }
+            if (importError) {
+                failures++;
+                continue;
+            }
+
+            // Lowering/Emission pro Modul kapseln: ein noch nicht
+            // unterstütztes Konstrukt (Phase-4-Scope) darf NUR diese
+            // Datei überspringen, nicht den ganzen Batch abbrechen
+            // (analog zur Parse-Fehler-Behandlung).
+            let java: string;
+            try {
+                const ir = lowerProgram(mod.program, {
+                    javaPackage: mod.javaPackage,
+                    className: mod.className,
+                    imports: [...byPath.values()],
+                });
+                java = emitJavaModule(ir);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`✗ ${disp(mod.absFile)}: ${msg}`);
+                failures++;
+                continue;
+            }
+            // Ausgabeverzeichnis spiegelt die Package-Struktur (javac/JVM-
+            // konform); Wurzeldatei → direkt ins Ausgabeverzeichnis.
+            const targetDir = mod.javaPackage === undefined
+                ? outDir
+                : path.join(outDir, ...mod.javaPackage.split('.'));
+            await fs.mkdir(targetDir, { recursive: true });
+            const target = path.join(targetDir, `${mod.className}.java`);
+            await fs.writeFile(target, java, 'utf-8');
             written.push(target);
+        }
+
+        // Durchgang 2b: `*.test.findsl` → JUnit5-Testklassen. Das SUT
+        // wird per `verwende` importiert und per Komposition eingebunden
+        // (gleiche Maschinerie wie Cross-Modul, Inkrement 2); selbes
+        // Java-Package wie das SUT → `protected` `_`-Methoden erreichbar.
+        const writtenTests: string[] = [];
+        const seenTest = new Map<string, string>();
+        for (const tm of testModules.values()) {
+            const fqcn = (tm.javaPackage ?? '') + '.' + tm.className;
+            const kollision = seenTest.get(fqcn);
+            if (kollision !== undefined) {
+                console.error(`✗ ${disp(tm.absFile)}: Testklassen-Kollision `
+                    + `"${fqcn.replace(/^\./, '')}" (bereits aus `
+                    + `${disp(kollision)}) — übersprungen.`);
+                failures++;
+                continue;
+            }
+            seenTest.set(fqcn, tm.absFile);
+
+            const byPath = new Map<string, ImportEntry>();
+            let importError = false;
+            for (const b of collectImportBindings(tm.program)) {
+                if (!b.resolvedPath) {
+                    console.error(`✗ ${disp(tm.absFile)}: Import `
+                        + `"${b.rawSource}" nicht auflösbar.`);
+                    importError = true;
+                    break;
+                }
+                const target = modules.get(b.resolvedPath);
+                if (target === undefined) {
+                    console.error(`✗ ${disp(tm.absFile)}: SUT-Import-Ziel `
+                        + `${disp(b.resolvedPath)} liegt nicht unter dem `
+                        + 'Basisverzeichnis oder ist keine Nicht-Test-Datei.');
+                    importError = true;
+                    break;
+                }
+                let entry = byPath.get(b.resolvedPath);
+                if (entry === undefined) {
+                    entry = {
+                        program: target.program,
+                        className: target.className,
+                        javaPackage: target.javaPackage,
+                        bindings: [],
+                    };
+                    byPath.set(b.resolvedPath, entry);
+                }
+                entry.bindings.push({ localName: b.localName, sourceName: b.sourceName });
+            }
+            if (importError) {
+                failures++;
+                continue;
+            }
+
+            let java: string;
+            try {
+                const ir = lowerTestProgram(tm.program, {
+                    javaPackage: tm.javaPackage,
+                    className: tm.className,
+                    imports: [...byPath.values()],
+                });
+                java = emitJavaTestModule(ir);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`✗ ${disp(tm.absFile)}: ${msg}`);
+                failures++;
+                continue;
+            }
+            const targetDir = tm.javaPackage === undefined
+                ? testOutDir
+                : path.join(testOutDir, ...tm.javaPackage.split('.'));
+            await fs.mkdir(targetDir, { recursive: true });
+            const target = path.join(targetDir, `${tm.className}.java`);
+            await fs.writeFile(target, java, 'utf-8');
+            writtenTests.push(target);
         }
 
         if (written.length > 0) {
             console.log(`✓ ${written.length} Modul(e) → ${lang} `
-                + `(${disp(outDir)}/) — Phase 1+2 (kst/est), bit-genau.`);
+                + `(${disp(outDir)}/) — bit-genau (Interpreter-Orakel).`);
         }
-        process.exit(failures > 0 || missing.length > 0 ? 1 : 0);
+        if (writtenTests.length > 0) {
+            console.log(`✓ ${writtenTests.length} JUnit5-Testklasse(n) → `
+                + `(${disp(testOutDir)}/) — prüfe-Spiegel (runPruefeDecl).`);
+        }
+        if (written.length === 0 && writtenTests.length === 0 && failures === 0) {
+            console.error('✗ Nichts erzeugt (keine passenden .findsl-Dateien).');
+        }
+        process.exit(failures > 0 ? 1 : 0);
     });
 
 program.parseAsync(process.argv);

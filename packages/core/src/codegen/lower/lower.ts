@@ -27,11 +27,13 @@ import {
     isNumberLiteral, isStringLiteral, isCallChain, isParenChain,
     isCall, isFieldAccess, isBinaryOp, isWaehleExpr, isFallArm,
     isSonstArm, isCast, isAbbruchExpr, isLetStmt, isFunktionBody,
-    isNamedType, isListLiteral, isLambda, isIndex,
+    isNamedType, isListLiteral, isLambda, isIndex, isPruefeDecl,
+    isBoolLiteral, isUnaryOp,
 } from '../../language/generated/ast.js';
 import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrFnBody, IrField,
-    IrParam, IrLet, IrDoc, ZahlFactory, ZielTyp,
+    IrParam, IrLet, IrDoc, ZahlFactory, ZielTyp, IrComposedModule,
+    IrTestModule, IrTestSuite, IrTestCase,
 } from '../ir/nodes.js';
 
 interface DeclPrefixLike {
@@ -49,9 +51,34 @@ function extractDoc(prefix: DeclPrefixLike | undefined): IrDoc {
     return { doc: prefix?.doc, quelle };
 }
 
-export interface LowerContext {
-    readonly javaPackage: string;
+/** Eine `verwende`-Bindung (lokaler Name ⇐ Quellname im Zielmodul). */
+export interface LowerBinding {
+    readonly localName: string;
+    readonly sourceName: string;
+}
+
+/** Ein direkt importiertes Modul (eine `verwende … aus "…"`-Quelle). */
+export interface LowerImport {
+    /** Geparstes Ziel-Programm (für Symbol-Klassifikation/Registry-Merge). */
+    readonly program: Program;
+    /** Java-Klassenname des Zielmoduls (aus dessen Dateipfad, ADR8). */
     readonly className: string;
+    /** Java-Package des Zielmoduls (`undefined` = unbenannt). */
+    readonly javaPackage: string | undefined;
+    readonly bindings: ReadonlyArray<LowerBinding>;
+}
+
+export interface LowerContext {
+    /** `undefined` = unbenanntes (Default-)Package — kein `package …;`. */
+    readonly javaPackage: string | undefined;
+    readonly className: string;
+    /** Direkte `verwende`-Importe (Phase 3); leer/undefined = keine. */
+    readonly imports?: ReadonlyArray<LowerImport>;
+}
+
+/** Java-Feld-/Methodenname aus Java-Klassenname: erster Buchstabe klein. */
+function lowerCamel(name: string): string {
+    return name.length === 0 ? name : name.charAt(0).toLowerCase() + name.slice(1);
 }
 
 const NUMERIC_NAMES = new Set([
@@ -70,18 +97,24 @@ function atomName(t: Type | undefined): string | undefined {
     return namedAtom(t)?.name;
 }
 
-/** FinDSL-Typ → Java-Typ. `Liste<T>`→`FinDslListe<E>`; numerisch→FinDslNumber. */
-function javaType(t: Type | undefined): string {
+/**
+ * FinDSL-Typ → Java-Typ. `Liste<T>`→`FinDslListe<E>`; numerisch→
+ * FinDslNumber. Cross-modul Datensatz/Aufzählung wird zur nested-static
+ * Klasse des Owner-Moduls qualifiziert (`OwnerClass.Typ`); lokal/builtin
+ * unqualifiziert.
+ */
+function javaType(t: Type | undefined, reg: Registry): string {
     const a = namedAtom(t);
     if (a === undefined) return 'FinDslNumber';            // Teil-Parse: konservativ
     if (a.name === 'Liste') {
         const elem = a.typeArgs?.args?.[0];
-        return `FinDslListe<${javaType(elem)}>`;
+        return `FinDslListe<${javaType(elem, reg)}>`;
     }
     if (NUMERIC_NAMES.has(a.name)) return 'FinDslNumber';
     if (a.name === 'Wahrheitswert') return 'boolean';
     if (a.name === 'Text') return 'String';
-    return a.name;                                         // Datensatz/Aufzählung
+    const owner = reg.typeOwner.get(a.name);               // Datensatz/Aufzählung
+    return owner !== undefined ? `${owner}.${a.name}` : a.name;
 }
 
 /** Geld-Annotationsname (`Euro|Cent|EuroCent`) einer Typ-Annotation. */
@@ -145,9 +178,7 @@ function lowerStringLiteral(raw: string, reg: Registry): IrExpr {
                 + `(name / name.feld) — komplexere Slots sind Phase-3-Scope.`);
         }
         const segs = slotText.split('.').map((s) => s.trim());
-        let slot: IrExpr = { kind: 'ref', name: segs[0] };
-        const en = reg.enumValues.get(segs[0]);
-        if (en !== undefined) slot = { kind: 'enumVal', enumName: en, value: segs[0] };
+        let slot: IrExpr = resolveBareName(segs[0], reg);
         for (let k = 1; k < segs.length; k++) {
             slot = { kind: 'field', receiver: slot, name: segs[k] };
         }
@@ -186,9 +217,25 @@ function governingMoneyTarget(node: object): 'Euro' | 'Cent' | undefined {
     }
 }
 
+interface EnumValueInfo {
+    readonly enumName: string;
+    /** Owner-Java-Klasse bei cross-modul Enum (sonst undefined = lokal/builtin). */
+    readonly ownerClass?: string;
+}
+interface RecordInfo {
+    readonly decl: DatensatzDecl;
+    /** Owner-Java-Klasse bei cross-modul Datensatz (sonst undefined = lokal). */
+    readonly ownerClass?: string;
+}
 interface Registry {
-    readonly enumValues: ReadonlyMap<string, string>;
-    readonly records: ReadonlyMap<string, DatensatzDecl>;
+    readonly enumValues: ReadonlyMap<string, EnumValueInfo>;
+    readonly records: ReadonlyMap<string, RecordInfo>;
+    /** Cross-modul Typ-/Enum-NAME → Owner-Klasse (nur cross; lokal fehlt → unqualifiziert). */
+    readonly typeOwner: ReadonlyMap<string, string>;
+    /** Lokaler Name → Kompositions-Feld + Quell-`fn`-Name (cross-modul Aufruf). */
+    readonly crossFns: ReadonlyMap<string, { fieldName: string; methodName: string }>;
+    /** Lokaler Name → Owner-Klasse + Quell-`konst`-Name (`Owner.MEMBER`, static). */
+    readonly crossKonst: ReadonlyMap<string, { ownerClass: string; memberName: string }>;
 }
 
 /** Eingebaute Sprach-Aufzählungen (SPEC § 8.5, kein Import) — Runtime-Enums. */
@@ -197,20 +244,72 @@ const BUILTIN_ENUMS: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
     ['Steuerklasse', ['I', 'II', 'III', 'IV', 'V', 'VI']],
 ];
 
-function buildRegistry(program: Program): Registry {
-    const enumValues = new Map<string, string>();
+function buildRegistry(
+    program: Program,
+    imports: ReadonlyArray<LowerImport>,
+): Registry {
+    const enumValues = new Map<string, EnumValueInfo>();
     for (const [enumName, values] of BUILTIN_ENUMS) {
-        for (const v of values) enumValues.set(v, enumName);
+        for (const v of values) enumValues.set(v, { enumName });
     }
-    const records = new Map<string, DatensatzDecl>();
+    const records = new Map<string, RecordInfo>();
+    const typeOwner = new Map<string, string>();
+    const crossFns = new Map<string, { fieldName: string; methodName: string }>();
+    const crossKonst = new Map<string, { ownerClass: string; memberName: string }>();
+
+    // Lokale Decls (ownerClass=undefined → in Java unqualifiziert/nested).
     for (const d of program.decls as ReadonlyArray<TopDecl>) {
         if (isAufzaehlungDecl(d)) {
-            for (const v of d.values) enumValues.set(v, d.name);
+            for (const v of d.values) enumValues.set(v, { enumName: d.name });
         } else if (isDatensatzDecl(d)) {
-            records.set(d.name, d);
+            records.set(d.name, { decl: d });
         }
     }
-    return { enumValues, records };
+
+    // Importierte Module: Typen/Enum-Werte/Datensätze voll mergen (bei
+    // validen Programmen graph-global eindeutig — gespiegelt am
+    // Interpreter `applyImports`); `fn`/`konst` NUR für tatsächlich
+    // gebundene Symbole (Komposition bzw. `Owner.MEMBER`).
+    for (const imp of imports) {
+        const owner = imp.className;
+        const fieldName = lowerCamel(owner);
+        const fnNames = new Set<string>();
+        const konstNames = new Set<string>();
+        for (const d of imp.program.decls as ReadonlyArray<TopDecl>) {
+            if (isAufzaehlungDecl(d)) {
+                typeOwner.set(d.name, owner);
+                for (const v of d.values) {
+                    enumValues.set(v, { enumName: d.name, ownerClass: owner });
+                }
+            } else if (isDatensatzDecl(d)) {
+                typeOwner.set(d.name, owner);
+                records.set(d.name, { decl: d, ownerClass: owner });
+            } else if (isFunktionDecl(d)) {
+                fnNames.add(d.name);
+            } else if (isKonstDecl(d)) {
+                konstNames.add(d.name);
+            }
+        }
+        for (const b of imp.bindings) {
+            if (fnNames.has(b.sourceName)) {
+                // `fn`-Alias ist korrekt: emittiert `feld.<sourceName>()`.
+                crossFns.set(b.localName, { fieldName, methodName: b.sourceName });
+            } else if (konstNames.has(b.sourceName)) {
+                // `konst`-Alias ist korrekt: emittiert `Owner.<sourceName>`.
+                crossKonst.set(b.localName, { ownerClass: owner, memberName: b.sourceName });
+            } else if (b.localName !== b.sourceName) {
+                // Typ-/Enum-Wert-Aliasse würden über `enumValues`/`typeOwner`
+                // (per sourceName verschlüsselt) NICHT unter `localName`
+                // aufgelöst → stilles Falsch. Aktiver Phase-4-Guard statt
+                // stillem Fehler (kraftst nutzt keine solchen Aliasse).
+                throw new Error(
+                    `Alias "${b.sourceName} als ${b.localName}" auf einen Typ/`
+                    + 'Aufzählungswert ist Phase-4-Scope (nur fn/konst-Aliasse '
+                    + 'werden in Phase 3 unterstützt).');
+            }
+        }
+    }
+    return { enumValues, records, typeOwner, crossFns, crossKonst };
 }
 
 function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
@@ -219,6 +318,15 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
     if (isNumberLiteral(expr)) {
         const { factory, arg } = parseNumberLiteral(expr.value);
         return { kind: 'numLit', factory, arg };
+    }
+    if (isBoolLiteral(expr)) {
+        return { kind: 'bool', value: expr.value === 'wahr' };   // undefined → falsch
+    }
+    if (isUnaryOp(expr)) {
+        const value = lowerExpr(expr.operand, reg);
+        // interpreter.ts:243-251 — `-` = numerische Negation (Art bleibt),
+        // `nicht` = boolesche Negation.
+        return expr.op === '-' ? { kind: 'neg', value } : { kind: 'not', value };
     }
     if (isStringLiteral(expr)) {
         return lowerStringLiteral(expr.value, reg);
@@ -234,7 +342,7 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
         const elemType = expr.typeArgs?.args?.[0];
         return {
             kind: 'listLit',
-            elementJavaType: elemType ? javaType(elemType) : 'FinDslNumber',
+            elementJavaType: elemType ? javaType(elemType, reg) : 'FinDslNumber',
             items: expr.items.map((e) => lowerExpr(e, reg)),
         };
     }
@@ -252,8 +360,14 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
         if (op === '==' || op === '!=' || op === '<' || op === '<=' || op === '>' || op === '>=') {
             const left = lowerExpr(expr.left, reg);
             const right = lowerExpr(expr.right, reg);
+            // Enum-(Un)gleichheit → Java-Identitäts-`==`/`!=` (Phase 3,
+            // kraftst `f.antrieb == Elektro`). Ordnungsvergleiche auf
+            // Enums bleiben unzulässig (kein FinDSL-Konstrukt dafür).
             if (left.kind === 'enumVal' || right.kind === 'enumVal') {
-                throw new Error('Enum-Vergleich als Ausdruck: Phase-3-Scope.');
+                if (op !== '==' && op !== '!=') {
+                    throw new Error(`Ordnungsvergleich "${op}" auf Aufzählung ist unzulässig.`);
+                }
+                return { kind: 'enumCmp', op, left, right };
             }
             return { kind: 'cmp', op, left, right };
         }
@@ -340,6 +454,23 @@ function lowerLambdaArg(
     return { kind: 'lambda1', param: lam.params[0].name, body: lowerExpr(lam.result, reg) };
 }
 
+/**
+ * Bezeichner ohne Aufruf-Klammern → IR: Enum-Wert (lokal/builtin oder
+ * cross-modul qualifiziert) ▸ cross-modul `konst` (`Owner.MEMBER`) ▸
+ * lokale/Parameter-/konst-Referenz.
+ */
+function resolveBareName(name: string, reg: Registry): IrExpr {
+    const ev = reg.enumValues.get(name);
+    if (ev !== undefined) {
+        return { kind: 'enumVal', enumName: ev.enumName, value: name, ownerClass: ev.ownerClass };
+    }
+    const ck = reg.crossKonst.get(name);
+    if (ck !== undefined) {
+        return { kind: 'crossRef', ownerClass: ck.ownerClass, memberName: ck.memberName };
+    }
+    return { kind: 'ref', name };
+}
+
 function lowerCallChain(
     cc: { name?: string; chain: ReadonlyArray<object> },
     reg: Registry,
@@ -347,27 +478,32 @@ function lowerCallChain(
     const name = cc.name;
     if (name === undefined) throw new Error('Teil-Parse: CallChain ohne Name.');
     if (cc.chain.length === 0) {
-        const enumName = reg.enumValues.get(name);
-        return enumName !== undefined
-            ? { kind: 'enumVal', enumName, value: name }
-            : { kind: 'ref', name };
+        return resolveBareName(name, reg);
     }
     const first = cc.chain[0];
     if (isCall(first)) {
         const call = first;
         const rec = reg.records.get(name);
-        const head: IrExpr = rec !== undefined
-            ? { kind: 'ctor', typeName: name, args: resolveCtorArgs(rec, call.args, reg) }
-            : { kind: 'call', name, args: call.args.map((a) => lowerExpr(a.value, reg)) };
+        const cf = reg.crossFns.get(name);
+        let head: IrExpr;
+        if (rec !== undefined) {
+            head = {
+                kind: 'ctor', typeName: rec.decl.name, ownerClass: rec.ownerClass,
+                args: resolveCtorArgs(rec.decl, call.args, reg),
+            };
+        } else if (cf !== undefined) {
+            head = {
+                kind: 'crossCall', fieldName: cf.fieldName, methodName: cf.methodName,
+                args: call.args.map((a) => lowerExpr(a.value, reg)),
+            };
+        } else {
+            head = { kind: 'call', name, args: call.args.map((a) => lowerExpr(a.value, reg)) };
+        }
         return cc.chain.length > 1
             ? lowerChainOps(head, cc.chain.slice(1), reg)
             : head;
     }
-    const enumName = reg.enumValues.get(name);
-    const head: IrExpr = enumName !== undefined
-        ? { kind: 'enumVal', enumName, value: name }
-        : { kind: 'ref', name };
-    return lowerChainOps(head, cc.chain, reg);
+    return lowerChainOps(resolveBareName(name, reg), cc.chain, reg);
 }
 
 /**
@@ -403,7 +539,7 @@ function lowerBlockLambda(lam: { stmts: ReadonlyArray<object>; result?: Expr }, 
         .filter(isLetStmt)
         .map((s) => ({
             name: s.name,
-            javaType: javaType(s.type),
+            javaType: javaType(s.type, reg),
             expr: maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
         }));
     return { kind: 'blockResult', lets, result: lowerExpr(lam.result, reg) };
@@ -439,8 +575,8 @@ function lowerWaehle(w: WaehleExpr, reg: Registry): IrExpr {
 }
 
 function lowerFn(fd: FunktionDecl, reg: Registry): IrDecl {
-    const params: IrParam[] = fd.params.map((p) => ({ name: p.name, javaType: javaType(p.type) }));
-    const returnJavaType = javaType(fd.returnType);
+    const params: IrParam[] = fd.params.map((p) => ({ name: p.name, javaType: javaType(p.type, reg) }));
+    const returnJavaType = javaType(fd.returnType, reg);
     let body: IrFnBody;
     if (fd.body.expr) {
         const ex = fd.body.expr;
@@ -457,13 +593,18 @@ function lowerFn(fd: FunktionDecl, reg: Registry): IrDecl {
             .filter(isLetStmt)
             .map((s) => ({
                 name: s.name,
-                javaType: javaType(s.type),
+                javaType: javaType(s.type, reg),
                 expr: maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
             }));
         body = { kind: 'block', lets, result: lowerExpr(blk.result, reg) };
     } else {
         throw new Error(`fn ${fd.name}: leerer Body (Teil-Parse).`);
     }
+    // `wähle` aus reinem Teilausdruck-Kontext in Ergebnisposition heben
+    // (P2; Emitter lowert `wähle` nur dort, ADR4).
+    body = body.kind === 'expr'
+        ? { kind: 'expr', expr: floatWaehle(body.expr) }
+        : { kind: 'block', lets: floatLets(body.lets), result: floatWaehle(body.result) };
     return {
         kind: 'fn',
         name: fd.name,
@@ -486,15 +627,187 @@ function maybeMoneyAnno(expr: IrExpr, t: Type | undefined, what: string): IrExpr
     return { kind: 'moneyAnno', expr, target: m, what };
 }
 
+// ---------------------------------------------------------------------------
+// `wähle` aus reinem Ausdruckskontext herausziehen (Phase 3)
+// ---------------------------------------------------------------------------
+//
+// Der Emitter lowert `wähle` ausschließlich in Ergebnisposition zu
+// if/return (ADR4 — Java hat kein Ausdrucks-`if`). FinDSL erlaubt aber
+// `wähle` als Teilausdruck (kraftst `_SteuerPkwB = sockel + wähle {…}`).
+// Da FinDSL-Ausdrücke seiteneffektfrei sind (P2), ist das Verteilen des
+// umgebenden reinen Kontexts in JEDEN Arm semantik-erhaltend:
+//   `f(wähle { p->r ; sonst->s })` ≡ `wähle { p->f(r) ; sonst->f(s) }`.
+// `floatWaehle` bubbelt jedes eingebettete `wähle` nach oben; das
+// Resultat ist entweder `wähle`-frei oder ein `wähle`, dessen Arm-
+// Ergebnisse rekursiv normalisiert sind (emitResult kann verschachtelte
+// `wähle` in Ergebnisposition).
+//
+// Mehrere `wähle`-Kinder eines Knotens (z. B. `wähle{…} + wähle{…}`):
+// es wird zuerst das LINKE gehoben; das rechte `wähle` bleibt in der
+// Closure als fester Operand und wird durch das erneute `floatWaehle`
+// in `pushCtxExpr` (auf dem rekonstruierten Knoten) anschließend
+// herausgehoben. Terminiert: jeder Schritt operiert auf strikt
+// kleineren Teilbäumen.
+
+function isChoice(e: IrExpr): e is Extract<IrExpr, { kind: 'waehle' }> {
+    return e.kind === 'waehle';
+}
+
+/** Reinen unären Kontext `k` in eine Ergebnisposition (Arm/Block/Leaf) drücken. */
+function pushCtx(
+    r: IrExpr | IrBlockResult,
+    k: (leaf: IrExpr) => IrExpr,
+): IrExpr | IrBlockResult {
+    if (r.kind === 'blockResult') {
+        return { ...r, lets: floatLets(r.lets), result: pushCtxExpr(r.result, k) };
+    }
+    if (r.kind === 'waehle') {
+        return { ...r, arms: r.arms.map((a) => ({ ...a, result: pushCtx(a.result, k) })) };
+    }
+    return pushCtxExpr(r, k);
+}
+function floatLets(lets: ReadonlyArray<IrLet>): IrLet[] {
+    return lets.map((l) => ({ ...l, expr: floatValue(l.expr, `var "${l.name}"`) }));
+}
+function pushCtxExpr(e: IrExpr, k: (leaf: IrExpr) => IrExpr): IrExpr {
+    const f = floatWaehle(e);
+    if (isChoice(f)) {
+        return { ...f, arms: f.arms.map((a) => ({ ...a, result: pushCtx(a.result, k) })) };
+    }
+    return floatWaehle(k(f));
+}
+
+/** Arm-/Block-Ergebnis selbst normalisieren (verschachtelte `wähle`). */
+function floatResult(r: IrExpr | IrBlockResult): IrExpr | IrBlockResult {
+    if (r.kind === 'blockResult') {
+        return { ...r, lets: floatLets(r.lets), result: floatWaehle(r.result) };
+    }
+    return floatWaehle(r);
+}
+
+/**
+ * Hebt jedes eingebettete `wähle` durch reine Operator-/Aufruf-/Cast-/
+ * Feld-/Interpolations-Knoten nach außen. Deterministisch, terminierend
+ * (strukturelle Rekursion; jeder Knoten endlich tief).
+ */
+function floatWaehle(e: IrExpr): IrExpr {
+    switch (e.kind) {
+        case 'waehle':
+            return { ...e, arms: e.arms.map((a) => ({ ...a, result: floatResult(a.result) })) };
+        case 'arith': case 'div': case 'cmp': case 'enumCmp': case 'and': {
+            const L = floatWaehle(e.left);
+            const R = floatWaehle(e.right);
+            if (isChoice(L)) return pushCtxExpr(L, (l) => ({ ...e, left: l, right: R }));
+            if (isChoice(R)) return pushCtxExpr(R, (r) => ({ ...e, left: L, right: r }));
+            return { ...e, left: L, right: R };
+        }
+        case 'cast': case 'neg': case 'not': {
+            const v = floatWaehle(e.value);
+            return isChoice(v) ? pushCtxExpr(v, (x) => ({ ...e, value: x })) : { ...e, value: v };
+        }
+        case 'round': case 'listMethod': {
+            const rc = floatWaehle(e.receiver);
+            return isChoice(rc) ? pushCtxExpr(rc, (x) => ({ ...e, receiver: x })) : { ...e, receiver: rc };
+        }
+        case 'listMap': {
+            const rc = floatWaehle(e.receiver);
+            return isChoice(rc) ? pushCtxExpr(rc, (x) => ({ ...e, receiver: x })) : { ...e, receiver: rc };
+        }
+        case 'moneyAnno': {
+            const x = floatWaehle(e.expr);
+            return isChoice(x) ? pushCtxExpr(x, (y) => ({ ...e, expr: y })) : { ...e, expr: x };
+        }
+        case 'field': {
+            const rc = floatWaehle(e.receiver);
+            return isChoice(rc) ? pushCtxExpr(rc, (x) => ({ ...e, receiver: x })) : { ...e, receiver: rc };
+        }
+        case 'abort': {
+            const x = floatWaehle(e.reason);
+            return isChoice(x) ? pushCtxExpr(x, (y) => ({ ...e, reason: y })) : { ...e, reason: x };
+        }
+        case 'call': case 'crossCall': case 'ctor': case 'listLit': {
+            const key = e.kind === 'listLit' ? 'items' : 'args';
+            const xs = (e as unknown as Record<string, IrExpr[]>)[key].map(floatWaehle);
+            const idx = xs.findIndex(isChoice);
+            if (idx < 0) {
+                return { ...e, [key]: xs } as IrExpr;
+            }
+            const w = xs[idx] as Extract<IrExpr, { kind: 'waehle' }>;
+            return pushCtxExpr(w, (leaf) => {
+                const next = xs.slice();
+                next[idx] = leaf;
+                return { ...e, [key]: next } as IrExpr;
+            });
+        }
+        case 'strInterp': {
+            const xs = e.slots.map(floatWaehle);
+            const idx = xs.findIndex(isChoice);
+            if (idx < 0) return { ...e, slots: xs };
+            const w = xs[idx] as Extract<IrExpr, { kind: 'waehle' }>;
+            return pushCtxExpr(w, (leaf) => {
+                const next = xs.slice();
+                next[idx] = leaf;
+                return { ...e, slots: next };
+            });
+        }
+        // Blätter ohne `wähle`-Kinder: numLit/ref/enumVal/crossRef/lambda1.
+        default:
+            return e;
+    }
+}
+
+/** Floatet einen Wert; `wähle` als var-/konst-Wert ist Phase-4-Scope. */
+function floatValue(e: IrExpr, what: string): IrExpr {
+    const f = floatWaehle(e);
+    if (isChoice(f)) {
+        throw new Error(`\`wähle\` als Wert von ${what} ist Phase-4-Scope `
+            + '(Statement-Zuweisung nötig; kraftst nutzt es nicht).');
+    }
+    return f;
+}
+
+/**
+ * Kompositions-Felder: ein Feld je importiertem Modul, aus dem mindestens
+ * ein `fn` gebunden wird (Cross-Aufruf braucht eine Instanz). Reihenfolge
+ * = `verwende`-Reihenfolge, dedupliziert (Determinismus).
+ */
+function computeComposedModules(
+    imports: ReadonlyArray<LowerImport>,
+): IrComposedModule[] {
+    const out: IrComposedModule[] = [];
+    const seen = new Set<string>();
+    for (const imp of imports) {
+        const fnNames = new Set<string>();
+        for (const d of imp.program.decls as ReadonlyArray<TopDecl>) {
+            if (isFunktionDecl(d)) fnNames.add(d.name);
+        }
+        const usesFn = imp.bindings.some((b) => fnNames.has(b.sourceName));
+        if (usesFn && !seen.has(imp.className)) {
+            seen.add(imp.className);
+            out.push({
+                className: imp.className,
+                fieldName: lowerCamel(imp.className),
+                javaPackage: imp.javaPackage,
+            });
+        }
+    }
+    return out;
+}
+
 export function lowerProgram(program: Program, ctx: LowerContext): IrModule {
-    const reg = buildRegistry(program);
+    const imports = ctx.imports ?? [];
+    const reg = buildRegistry(program, imports);
+    const composedModules = computeComposedModules(imports);
+
     const decls: IrDecl[] = [];
     for (const d of program.decls as ReadonlyArray<TopDecl>) {
         if (isKonstDecl(d)) {
             decls.push({
                 kind: 'konst',
                 name: d.name,
-                expr: maybeMoneyAnno(lowerExpr(d.value, reg), d.type, `Konstante "${d.name}"`),
+                expr: floatValue(
+                    maybeMoneyAnno(lowerExpr(d.value, reg), d.type, `Konstante "${d.name}"`),
+                    `Konstante "${d.name}"`),
                 info: extractDoc(d.docPrefix),
             });
         } else if (isAufzaehlungDecl(d)) {
@@ -502,7 +815,7 @@ export function lowerProgram(program: Program, ctx: LowerContext): IrModule {
         } else if (isDatensatzDecl(d)) {
             const fields: IrField[] = d.fields.map((f) => ({
                 name: f.name,
-                javaType: javaType(f.type),
+                javaType: javaType(f.type, reg),
             }));
             decls.push({ kind: 'record', name: d.name, fields, info: extractDoc(d.docPrefix) });
         } else if (isFunktionDecl(d)) {
@@ -514,6 +827,62 @@ export function lowerProgram(program: Program, ctx: LowerContext): IrModule {
         javaPackage: ctx.javaPackage,
         className: ctx.className,
         decls,
+        info: extractDoc(program.fileDoc),
+        composedModules,
+    };
+}
+
+/**
+ * `*.test.findsl` → `IrTestModule` (JUnit5). Nutzt die Cross-Modul-
+ * Maschinerie aus Inkrement 2: das SUT wird per `verwende` importiert,
+ * `buildRegistry`/`composedModules` lösen Aufrufe als `sut.methode(…)`
+ * auf. Spiegel `pruefe.ts runPruefeDecl`: `var` → `lets`, `BlockExpr.
+ * result` → `assertion`; `erwartetAbbruch` durchgereicht.
+ */
+export function lowerTestProgram(program: Program, ctx: LowerContext): IrTestModule {
+    const imports = ctx.imports ?? [];
+    const reg = buildRegistry(program, imports);
+    const composedModules = computeComposedModules(imports);
+
+    const suites: IrTestSuite[] = [];
+    for (const d of program.decls as ReadonlyArray<TopDecl>) {
+        if (!isPruefeDecl(d)) continue;                  // Nur prüfe-Blöcke
+        const cases: IrTestCase[] = d.beispiele.map((b) => {
+            const stmts = b.body.stmts ?? [];
+            const lets: IrLet[] = [];
+            for (const s of stmts) {
+                if (!isLetStmt(s)) {
+                    throw new Error('`ausgabe` in prüfe-Block ist Phase-4-Scope '
+                        + `(prüfe "${d.name}").`);
+                }
+                lets.push({
+                    name: s.name,
+                    javaType: javaType(s.type, reg),
+                    expr: floatValue(
+                        maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
+                        `var "${s.name}"`),
+                });
+            }
+            const assertion = floatWaehle(lowerExpr(b.body.result, reg));
+            if (isChoice(assertion)) {
+                throw new Error('`wähle` als testfall-Ergebnis ist Phase-4-Scope '
+                    + `(prüfe "${d.name}", testfall "${b.label}").`);
+            }
+            return {
+                label: b.label,
+                erwartetAbbruch: b.erwartetAbbruch === true,
+                lets,
+                assertion,
+            };
+        });
+        suites.push({ suiteName: d.name, cases });
+    }
+
+    return {
+        javaPackage: ctx.javaPackage,
+        className: ctx.className,
+        composedModules,
+        suites,
         info: extractDoc(program.fileDoc),
     };
 }

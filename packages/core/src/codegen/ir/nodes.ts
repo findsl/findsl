@@ -48,17 +48,39 @@ export type IrExpr =
     | { readonly kind: 'and'; readonly left: IrExpr; readonly right: IrExpr }
     /** `(receiver).abrunden()/.aufrunden()` — Ziel beim Lowering fixiert. */
     | { readonly kind: 'round'; readonly receiver: IrExpr; readonly mode: 'abrunden' | 'aufrunden'; readonly target: ZielTyp }
-    /** `abbruch(grund)` → `throw new FinDslAbort(grund)`. */
+    /** `abbruch(grund)` → `throw new FinDslAbort(grund)` (grund i. d. R. `strInterp`). */
     | { readonly kind: 'abort'; readonly reason: IrExpr }
     /** `konst`/`var`-Geld-Annotation → `expr.withMoneyAnnotation(Type.X, "what")`. */
     | { readonly kind: 'moneyAnno'; readonly expr: IrExpr; readonly target: 'Euro' | 'Cent' | 'EuroCent'; readonly what: string }
+    /** Division `/` → `left.div(right)`. */
+    | { readonly kind: 'div'; readonly left: IrExpr; readonly right: IrExpr }
+    /** `als <Ziel>`-Cast → `value.cast(FinDslNumber.Type.X)`. */
+    | { readonly kind: 'cast'; readonly value: IrExpr; readonly target: ZielTyp }
+    /** Listen-Literal — `[]<T>` → `FinDslListe.<E>empty()`, sonst `FinDslListe.of(List.of(…))`. */
+    | { readonly kind: 'listLit'; readonly elementJavaType: string; readonly items: ReadonlyArray<IrExpr> }
+    /** §-11.2-Listen-Methode ohne Argument (`.länge`/`.summe()`). */
+    | { readonly kind: 'listMethod'; readonly receiver: IrExpr; readonly method: 'laenge' | 'summe' }
+    /** `.zuordnen(lambda)` — Argument typsicher (kein optionales Feld). */
+    | { readonly kind: 'listMap'; readonly receiver: IrExpr; readonly fn: IrExpr }
+    /** Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1). */
+    | { readonly kind: 'lambda1'; readonly param: string; readonly body: IrExpr }
+    /** String-Literal mit Interpolation → Java-String-Konkatenation. */
+    | { readonly kind: 'strInterp'; readonly parts: ReadonlyArray<string>; readonly slots: ReadonlyArray<IrExpr> }
     /** `wähle` als Ausdruck — wird vom Emitter zu if/return gelowert. */
     | { readonly kind: 'waehle'; readonly subject?: IrExpr; readonly arms: ReadonlyArray<IrArm> };
+
+/** Block als `wähle`-Arm-Ergebnis (`{ var …; ergebnis }`) — Statement-Lowering. */
+export interface IrBlockResult {
+    readonly kind: 'blockResult';
+    readonly lets: ReadonlyArray<IrLet>;
+    readonly result: IrExpr;
+}
 
 export interface IrArm {
     /** Leer ⇔ `sonst`-Arm. Bei Subjekt: Enum-Werte; sonst: boolesche Prädikate. */
     readonly patterns: ReadonlyArray<IrExpr>;
-    readonly result: IrExpr;
+    /** Ausdruck ODER Block (`{ var …; ergebnis }`, Phase 2). */
+    readonly result: IrExpr | IrBlockResult;
     readonly isSonst: boolean;
 }
 

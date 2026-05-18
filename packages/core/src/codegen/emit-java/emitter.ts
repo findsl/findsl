@@ -4,30 +4,28 @@
 // SPDX-License-Identifier: EUPL-1.2
 
 /**
- * IR → Java-21-Quelltext (ADR1 `emit-java/`), Phase 1.
+ * IR → Java-21-Quelltext (ADR1 `emit-java/`).
  *
  * Reiner, deterministischer Pretty-Printer (Risiko R9). Ein FinDSL-Modul
  * → eine **instanziierbare** Klasse (Objekt; `fn` = Instanzmethoden, kein
  * privater Konstruktor) mit verschachtelten `enum`/`record` + statischen
- * `konst`. `_`-interne `fn` → `protected`. Methoden-Namen in Java-
- * Konvention (erster Buchstabe klein). `wähle`/`abbruch` →
- * Statement-Lowering (ADR4). FinDSL-`--…--`-Doc + `@Quelle` werden als
- * Javadoc übertragen. Wert-/Tag-Semantik liegt in der Runtime.
+ * `konst`. `_`-interne `fn` → `protected`. Methoden-Namen lowerCamel.
+ * `wähle`/`abbruch`/Block-Arm → Statement-Lowering (ADR4). FinDSL-Doc +
+ * `@Quelle` → Javadoc. Wert-/Tag-/Listen-Semantik liegt in der Runtime.
  */
 
-import type { IrModule, IrDecl, IrExpr, IrArm, IrDoc } from '../ir/nodes.js';
+import type { IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrDoc } from '../ir/nodes.js';
 
 const IND = '    ';
 
 function javaString(s: string): string {
-    return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+    return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"';
 }
 
 /**
- * FinDSL-`fn`-Name → Java-Methodenname: erster Buchst(nach optionalem
- * führendem `_`) klein (Java-Konvention). `KstSatz`→`kstSatz`,
- * `_BegrenzterFreibetrag24`→`_begrenzterFreibetrag24`. Deterministisch,
- * konsistent an Deklaration UND Aufrufstelle anzuwenden.
+ * FinDSL-`fn`-Name → Java-Methodenname: erster Buchst. (nach optionalem
+ * führendem `_`) klein. Deterministisch, konsistent an Decl UND Aufruf.
  */
 function javaMethodName(name: string): string {
     return name.replace(/^(_*)(\p{L})/u, (_m, us: string, c: string) => us + c.toLowerCase());
@@ -37,19 +35,13 @@ function javaMethodName(name: string): string {
 function javadoc(info: IrDoc, indent: string): string[] {
     const body: string[] = [];
     if (info.doc && info.doc.trim() !== '') {
-        // Inhalt maximal übertragen, aber die `--`-Fence-Marker selbst
-        // sind kein Doku-Inhalt. Beide FinDSL-Formen abdecken: Block
-        // (`--`\n…\n`--`) UND Einzeiler (`-- Text --`) — führendes/
-        // schließendes `--` am getrimmten Gesamttext entfernen.
         const stripped = info.doc.replace(/\r/g, '').trim()
             .replace(/^--/, '').replace(/--$/, '');
         for (const raw of stripped.split('\n')) {
-            if (raw.trim() === '--') continue;             // interne Fence-Zeile
-            // `@rückgabe` → Javadoc `@return`; Prosa/Markdown unverändert.
+            if (raw.trim() === '--') continue;
             const ln = raw.replace(/@rückgabe\b/g, '@return').replace(/\*\//g, '* /');
             body.push(ln.length ? ` * ${ln}` : ' *');
         }
-        // Führende/abschließende Leerzeile (durch Fence-Strip) trimmen.
         while (body.length && body[0] === ' *') body.shift();
         while (body.length && body[body.length - 1] === ' *') body.pop();
     }
@@ -79,6 +71,8 @@ function emitExpr(e: IrExpr): string {
             const m = e.op === '+' ? 'add' : e.op === '-' ? 'sub' : 'mul';
             return `${emitExpr(e.left)}.${m}(${emitExpr(e.right)})`;
         }
+        case 'div':
+            return `${emitExpr(e.left)}.div(${emitExpr(e.right)})`;
         case 'cmp': {
             const l = emitExpr(e.left), r = emitExpr(e.right);
             switch (e.op) {
@@ -95,34 +89,67 @@ function emitExpr(e: IrExpr): string {
             return `(${emitExpr(e.left)}) && (${emitExpr(e.right)})`;
         case 'round':
             return `${emitExpr(e.receiver)}.${e.mode}(FinDslNumber.Type.${e.target})`;
+        case 'cast':
+            return `${emitExpr(e.value)}.cast(FinDslNumber.Type.${e.target})`;
         case 'moneyAnno':
             return `${emitExpr(e.expr)}.withMoneyAnnotation(`
                 + `FinDslNumber.Type.${e.target}, ${javaString(e.what)})`;
+        case 'listLit':
+            return e.items.length === 0
+                ? `FinDslListe.<${e.elementJavaType}>empty()`
+                : `FinDslListe.of(java.util.List.of(${e.items.map(emitExpr).join(', ')}))`;
+        case 'listMethod':
+            return `${emitExpr(e.receiver)}.${e.method}()`;
+        case 'listMap':
+            return `${emitExpr(e.receiver)}.zuordnen(${emitExpr(e.fn)})`;
+        case 'lambda1':
+            return `(${e.param}) -> ${emitExpr(e.body)}`;
+        case 'strInterp': {
+            const terms: string[] = [];
+            for (let k = 0; k < e.slots.length; k++) {
+                terms.push(javaString(e.parts[k]));
+                terms.push(`${emitExpr(e.slots[k])}.asText()`);
+            }
+            terms.push(javaString(e.parts[e.parts.length - 1]));
+            return terms.join(' + ');
+        }
         case 'abort':
-            throw new Error('abbruch-Emission ist Phase-2-Scope (kst nutzt es nicht).');
+            throw new Error('abbruch nur in Ergebnis-Position (emitResult), nicht als Sub-Ausdruck.');
         case 'waehle':
-            throw new Error('wähle in Ausdrucksposition: nur als Body/Arm-Ergebnis (Phase 1).');
+            throw new Error('wähle nur in Ergebnis-Position (emitResult), nicht als Sub-Ausdruck.');
     }
     throw new Error(`Emit: unbekannter IR-Knoten ${(e as { kind: string }).kind}.`);
 }
 
-function emitResultStmt(e: IrExpr, indent: string): string {
-    if (e.kind === 'abort') {
-        return `${indent}throw new FinDslAbort(${emitExpr(e.reason)});`;
+/**
+ * Ergebnis-Position (fn-Body, `wähle`-Arm): Statement-Lowering von
+ * Block (`{var…;ergebnis}`) / verschachteltem `wähle` / `abbruch` /
+ * Ausdruck (ADR4 — kein Ternär).
+ */
+function emitResult(r: IrExpr | IrBlockResult, indent: string): string {
+    if (r.kind === 'blockResult') {
+        const lines = r.lets.map(
+            (l) => `${indent}final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`);
+        lines.push(emitResult(r.result, indent));
+        return lines.join('\n');
     }
-    return `${indent}return ${emitExpr(e)};`;
+    if (r.kind === 'waehle') {
+        return emitWaehle(r, indent);
+    }
+    if (r.kind === 'abort') {
+        return `${indent}throw new FinDslAbort(${emitExpr(r.reason)});`;
+    }
+    return `${indent}return ${emitExpr(r)};`;
 }
 
 function emitArmCondition(arm: IrArm, subject: IrExpr | undefined): string {
     if (arm.patterns.length === 0) {
-        // Nicht-sonst-Arm ohne Pattern (nur via Teil-Parse) — niemals
-        // `if () {` emittieren.
         throw new Error('falls-Arm ohne Pattern (Teil-Parse, Codegen).');
     }
     const terms = arm.patterns.map((p) => {
         if (subject === undefined) return emitExpr(p);
         if (p.kind !== 'enumVal') {
-            throw new Error('Subjekt-wähle erwartet Enum-Pattern (Phase 1/kst).');
+            throw new Error('Subjekt-wähle erwartet Enum-Pattern (Codegen).');
         }
         return `${emitExpr(subject)} == ${emitExpr(p)}`;
     });
@@ -138,11 +165,11 @@ function emitWaehle(
     for (const arm of w.arms) {
         if (arm.isSonst) {
             hasSonst = true;
-            lines.push(emitResultStmt(arm.result, indent));
+            lines.push(emitResult(arm.result, indent));
             break;
         }
         lines.push(`${indent}if (${emitArmCondition(arm, w.subject)}) {`);
-        lines.push(emitResultStmt(arm.result, indent + IND));
+        lines.push(emitResult(arm.result, indent + IND));
         lines.push(`${indent}}`);
     }
     if (!hasSonst) {
@@ -154,18 +181,12 @@ function emitWaehle(
 
 function emitFnBody(decl: Extract<IrDecl, { kind: 'fn' }>): string {
     const b = decl.body;
-    const out: string[] = [];
-    const resultPos = (e: IrExpr): string =>
-        e.kind === 'waehle' ? emitWaehle(e, IND + IND) : emitResultStmt(e, IND + IND);
-
     if (b.kind === 'expr') {
-        out.push(resultPos(b.expr));
-    } else {
-        for (const l of b.lets) {
-            out.push(`${IND}${IND}final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`);
-        }
-        out.push(resultPos(b.result));
+        return emitResult(b.expr, IND + IND);
     }
+    const out = b.lets.map(
+        (l) => `${IND}${IND}final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`);
+    out.push(emitResult(b.result, IND + IND));
     return out.join('\n');
 }
 
@@ -202,7 +223,6 @@ export function emitJavaModule(m: IrModule): string {
         .sort((a, b) => order[a.d.kind] - order[b.d.kind] || a.i - b.i)
         .map(({ d }) => emitDecl(d));
 
-    // Klassen-Javadoc: fixe Erzeugt-Notiz + übertragener FinDSL-Datei-Doc.
     const classDoc: string[] = [
         '/**',
         ' * Generiert aus FinDSL — NICHT manuell editieren.',
@@ -210,23 +230,33 @@ export function emitJavaModule(m: IrModule): string {
     ];
     const fileDoc = javadoc(m.info, '');
     if (fileDoc.length) {
-        classDoc.push(' *', ...fileDoc.slice(1, -1));          // ohne /** und */
+        classDoc.push(' *', ...fileDoc.slice(1, -1));
     }
     classDoc.push(' */');
+
+    // Bedarfsgesteuerte Imports: nur Runtime-Typen, die im generierten
+    // Member-Code (NICHT Javadoc) namentlich vorkommen — vermeidet
+    // ungenutzte Imports (Checkstyle/IDE). `FinDslLambda1` taucht nie
+    // namentlich auf (nur strukturell via FinDslListe.zuordnen-Signatur).
+    const code = decls.join('\n\n');
+    const runtimeImports = [
+        'FinDslNumber', 'FinDslListe', 'Tarifart', 'Steuerklasse',
+        'FinDslAbort', 'FinDslRuntimeError',
+    ]
+        .filter((t) => new RegExp(`\\b${t}\\b`).test(code))
+        .map((t) => `import org.findsl.runtime.${t};`);
 
     return [
         `package ${m.javaPackage};`,
         '',
         'import javax.annotation.processing.Generated;',
-        'import org.findsl.runtime.FinDslNumber;',
-        'import org.findsl.runtime.FinDslAbort;',
-        'import org.findsl.runtime.FinDslRuntimeError;',
+        ...runtimeImports,
         '',
         ...classDoc,
         '@Generated(value = "findsl.Generator")',
         `public final class ${m.className} {`,
         '',
-        decls.join('\n\n'),
+        code,
         '}',
         '',
     ].join('\n');

@@ -79,7 +79,7 @@ if (gradleStatus.error) {
 }
 if ((gradleStatus.status ?? 1) !== 0) process.exit(gradleStatus.status ?? 1);
 
-// --- Phase 1: kst → Java generieren, gegen Runtime kompilieren, Treiber ---
+// --- Phase 1+2: je Modul generieren → gegen Runtime kompilieren → Treiber ---
 const cli = join(repoRoot, 'packages', 'cli', 'out', 'main.js');
 if (!existsSync(cli)) {
     console.error('✗ packages/cli/out/main.js fehlt — vorher `npm run build`.');
@@ -90,17 +90,24 @@ if (!existsSync(rtClasses)) {
     console.error('✗ Runtime-Klassen fehlen (Gradle-Build unvollständig).');
     process.exit(1);
 }
-const work = mkdtempSync(join(tmpdir(), 'findsl-difftest-'));
-const driver = join(repoRoot, 'packages', 'core', 'test', 'codegen',
-    'fixtures', 'KstDifferential.java');
+const fixtures = join(repoRoot, 'packages', 'core', 'test', 'codegen', 'fixtures');
+const MODULE = [
+    { src: 'examples/kst/kst.findsl', cls: 'Kst', driver: 'KstDifferential.java', phase: '1 (kst)' },
+    { src: 'examples/est/est.findsl', cls: 'Est', driver: 'EstDifferential.java', phase: '2 (est)' },
+];
 
-console.log('▶  Phase 1: examples/kst → Java + Differential…');
-run('node', [cli, 'codegen', join(repoRoot, 'examples', 'kst', 'kst.findsl'),
-    '-l', 'java', '-o', work], {}, 'kst-Codegen');
-copyFileSync(driver, join(work, 'KstDifferential.java'));
-const cp = isWin ? `${work};${rtClasses}` : `${work}:${rtClasses}`;
-run('javac', ['-encoding', 'UTF-8', '-cp', rtClasses, '-d', work,
-    join(work, 'Kst.java'), join(work, 'KstDifferential.java')], {}, 'javac');
-const diff = run('java', ['-cp', cp, 'org.findsl.generated.KstDifferential'],
-    {}, 'Differential-Treiber');
-process.exit(diff);
+for (const m of MODULE) {
+    console.log(`▶  Phase ${m.phase}: ${m.src} → Java + Differential…`);
+    const work = mkdtempSync(join(tmpdir(), 'findsl-difftest-'));
+    run('node', [cli, 'codegen', join(repoRoot, m.src), '-l', 'java', '-o', work],
+        {}, `${m.cls}-Codegen`);
+    copyFileSync(join(fixtures, m.driver), join(work, m.driver));
+    const cp = isWin ? `${work};${rtClasses}` : `${work}:${rtClasses}`;
+    run('javac', ['-encoding', 'UTF-8', '-cp', rtClasses, '-d', work,
+        join(work, `${m.cls}.java`), join(work, m.driver)], {}, `javac ${m.cls}`);
+    const status = run('java', ['-cp', cp,
+        `org.findsl.generated.${m.driver.replace('.java', '')}`],
+        {}, `Differential ${m.cls}`);
+    if (status !== 0) process.exit(status);
+}
+process.exit(0);

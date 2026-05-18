@@ -11,7 +11,7 @@
  * Subkommandos:
  *   parse       — Datei parsen, Diagnose ausgeben
  *   test        — Akzeptanztests aus prüfe-Blöcken ausführen
- *   codegen     — Zielsprachencode erzeugen (--lang; Phase 1: kst-Slice)
+ *   codegen     — Zielsprachencode erzeugen (--lang; Phase 1+2: kst/est)
  *   docgen      — Dokumentation generieren
  */
 
@@ -489,8 +489,8 @@ Beispiele:
 program
     .command('codegen')
     .description('Erzeugt Zielsprachencode aus .findsl (Issue #7). '
-        + 'Phase 1: Skalar/fn/wähle/Geld-Slice (kst-Konstruktsatz) → '
-        + 'kompilierbares, bit-genaues Java. Semantik-Orakel: Interpreter.')
+        + 'Phase 1+2: kst/est-Konstruktsatz (Skalar/Geld/wähle + Listen/'
+        + 'Lambda/Cast/Interpolation) → bit-genaues Java. Orakel: Interpreter.')
     .argument('<pfade...>',
         'beliebig viele Ziele: Dateien, Verzeichnisse (rekursiv) oder '
         + 'Glob-Muster wie "examples/**/*.findsl" (quoten!)')
@@ -585,7 +585,7 @@ Beispiele:
 
         if (written.length > 0) {
             console.log(`✓ ${written.length} Modul(e) → ${lang} `
-                + `(${disp(outDir)}/) — Phase 1: kst-Konstruktsatz, bit-genau.`);
+                + `(${disp(outDir)}/) — Phase 1+2 (kst/est), bit-genau.`);
         }
         process.exit(failures > 0 || missing.length > 0 ? 1 : 0);
     });

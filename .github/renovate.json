@@ -6,6 +6,7 @@
   ],
   "schedule": ["before 6am every weekday"],
   "timezone": "Europe/Berlin",
+  "gitAuthor": "devtank42 <261431074+devtank42@users.noreply.github.com>",
   "automerge": false,
   "dependencyDashboard": true,
   "dependencyDashboardTitle": "Renovate Dependency Dashboard",

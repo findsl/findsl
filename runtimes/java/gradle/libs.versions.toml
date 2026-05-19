@@ -1,7 +1,7 @@
 # Versionskatalog — alle Versionen zentral gepinnt (Reproduzierbarkeit/Audit, ADR2).
 
 [versions]
-junit = "5.14.4"
+junit = "6.0.3"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }

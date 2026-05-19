@@ -7,7 +7,7 @@
   "bin": { "findsl": "./out/main.js" },
   "dependencies": {
     "@findsl/core": "*",
-    "commander": "~12.1.0",
-    "langium": "~4.2.0"
+    "commander": "12.1.0",
+    "langium": "4.2.4"
   }
 }

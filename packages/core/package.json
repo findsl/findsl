@@ -15,13 +15,13 @@
     "langium:generate": "langium generate && node ../../scripts/enhance-textmate.mjs"
   },
   "dependencies": {
-    "chevrotain": "~12.0.0",
-    "decimal.js": "~10.4.3",
+    "chevrotain": "12.0.0",
+    "decimal.js": "10.4.3",
     "katex": "0.16.11",
-    "langium": "~4.2.0",
-    "markdown-it": "^14.1.1",
+    "langium": "4.2.4",
+    "markdown-it": "14.1.1",
     "mathjax-full": "3.2.2",
-    "pdfmake": "^0.3.8",
-    "vscode-languageserver": "~9.0.1"
+    "pdfmake": "0.3.8",
+    "vscode-languageserver": "9.0.1"
   }
 }

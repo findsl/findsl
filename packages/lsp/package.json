@@ -7,7 +7,7 @@
   "main": "./out/main.js",
   "dependencies": {
     "@findsl/core": "*",
-    "langium": "~4.2.0",
-    "vscode-languageserver": "~9.0.1"
+    "langium": "4.2.4",
+    "vscode-languageserver": "9.0.1"
   }
 }

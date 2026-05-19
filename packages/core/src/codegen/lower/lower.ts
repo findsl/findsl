@@ -117,6 +117,35 @@ function javaType(t: Type | undefined, reg: Registry): string {
     return owner !== undefined ? `${owner}.${a.name}` : a.name;
 }
 
+/** `true` ⇔ skalarer numerischer FinDSL-Typ (kein `Liste<…>`). */
+function isNumericType(t: Type | undefined): boolean {
+    const a = namedAtom(t);
+    return a !== undefined && a.name !== 'Liste' && NUMERIC_NAMES.has(a.name);
+}
+
+/**
+ * API-/Fassaden-Typ (deklarierte Grenzen: fn-Param/-Rückgabe, `record`-
+ * Feld, `konst`): numerisch-skalar → **sprechender Wrapper** (= der
+ * FinDSL-Typname `Euro`/`EuroCent`/`Cent`/`Prozent`/`Ganzzahl`/`Dezimal`).
+ * `Liste<T>` bleibt `FinDslListe<Kern>` (Listen sind generische Rechen-
+ * Container; `.summe()` einer leeren Liste ist orakel-gemäß `Ganzzahl 0`,
+ * Boxing erst an der nächsten deklarierten Bindung). Alles übrige =
+ * {@link javaType}.
+ */
+function apiJavaType(t: Type | undefined, reg: Registry): string {
+    const a = namedAtom(t);
+    if (a === undefined) return 'FinDslNumber';
+    if (a.name === 'Liste') {
+        const elem = a.typeArgs?.args?.[0];
+        return `FinDslListe<${javaType(elem, reg)}>`;
+    }
+    if (NUMERIC_NAMES.has(a.name)) return a.name;          // sprechender Wrapper
+    if (a.name === 'Wahrheitswert') return 'boolean';
+    if (a.name === 'Text') return 'String';
+    const owner = reg.typeOwner.get(a.name);
+    return owner !== undefined ? `${owner}.${a.name}` : a.name;
+}
+
 /** Geld-Annotationsname (`Euro|Cent|EuroCent`) einer Typ-Annotation. */
 function moneyAnnotation(t: Type | undefined): 'Euro' | 'Cent' | 'EuroCent' | undefined {
     const n = atomName(t);
@@ -227,15 +256,38 @@ interface RecordInfo {
     /** Owner-Java-Klasse bei cross-modul Datensatz (sonst undefined = lokal). */
     readonly ownerClass?: string;
 }
+interface CrossFnInfo {
+    readonly fieldName: string;
+    readonly methodName: string;
+    /** Callee-Parameter-Typen (für Box numerischer Cross-Argumente). */
+    readonly paramTypes: ReadonlyArray<Type | undefined>;
+    /** Callee-Rückgabetyp (für Unbox numerischen Cross-Ergebnisses). */
+    readonly returnType: Type | undefined;
+}
 interface Registry {
     readonly enumValues: ReadonlyMap<string, EnumValueInfo>;
     readonly records: ReadonlyMap<string, RecordInfo>;
     /** Cross-modul Typ-/Enum-NAME → Owner-Klasse (nur cross; lokal fehlt → unqualifiziert). */
     readonly typeOwner: ReadonlyMap<string, string>;
-    /** Lokaler Name → Kompositions-Feld + Quell-`fn`-Name (cross-modul Aufruf). */
-    readonly crossFns: ReadonlyMap<string, { fieldName: string; methodName: string }>;
-    /** Lokaler Name → Owner-Klasse + Quell-`konst`-Name (`Owner.MEMBER`, static). */
-    readonly crossKonst: ReadonlyMap<string, { ownerClass: string; memberName: string }>;
+    /** Lokaler Name → Kompositions-Feld + Quell-`fn` + Callee-Signatur. */
+    readonly crossFns: ReadonlyMap<string, CrossFnInfo>;
+    /** Lokaler Name → Owner-Klasse + Quell-`konst` + numerisch? (`Owner.MEMBER`). */
+    readonly crossKonst: ReadonlyMap<string, { ownerClass: string; memberName: string; numeric: boolean }>;
+    /** Lokale `konst`: Name → numerisch? (Wrapper-getypt). */
+    readonly localKonst: ReadonlyMap<string, boolean>;
+    /**
+     * Lokale `fn`: Name → intern? + Param-Typen. Öffentliche `fn` haben
+     * Sicht-getypte Parameter → numerische Aufruf-Argumente boxen;
+     * interne `_`-fn haben `FinDslNumber`-Parameter (kein Box, IS-A).
+     */
+    readonly localFns: ReadonlyMap<string,
+        { internal: boolean; paramTypes: ReadonlyArray<Type | undefined> }>;
+    /**
+     * Per-`fn` veränderliche Sicht: lokaler Name (Param/`var`) → FinDSL-
+     * Typ — für die Typauflösung von Record-Feldzugriffen (Lese-Unbox).
+     * `lowerFn`/Block setzt sie vor dem Lowern des Rumpfs.
+     */
+    readonly scopeTypes: Map<string, Type | undefined>;
 }
 
 /** Eingebaute Sprach-Aufzählungen (SPEC § 8.5, kein Import) — Runtime-Enums. */
@@ -254,8 +306,11 @@ function buildRegistry(
     }
     const records = new Map<string, RecordInfo>();
     const typeOwner = new Map<string, string>();
-    const crossFns = new Map<string, { fieldName: string; methodName: string }>();
-    const crossKonst = new Map<string, { ownerClass: string; memberName: string }>();
+    const crossFns = new Map<string, CrossFnInfo>();
+    const crossKonst = new Map<string, { ownerClass: string; memberName: string; numeric: boolean }>();
+    const localKonst = new Map<string, boolean>();
+    const localFns = new Map<string,
+        { internal: boolean; paramTypes: ReadonlyArray<Type | undefined> }>();
 
     // Lokale Decls (ownerClass=undefined → in Java unqualifiziert/nested).
     for (const d of program.decls as ReadonlyArray<TopDecl>) {
@@ -263,6 +318,13 @@ function buildRegistry(
             for (const v of d.values) enumValues.set(v, { enumName: d.name });
         } else if (isDatensatzDecl(d)) {
             records.set(d.name, { decl: d });
+        } else if (isKonstDecl(d)) {
+            localKonst.set(d.name, isNumericType(d.type));
+        } else if (isFunktionDecl(d)) {
+            localFns.set(d.name, {
+                internal: d.name.startsWith('_'),
+                paramTypes: d.params.map((p) => p.type),
+            });
         }
     }
 
@@ -273,8 +335,8 @@ function buildRegistry(
     for (const imp of imports) {
         const owner = imp.className;
         const fieldName = lowerCamel(owner);
-        const fnNames = new Set<string>();
-        const konstNames = new Set<string>();
+        const fnDecls = new Map<string, FunktionDecl>();
+        const konstNumeric = new Map<string, boolean>();
         for (const d of imp.program.decls as ReadonlyArray<TopDecl>) {
             if (isAufzaehlungDecl(d)) {
                 typeOwner.set(d.name, owner);
@@ -285,18 +347,26 @@ function buildRegistry(
                 typeOwner.set(d.name, owner);
                 records.set(d.name, { decl: d, ownerClass: owner });
             } else if (isFunktionDecl(d)) {
-                fnNames.add(d.name);
+                fnDecls.set(d.name, d);
             } else if (isKonstDecl(d)) {
-                konstNames.add(d.name);
+                konstNumeric.set(d.name, isNumericType(d.type));
             }
         }
         for (const b of imp.bindings) {
-            if (fnNames.has(b.sourceName)) {
+            const fd = fnDecls.get(b.sourceName);
+            if (fd !== undefined) {
                 // `fn`-Alias ist korrekt: emittiert `feld.<sourceName>()`.
-                crossFns.set(b.localName, { fieldName, methodName: b.sourceName });
-            } else if (konstNames.has(b.sourceName)) {
+                crossFns.set(b.localName, {
+                    fieldName, methodName: b.sourceName,
+                    paramTypes: fd.params.map((p) => p.type),
+                    returnType: fd.returnType,
+                });
+            } else if (konstNumeric.has(b.sourceName)) {
                 // `konst`-Alias ist korrekt: emittiert `Owner.<sourceName>`.
-                crossKonst.set(b.localName, { ownerClass: owner, memberName: b.sourceName });
+                crossKonst.set(b.localName, {
+                    ownerClass: owner, memberName: b.sourceName,
+                    numeric: konstNumeric.get(b.sourceName) === true,
+                });
             } else if (b.localName !== b.sourceName) {
                 // Typ-/Enum-Wert-Aliasse würden über `enumValues`/`typeOwner`
                 // (per sourceName verschlüsselt) NICHT unter `localName`
@@ -309,7 +379,10 @@ function buildRegistry(
             }
         }
     }
-    return { enumValues, records, typeOwner, crossFns, crossKonst };
+    return {
+        enumValues, records, typeOwner, crossFns, crossKonst,
+        localKonst, localFns, scopeTypes: new Map<string, Type | undefined>(),
+    };
 }
 
 function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
@@ -393,6 +466,29 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
  * Target), §-11.2-Listen-Methoden (`.zuordnen/.summe/.länge`), sonst
  * Record-Feldzugriff. Index = Phase-3-Guard.
  */
+/**
+ * Datensatz-Deklaration des Empfänger-Ausdrucks (für Feld-Unbox):
+ * `ref`→Param/`var`-Typ (scopeTypes), verschachtelter `field`→Feldtyp,
+ * `ctor`/Cross-Aufruf→Rückgabetyp. `undefined`, wenn nicht statisch
+ * auflösbar (dann kein Unbox; ein etwaiger Wrapper-Fehlgriff fällt als
+ * javac-Typfehler auf — nie als stiller Zahlenfehler).
+ */
+function exprFinDslType(e: IrExpr, reg: Registry): Type | undefined {
+    if (e.kind === 'ref') return reg.scopeTypes.get(e.name);
+    if (e.kind === 'field') {
+        const rec = reg.records.get(
+            atomName(exprFinDslType(e.receiver, reg)) ?? '')?.decl;
+        return rec?.fields.find((x) => x.name === e.name)?.type;
+    }
+    if (e.kind === 'crossCall') {
+        return [...reg.crossFns.values()]
+            .find((c) => c.fieldName === e.fieldName && c.methodName === e.methodName)
+            ?.returnType;
+    }
+    return undefined;            // ctor/list-ops etc.: nicht als Empfänger nötig
+}
+
+
 function lowerChainOps(
     base: IrExpr,
     chain: ReadonlyArray<object>,
@@ -417,6 +513,16 @@ function lowerChainOps(
                 const target = governingMoneyTarget(op) ?? 'Ganzzahl';
                 cur = { kind: 'round', receiver: cur, mode: fname, target: target as ZielTyp };
             } else if (fname === 'zuordnen') {
+                // Lambda-Param-Typ = Element-Typ des Empfängers
+                // (`Liste<E>`) → in die Sicht eintragen, damit `e.feld`
+                // im Lambda-Rumpf korrekt unboxt (z. B. `k.faktor()`).
+                const recvAtom = namedAtom(exprFinDslType(cur, reg));
+                const elemT = recvAtom?.name === 'Liste'
+                    ? recvAtom.typeArgs?.args?.[0] : undefined;
+                const lam = call.args[0]?.value;
+                if (isLambda(lam) && lam.params.length === 1) {
+                    reg.scopeTypes.set(lam.params[0].name, elemT);
+                }
                 cur = { kind: 'listMap', receiver: cur, fn: lowerLambdaArg(call.args, reg) };
             } else if (fname === 'summe') {
                 if (call.args.length !== 0) throw new Error('`.summe()` erwartet keine Argumente.');
@@ -429,6 +535,7 @@ function lowerChainOps(
             if (fname === 'länge') {
                 cur = { kind: 'listMethod', receiver: cur, method: 'laenge' };
             } else {
+                // (C): Feld ist Sicht-Subtyp IS-A FinDslNumber → kein Unbox.
                 cur = { kind: 'field', receiver: cur, name: fname };
             }
             i += 1;
@@ -466,8 +573,11 @@ function resolveBareName(name: string, reg: Registry): IrExpr {
     }
     const ck = reg.crossKonst.get(name);
     if (ck !== undefined) {
+        // (C): Sicht-Subtyp IST-EIN FinDslNumber → kein Unbox beim Lesen.
         return { kind: 'crossRef', ownerClass: ck.ownerClass, memberName: ck.memberName };
     }
+    // (C): lokale `konst`/Param/`var` sind alle als FinDslNumber lesbar
+    // (Sicht-Subtyp IS-A) → schlichte Referenz, kein Unbox.
     return { kind: 'ref', name };
 }
 
@@ -492,12 +602,32 @@ function lowerCallChain(
                 args: resolveCtorArgs(rec.decl, call.args, reg),
             };
         } else if (cf !== undefined) {
+            // Cross-Aufruf → Interface-Methode (Sicht-Signatur):
+            // numerische Argumente auf den Sicht-Param boxen. Das
+            // Ergebnis ist Sicht-Subtyp IS-A FinDslNumber → KEIN Unbox.
+            const args = call.args.map((a, idx) => {
+                const e = lowerExpr(a.value, reg);
+                const pt = cf.paramTypes[idx];
+                return isNumericType(pt)
+                    ? { kind: 'box', wrapper: namedAtom(pt)!.name, expr: e } as IrExpr
+                    : e;
+            });
             head = {
-                kind: 'crossCall', fieldName: cf.fieldName, methodName: cf.methodName,
-                args: call.args.map((a) => lowerExpr(a.value, reg)),
+                kind: 'crossCall', fieldName: cf.fieldName, methodName: cf.methodName, args,
             };
         } else {
-            head = { kind: 'call', name, args: call.args.map((a) => lowerExpr(a.value, reg)) };
+            // Lokaler Aufruf: EINE Methode. Öffentliche `fn` haben
+            // Sicht-getypte Parameter → numerische Argumente boxen;
+            // interne `_`-fn haben FinDslNumber-Parameter (kein Box).
+            const lf = reg.localFns.get(name);
+            const args = call.args.map((a, idx) => {
+                const e = lowerExpr(a.value, reg);
+                const pt = lf?.paramTypes[idx];
+                return (lf !== undefined && !lf.internal && isNumericType(pt))
+                    ? { kind: 'box', wrapper: namedAtom(pt)!.name, expr: e } as IrExpr
+                    : e;
+            });
+            head = { kind: 'call', name, args };
         }
         return cc.chain.length > 1
             ? lowerChainOps(head, cc.chain.slice(1), reg)
@@ -524,10 +654,15 @@ function resolveCtorArgs(
     }
     let posIdx = 0;
     return rec.fields.map((f) => {
+        // Record-Felder sind Wrapper-getypt (API) → numerisches Argument
+        // (Rechen-Schicht) boxen. Box ist rein strukturell (ändert Wert/
+        // Tag nicht) — constructRecord-Spiegel: Defaults OHNE moneyAnno.
+        const box = (e: IrExpr): IrExpr =>
+            isNumericType(f.type) ? { kind: 'box', wrapper: namedAtom(f.type)!.name, expr: e } : e;
         const byName = named.get(f.name);
-        if (byName) return lowerExpr(byName, reg);
-        if (posIdx < positional.length) return lowerExpr(positional[posIdx++], reg);
-        if (f.default) return lowerExpr(f.default, reg);
+        if (byName) return box(lowerExpr(byName, reg));
+        if (posIdx < positional.length) return box(lowerExpr(positional[posIdx++], reg));
+        if (f.default) return box(lowerExpr(f.default, reg));
         throw new Error(`Pflichtfeld "${f.name}" fehlt bei ${rec.name}(…).`);
     });
 }
@@ -535,6 +670,9 @@ function resolveCtorArgs(
 /** Block-Lambda (`{ var …; ergebnis }`) als Arm-Ergebnis → IrBlockResult. */
 function lowerBlockLambda(lam: { stmts: ReadonlyArray<object>; result?: Expr }, reg: Registry): IrBlockResult {
     if (!lam.result) throw new Error('Block-Arm ohne Ergebnis (Teil-Parse).');
+    for (const s of lam.stmts.filter(isLetStmt)) {
+        reg.scopeTypes.set(s.name, s.type);          // Sicht für Feld-Unbox
+    }
     const lets: IrLet[] = lam.stmts
         .filter(isLetStmt)
         .map((s) => ({
@@ -575,8 +713,31 @@ function lowerWaehle(w: WaehleExpr, reg: Registry): IrExpr {
 }
 
 function lowerFn(fd: FunktionDecl, reg: Registry): IrDecl {
-    const params: IrParam[] = fd.params.map((p) => ({ name: p.name, javaType: javaType(p.type, reg) }));
+    const params: IrParam[] = fd.params.map((p) => ({
+        name: p.name,
+        javaType: javaType(p.type, reg),          // Kern (FinDslNumber)
+        apiType: apiJavaType(p.type, reg),        // Fassade (Wrapper)
+        numeric: isNumericType(p.type),
+    }));
     const returnJavaType = javaType(fd.returnType, reg);
+    const returnApiType = apiJavaType(fd.returnType, reg);
+    const returnNumeric = isNumericType(fd.returnType);
+
+    // Per-`fn`-Sicht für Record-Feld-Unbox: Param- und `var`-Typen.
+    // Param/`var` sind im Kern bereits FinDslNumber — die Sicht dient
+    // nur dazu, Datensatz-Empfänger von Feldzugriffen aufzulösen.
+    reg.scopeTypes.clear();
+    for (const p of fd.params) reg.scopeTypes.set(p.name, p.type);
+    if (fd.body.block) {
+        for (const s of fd.body.block.stmts.filter(isLetStmt)) {
+            reg.scopeTypes.set(s.name, s.type);
+        }
+    } else if (fd.body.expr && isLambda(fd.body.expr) && fd.body.expr.params.length === 0) {
+        for (const s of fd.body.expr.stmts.filter(isLetStmt)) {
+            reg.scopeTypes.set(s.name, s.type);
+        }
+    }
+
     let body: IrFnBody;
     if (fd.body.expr) {
         const ex = fd.body.expr;
@@ -605,15 +766,48 @@ function lowerFn(fd: FunktionDecl, reg: Registry): IrDecl {
     body = body.kind === 'expr'
         ? { kind: 'expr', expr: floatWaehle(body.expr) }
         : { kind: 'block', lets: floatLets(body.lets), result: floatWaehle(body.result) };
+
+    // (C): öffentliche `fn` deklarieren einen Sicht-Rückgabetyp; das
+    // Kern-Ergebnis (FinDslNumber) wird an JEDER Ergebnisposition auf
+    // die Sicht geboxt (`Euro.von(…)`). Interne `_`-fn geben den Kern
+    // (FinDslNumber) zurück → kein Box.
+    if (!fd.name.startsWith('_') && returnNumeric) {
+        body = body.kind === 'expr'
+            ? { kind: 'expr', expr: boxReturnExpr(body.expr, returnApiType) }
+            : { kind: 'block', lets: body.lets, result: boxReturnExpr(body.result, returnApiType) };
+    }
+
     return {
         kind: 'fn',
         name: fd.name,
         internal: fd.name.startsWith('_'),
         params,
         returnJavaType,
+        returnApiType,
+        returnNumeric,
         body,
         info: extractDoc(fd.docPrefix),
     };
+}
+
+/**
+ * Boxt die RÜCKGABE einer öffentlichen `fn` auf den Sicht-Subtyp:
+ * jede Ergebnisposition (`wähle`-Arm, Block-Ergebnis, schlichter
+ * Ausdruck) wird in `box{wrapper}` gehüllt; `abbruch` (wirft, kein
+ * Wert) und bereits geboxte Ausdrücke bleiben unberührt. Rein
+ * strukturell (Wert/Tag unverändert) → bit-genau.
+ */
+function boxReturn(r: IrExpr | IrBlockResult, wrapper: string): IrExpr | IrBlockResult {
+    return r.kind === 'blockResult'
+        ? { ...r, result: boxReturnExpr(r.result, wrapper) }
+        : boxReturnExpr(r, wrapper);
+}
+function boxReturnExpr(e: IrExpr, wrapper: string): IrExpr {
+    if (e.kind === 'waehle') {
+        return { ...e, arms: e.arms.map((a) => ({ ...a, result: boxReturn(a.result, wrapper) })) };
+    }
+    if (e.kind === 'abort' || e.kind === 'box') return e;
+    return { kind: 'box', wrapper, expr: e };
 }
 
 /**
@@ -713,7 +907,7 @@ function floatWaehle(e: IrExpr): IrExpr {
             const rc = floatWaehle(e.receiver);
             return isChoice(rc) ? pushCtxExpr(rc, (x) => ({ ...e, receiver: x })) : { ...e, receiver: rc };
         }
-        case 'moneyAnno': {
+        case 'moneyAnno': case 'box': case 'unbox': {
             const x = floatWaehle(e.expr);
             return isChoice(x) ? pushCtxExpr(x, (y) => ({ ...e, expr: y })) : { ...e, expr: x };
         }
@@ -802,20 +996,25 @@ export function lowerProgram(program: Program, ctx: LowerContext): IrModule {
     const decls: IrDecl[] = [];
     for (const d of program.decls as ReadonlyArray<TopDecl>) {
         if (isKonstDecl(d)) {
+            // `konst` ist API → numerisch Wrapper-getypt; der Kern-
+            // Ausdruck bleibt unverändert (Emitter boxt: `W.von(expr)`).
             decls.push({
                 kind: 'konst',
                 name: d.name,
                 expr: floatValue(
                     maybeMoneyAnno(lowerExpr(d.value, reg), d.type, `Konstante "${d.name}"`),
                     `Konstante "${d.name}"`),
+                wrapper: isNumericType(d.type) ? namedAtom(d.type)!.name : undefined,
                 info: extractDoc(d.docPrefix),
             });
         } else if (isAufzaehlungDecl(d)) {
             decls.push({ kind: 'enum', name: d.name, values: d.values, info: extractDoc(d.docPrefix) });
         } else if (isDatensatzDecl(d)) {
+            // Record-Felder sind API → numerisch Wrapper-getypt.
             const fields: IrField[] = d.fields.map((f) => ({
                 name: f.name,
-                javaType: javaType(f.type, reg),
+                javaType: apiJavaType(f.type, reg),
+                numeric: isNumericType(f.type),
             }));
             decls.push({ kind: 'record', name: d.name, fields, info: extractDoc(d.docPrefix) });
         } else if (isFunktionDecl(d)) {
@@ -849,6 +1048,12 @@ export function lowerTestProgram(program: Program, ctx: LowerContext): IrTestMod
         if (!isPruefeDecl(d)) continue;                  // Nur prüfe-Blöcke
         const cases: IrTestCase[] = d.beispiele.map((b) => {
             const stmts = b.body.stmts ?? [];
+            // Per-testfall-Sicht: `var`-Typen für Record-Feld-Unbox in
+            // den Assertions (z. B. `e.gesamtbetragDerEinkuenfte()`).
+            reg.scopeTypes.clear();
+            for (const s of stmts.filter(isLetStmt)) {
+                reg.scopeTypes.set(s.name, s.type);
+            }
             const lets: IrLet[] = [];
             for (const s of stmts) {
                 if (!isLetStmt(s)) {

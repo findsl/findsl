@@ -70,9 +70,17 @@ function emitExpr(e: IrExpr): string {
                 ? `${e.ownerClass}.${e.enumName}.${e.value}`
                 : `${e.enumName}.${e.value}`;
         case 'field':
+            // Sicht-Subtyp IST-EIN FinDslNumber → kein Unboxing nötig.
             return `${emitExpr(e.receiver)}.${e.name}()`;
         case 'call':
             return `${javaMethodName(e.name)}(${e.args.map(emitExpr).join(', ')})`;
+        case 'box':
+            // Sicht-Adapter an Schreibgrenze (fn-Rückgabe/ctor/konst/
+            // Aufruf-Argument); rein nominal, Wert/Tag bleiben.
+            return `${e.wrapper}.von(${emitExpr(e.expr)})`;
+        case 'unbox':
+            // (C): IS-A — Unboxing entfällt; defensiver Durchgriff.
+            return emitExpr(e.expr);
         case 'ctor': {
             const qual = e.ownerClass !== undefined ? `${e.ownerClass}.` : '';
             return `new ${qual}${e.typeName}(${e.args.map(emitExpr).join(', ')})`;
@@ -236,31 +244,44 @@ function emitInterfaceMember(d: IrDecl): string | undefined {
                 .join(',\n');
             return head + `${IND}public record ${d.name}(\n${params}\n${IND}) {}`;
         }
-        case 'konst':
-            return head + `${IND}public static final FinDslNumber ${d.name} = ${emitExpr(d.expr)};`;
+        case 'konst': {
+            // API-Konstante: numerisch → Wrapper-getypt, Kern-Ausdruck
+            // geboxt (`W.von(expr)`); sonst unverändert FinDslNumber.
+            const w = d.wrapper;
+            const init = w !== undefined ? `${w}.von(${emitExpr(d.expr)})` : emitExpr(d.expr);
+            return head + `${IND}public static final ${w ?? 'FinDslNumber'} ${d.name} = ${init};`;
+        }
         case 'fn': {
             if (d.internal) return undefined;        // `_` nur in der Impl
-            const params = d.params.map((p) => `${p.javaType} ${p.name}`).join(', ');
-            return head + `${IND}${d.returnJavaType} ${javaMethodName(d.name)}(${params});`;
+            // Fassaden-Signatur: sprechende API-Typen (Wrapper).
+            const params = d.params.map((p) => `${p.apiType} ${p.name}`).join(', ');
+            return head + `${IND}${d.returnApiType} ${javaMethodName(d.name)}(${params});`;
         }
     }
 }
 
 /**
- * Implementierungs-Methode: öffentliche `fn` → `@Override` (Javadoc
- * steht im Interface, hier keiner); `_`-interne `fn` → `protected` mit
- * Javadoc (nicht im Interface). Nicht-`fn`-Decls liegen im Interface.
+ * Implementierungs-Methode (EINE Methode, keine Fassade/`_kern`-Doppe-
+ * lung). Öffentliche `fn`: `@Override public <WrapperRet> name(<Wrapper-
+ * Params>)` — Parameter sind Sicht-Subtypen (IS-A FinDslNumber → im
+ * Rumpf direkt ohne `.zahl()` rechenbar); die Rückgabe wird vom Lowering
+ * an der Ergebnisposition auf den Sicht-Typ geboxt (`Euro.von(…)`).
+ * `_`-interne `fn`: `protected FinDslNumber _name(<FinDslNumber>)` mit
+ * Javadoc (Kern-Signatur, NICHT im Interface).
  */
 function emitImplFn(d: IrDecl): string | undefined {
     if (d.kind !== 'fn') return undefined;
-    const params = d.params.map((p) => `${p.javaType} ${p.name}`).join(', ');
-    const sig = `${d.returnJavaType} ${javaMethodName(d.name)}(${params})`;
     if (d.internal) {
         const doc = javadoc(d.info, IND);
         const head = doc.length ? doc.join('\n') + '\n' : '';
+        const kernParams = d.params.map((p) => `${p.javaType} ${p.name}`).join(', ');
+        const sig = `${d.returnJavaType} ${javaMethodName(d.name)}(${kernParams})`;
         return head + `${IND}protected ${sig} {\n` + emitFnBody(d) + `\n${IND}}`;
     }
-    return `${IND}@Override\n${IND}public ${sig} {\n` + emitFnBody(d) + `\n${IND}}`;
+    const apiParams = d.params.map((p) => `${p.apiType} ${p.name}`).join(', ');
+    return `${IND}@Override\n`
+        + `${IND}public ${d.returnApiType} ${javaMethodName(d.name)}(${apiParams}) {\n`
+        + emitFnBody(d) + `\n${IND}}`;
 }
 
 /** Klassen-Javadoc (Datei-Doc) — identisch für Interface und Impl. */
@@ -281,6 +302,7 @@ function runtimeImportsFor(code: string): string[] {
     return [
         'FinDslNumber', 'FinDslListe', 'Tarifart', 'Steuerklasse',
         'FinDslAbort', 'FinDslRuntimeError',
+        'Euro', 'EuroCent', 'Cent', 'Prozent', 'Ganzzahl', 'Dezimal',
     ]
         .filter((t) => new RegExp(`\\b${t}\\b`).test(code))
         .map((t) => `import org.findsl.runtime.${t};`);
@@ -473,6 +495,7 @@ export function emitJavaTestModule(m: IrTestModule): string {
     const runtimeImports = [
         'FinDslNumber', 'FinDslListe', 'Tarifart', 'Steuerklasse',
         'FinDslAbort', 'FinDslRuntimeError',
+        'Euro', 'EuroCent', 'Cent', 'Prozent', 'Ganzzahl', 'Dezimal',
     ]
         .filter((t) => new RegExp(`\\b${t}\\b`).test(code))
         .map((t) => `import org.findsl.runtime.${t};`);

@@ -17,11 +17,19 @@ import java.util.Objects;
  * {@code combineAddSub/Mul/Div}, {@code castNumeric},
  * {@code applyMoneyAnnotation}, {@code scalarRoundingValue}).
  *
- * <p>Unveränderlicher Wertetyp als {@code record} (Java 16+):
- * {@code value} (immer Euro-kanonisch, 1 ct = 0,01 €) + ein {@link Type}.
- * <b>Ein</b> Java-Typ für alle sechs FinDSL-Zahlarten (die sechs
- * {@link Type}-Konstanten) — wie der Interpreter, KEIN Typ pro Geldart,
- * sonst divergieren die {@code combine*}-Regeln.
+ * <p>Unveränderlicher Wertetyp als {@code sealed class}: {@code value}
+ * (immer Euro-kanonisch, 1 ct = 0,01 €) + ein {@link Type} (= das
+ * semantik-tragende Tag). Die sechs sprechenden Subtypen {@link Euro}/
+ * {@link EuroCent}/{@link Cent}/{@link Prozent}/{@link Ganzzahl}/
+ * {@link Dezimal} sind <b>reine nominale Sicht-Typen ohne Eigen-
+ * verhalten</b>: sie tragen kein eigenes Tag und erzeugen keine eigene
+ * Arithmetik — die gesamte {@code combine*}/{@code cast}/Rundungs-
+ * Semantik bleibt HIER zentral (sonst divergieren die Regeln). Eine
+ * {@code Euro}-Instanz behält den TATSÄCHLICHEN Lauf­zeit-Tag im
+ * geerbten {@code type}-Feld (z. B. {@code Cent} nach
+ * {@code Euro − Cent}); die Subklasse ist nur die deklarierte Sicht.
+ * Arithmetik liefert stets Obertyp-Instanzen (kein Subtyp-Routing →
+ * keine Tag-Reimplementierung, bit-genau zum Interpreter).
  *
  * <p>Die Factory- und Rundungs-Methodennamen ({@code euro}, {@code cent},
  * {@code abrunden}, {@code aufrunden}, …) behalten bewusst die
@@ -31,9 +39,10 @@ import java.util.Objects;
  * <p><b>Gleichheit:</b> FinDSL-Wertgleichheit ist
  * {@link #equalsValue(FinDslNumber)} (Euro-kanonisch, skalen-unabhängig
  * über {@code compareTo}, ignoriert den {@code type} — exakt
- * {@code values.ts valuesEqual}). Das vom {@code record} erzeugte
- * {@link #equals(Object)} ist komponentenbasiert (BigDecimal-{@code equals}
- * ist skalen-sensitiv) und für FinDSL-{@code ==} <b>nicht</b> maßgeblich.
+ * {@code values.ts valuesEqual}). {@link #equals(Object)} ist
+ * komponentenbasiert ({@code value}+{@code type}, subklassen-agnostisch,
+ * verhaltensidentisch zum früheren {@code record}-{@code equals}) und
+ * für FinDSL-{@code ==} <b>nicht</b> maßgeblich.
  *
  * <p><b>Gate 0 (verbindlich):</b> Der Interpreter nutzt {@code decimal.js}
  * mit dessen Default {@code precision: 20} / {@code ROUND_HALF_UP} (nie
@@ -43,7 +52,11 @@ import java.util.Objects;
  * heißt: bit-genau zum Interpreter, nicht zur SPEC (die SPEC-Korrektur
  * „≥ 50 Stellen" ist ein separates Doku-Ticket).
  */
-public record FinDslNumber(BigDecimal value, Type type) {
+public sealed class FinDslNumber
+        permits Euro, EuroCent, Cent, Prozent, Ganzzahl, Dezimal {
+
+    private final BigDecimal value;
+    private final Type type;
 
     /**
      * Die Art einer {@link FinDslNumber} — exakt die sechs Tags des
@@ -77,13 +90,60 @@ public record FinDslNumber(BigDecimal value, Type type) {
 
     /**
      * Kanonischer Konstruktor: Fail-fast gegen {@code null}-Komponenten.
+     * Paket-privat — Instanzen entstehen über die Factories bzw. die
+     * Sicht-Subklassen ({@code Euro.von(…)} …).
      *
      * @param value Euro-kanonischer Betrag (nie {@code null}).
      * @param type  Zahl-Art (nie {@code null}).
      */
-    public FinDslNumber {
-        Objects.requireNonNull(value, "value");
-        Objects.requireNonNull(type, "type");
+    FinDslNumber(BigDecimal value, Type type) {
+        this.value = Objects.requireNonNull(value, "value");
+        this.type = Objects.requireNonNull(type, "type");
+    }
+
+    /**
+     * Euro-kanonischer Betrag.
+     *
+     * @return der Wert (skalen-sensitiv; FinDSL-Gleichheit via
+     *         {@link #equalsValue(FinDslNumber)}).
+     */
+    public BigDecimal value() {
+        return value;
+    }
+
+    /**
+     * Zahl-Art (Tag) — das semantik-tragende Feld; bei Sicht-Subtypen
+     * der TATSÄCHLICHE Laufzeit-Tag, nicht zwingend die deklarierte Sicht.
+     *
+     * @return die {@link Type}-Konstante.
+     */
+    public Type type() {
+        return type;
+    }
+
+    /**
+     * Komponentengleichheit ({@code value}+{@code type}, subklassen-
+     * agnostisch) — verhaltensidentisch zum früheren {@code record}-
+     * {@code equals}. Für FinDSL-{@code ==} ist
+     * {@link #equalsValue(FinDslNumber)} maßgeblich, NICHT dies.
+     *
+     * @param o Vergleichsobjekt.
+     * @return {@code true} gdw. gleicher Wert (skalen-sensitiv) und Tag.
+     */
+    @Override
+    public boolean equals(Object o) {
+        return o instanceof FinDslNumber f
+                && type == f.type && value.equals(f.value);
+    }
+
+    /**
+     * Konsistent zu {@link #equals(Object)} (Wert + Tag).
+     *
+     * @return Hashcode aus Wert und Art.
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(value, type);
     }
 
     // --- Factories (Werte Euro-kanonisch, wie values.ts) ------------------

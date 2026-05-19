@@ -5,11 +5,11 @@
  * Differential-Test-Gate für den Java-Codegen (Issue #7, ADR10).
  *
  * Phase 0: verifiziert die `findsl-runtime` (Gradle-Wrapper-Build +
- * JUnit). Phase 1: generiert `examples/kst` → Java, kompiliert es gegen
- * die Runtime und führt den handgeschriebenen Differential-Treiber
- * (`fixtures/KstDifferential.java`) mit den exakten kst.test-Eingaben/
- * Orakel-Sollwerten aus. Phase 3 ersetzt den Treiber durch
- * `prüfe`→JUnit + `runPruefe`-Klassifikationsvergleich.
+ * JUnit, inkl. `FinDslNumberTest`/`FinDslWrapperTest`). Phasen 1–3:
+ * generieren `examples/{kst,est,kraftst}` → Interface+`…Impl` + die
+ * `prüfe`→JUnit-Testklasse, kompilieren gegen die Runtime und führen
+ * das GENERIERTE JUnit aus. Grün ⇔ bit-genau zum Interpreter-Orakel
+ * (`runPruefeDecl`); kein handgeschriebener Treiber mehr.
  *
  * Voraussetzung: `npm run build` lief (CLI unter packages/cli/out/).
  *
@@ -21,7 +21,7 @@
 
 import { spawnSync } from 'node:child_process';
 import {
-    existsSync, mkdtempSync, copyFileSync, mkdirSync, readdirSync,
+    existsSync, mkdtempSync, mkdirSync, readdirSync,
     readFileSync, rmSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -94,46 +94,16 @@ if (!existsSync(rtClasses)) {
     console.error('✗ Runtime-Klassen fehlen (Gradle-Build unvollständig).');
     process.exit(1);
 }
-const fixtures = join(repoRoot, 'packages', 'core', 'test', 'codegen', 'fixtures');
-// ADR8: codegen erwartet ein Basisverzeichnis. `examples/kst` enthält
-// nur kst.findsl direkt → unbenanntes Package → <work>/Kst.java
-// (kst.test.findsl wird übersprungen → JUnit, Inkrement 3). Treiber
-// liegen daher ebenfalls im unbenannten Package (Aufruf ohne Präfix).
-const MODULE = [
-    { dir: 'examples/kst', cls: 'Kst', driver: 'KstDifferential.java', phase: '1 (kst)' },
-    { dir: 'examples/est', cls: 'Est', driver: 'EstDifferential.java', phase: '2 (est)' },
-];
-
-for (const m of MODULE) {
-    console.log(`▶  Phase ${m.phase}: ${m.dir} → Java + Differential…`);
-    const work = mkdtempSync(join(tmpdir(), 'findsl-difftest-'));
-    run('node', [cli, 'codegen', join(repoRoot, m.dir), '-l', 'java', '-o', work],
-        {}, `${m.cls}-Codegen`);
-    copyFileSync(join(fixtures, m.driver), join(work, m.driver));
-    const cp = isWin ? `${work};${rtClasses}` : `${work}:${rtClasses}`;
-    // Pro Modul ZWEI generierte Dateien (Interface + `…Impl`) + Treiber.
-    // Die ebenfalls erzeugte JUnit-Klasse `<Name>Test.java` (–t fällt
-    // auf –o zurück) wird hier ausgeschlossen — sie braucht JUnit im
-    // Klassenpfad und wird separat (Phase 3) verifiziert.
-    const javaSrcs = readdirSync(work)
-        .filter((f) => f.endsWith('.java') && !f.endsWith('Test.java'))
-        .map((f) => join(work, f));
-    run('javac', ['-encoding', 'UTF-8', '-cp', rtClasses, '-d', work,
-        ...javaSrcs], {}, `javac ${m.cls}`);
-    const status = run('java', ['-cp', cp,
-        m.driver.replace('.java', '')],
-        {}, `Differential ${m.cls}`);
-    if (status !== 0) process.exit(status);
-}
-
-// --- Phase 3 (kraftst): Cross-Modul → generiertes JUnit5 = Orakel ---
+// --- Phasen 1–3: generiertes JUnit5 = Orakel (bit-genau) ---
 //
-// kraftst (3×`verwende`) → Java + `KraftstTest` aus `kraftst.test.findsl`.
-// Soll-Verhalten = `findsl test` (runPruefeDecl). Statt Hand-Treiber wird
-// das GENERIERTE JUnit gegen die Runtime ausgeführt; grün ⇔ bit-genau.
-// JUnit-Platform-Console-Standalone gepinnt (Version+SHA-256), Bezug aus
-// scripts/lib/ (offline) oder Maven Central (curl/wget); fehlt beides →
-// nur Phase 3 überspringen (ADR10-Stil), Phase 0–2 bleiben Gate.
+// Pro Modul: `*.findsl` → Interface+`…Impl` (–o), `*.test.findsl` →
+// `<Name>Test` (–t) aus den `prüfe`-Blöcken. Soll-Verhalten = `findsl
+// test` (`runPruefeDecl`); das GENERIERTE JUnit läuft gegen die Runtime
+// — grün ⇔ bit-genau. Einheitlich für kst/est (Skalar/Listen) UND
+// kraftst (Cross-Modul, 3×`verwende`); kein Hand-Treiber mehr.
+// JUnit-Platform-Console-Standalone gepinnt (Version+SHA-256), Bezug
+// aus scripts/lib/ (offline) oder Maven Central (curl/wget); fehlt
+// beides → JUnit-Phasen überspringen (ADR10-Stil), Phase 0 bleibt Gate.
 
 const JUNIT_VER = '1.11.4';
 const JUNIT_SHA256 =
@@ -173,32 +143,41 @@ function ensureJunitJar() {
 
 const jpcsPath = ensureJunitJar();
 if (!jpcsPath) {
-    console.log('⏭  Phase 3 (kraftst prüfe→JUnit) übersprungen — '
+    console.log('⏭  JUnit-Phasen (kst/est/kraftst) übersprungen — '
         + 'JUnit-Console-Standalone weder in scripts/lib/ noch via '
-        + 'curl/wget beziehbar (offline). Phase 0–2 grün.');
+        + 'curl/wget beziehbar (offline). Phase 0 (Runtime) grün.');
     process.exit(0);
 }
 
-console.log('▶  Phase 3 (kraftst): examples/kraftst → Java + generiertes JUnit…');
-const wm = mkdtempSync(join(tmpdir(), 'findsl-difftest-km-'));
-const wt = mkdtempSync(join(tmpdir(), 'findsl-difftest-kt-'));
-const wc = mkdtempSync(join(tmpdir(), 'findsl-difftest-kc-'));
-// examples/kraftst als Basis ⇒ alle Dateien direkt darin ⇒ unbenanntes
-// Package; KraftstTest ohne Paket-Präfix selektieren.
-run('node', [cli, 'codegen', join(repoRoot, 'examples', 'kraftst'),
-    '-l', 'java', '-o', wm, '-t', wt], {}, 'kraftst-Codegen');
-const sut = readdirSync(wm).filter((f) => f.endsWith('.java')).map((f) => join(wm, f));
-const testSrc = join(wt, 'KraftstTest.java');
-if (!existsSync(testSrc)) {
-    console.error('✗ KraftstTest.java nicht generiert (Phase 3).');
-    process.exit(1);
-}
 const cpJoin = (parts) => parts.join(isWin ? ';' : ':');
-run('javac', ['-encoding', 'UTF-8', '-cp', cpJoin([rtClasses, jpcsPath]),
-    '-d', wc, ...sut, testSrc], {}, 'javac kraftst + KraftstTest');
-const stK = run('java', ['-jar', jpcsPath, 'execute',
-    '-cp', cpJoin([wc, rtClasses]), '-c', 'KraftstTest',
-    '--disable-banner', '--fail-if-no-tests'], {}, 'JUnit kraftst');
-if (stK !== 0) process.exit(stK);
-console.log('✓ Phase 3 (kraftst): generiertes JUnit = Interpreter-Orakel (bit-genau).');
+// Alle Module direkt im jeweiligen Basisverzeichnis → unbenanntes
+// Package; Testklasse `<Name>Test` ohne Paket-Präfix selektieren.
+const MODULE = [
+    { dir: 'examples/kst', test: 'KstTest', phase: '1 (kst, Skalar/Geld)' },
+    { dir: 'examples/est', test: 'EstTest', phase: '2 (est, Listen/Lambda)' },
+    { dir: 'examples/kraftst', test: 'KraftstTest', phase: '3 (kraftst, Cross-Modul)' },
+];
+
+for (const m of MODULE) {
+    console.log(`▶  Phase ${m.phase}: ${m.dir} → Java + generiertes JUnit…`);
+    const wm = mkdtempSync(join(tmpdir(), 'findsl-difftest-m-'));
+    const wt = mkdtempSync(join(tmpdir(), 'findsl-difftest-t-'));
+    const wc = mkdtempSync(join(tmpdir(), 'findsl-difftest-c-'));
+    run('node', [cli, 'codegen', join(repoRoot, m.dir),
+        '-l', 'java', '-o', wm, '-t', wt], {}, `${m.test}-Codegen`);
+    const sut = readdirSync(wm)
+        .filter((f) => f.endsWith('.java')).map((f) => join(wm, f));
+    const testSrc = join(wt, `${m.test}.java`);
+    if (!existsSync(testSrc)) {
+        console.error(`✗ ${m.test}.java nicht generiert (Phase ${m.phase}).`);
+        process.exit(1);
+    }
+    run('javac', ['-encoding', 'UTF-8', '-cp', cpJoin([rtClasses, jpcsPath]),
+        '-d', wc, ...sut, testSrc], {}, `javac ${m.test}`);
+    const st = run('java', ['-jar', jpcsPath, 'execute',
+        '-cp', cpJoin([wc, rtClasses]), '-c', m.test,
+        '--disable-banner', '--fail-if-no-tests'], {}, `JUnit ${m.test}`);
+    if (st !== 0) process.exit(st);
+    console.log(`✓ Phase ${m.phase}: generiertes JUnit = Interpreter-Orakel (bit-genau).`);
+}
 process.exit(0);

@@ -86,8 +86,10 @@ jobs:
           # aber `WARN: No repositories found` und tut nichts.
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           # Manuelle Läufe (workflow_dispatch) übersteuern den
-          # per-Config-`schedule`, damit PRs sofort entstehen. Cron-Läufe
-          # lassen den `before 6am every weekday`-Filter intakt. Für
-          # Nicht-Dispatch-Trigger löst der Ausdruck zu `{}` auf (No-op),
-          # die env-Var bleibt immer gesetzt und parsebar.
-          RENOVATE_FORCE: ${{ github.event_name == 'workflow_dispatch' && '{"schedule":null}' || '{}' }}
+          # per-Config-`schedule` (PRs sofort) UND setzen
+          # `recreateWhen:always` — so legt Renovate auch zuvor MANUELL
+          # geschlossene PRs (z. B. Pin-/npm-Gruppe) gezielt wieder an.
+          # Cron-Läufe lassen Schedule-Filter + Default
+          # `recreateWhen:auto` intakt; für Nicht-Dispatch-Trigger ist
+          # der Ausdruck `{}` (No-op), env immer gesetzt/parsebar.
+          RENOVATE_FORCE: ${{ github.event_name == 'workflow_dispatch' && '{"schedule":null,"recreateWhen":"always"}' || '{}' }}

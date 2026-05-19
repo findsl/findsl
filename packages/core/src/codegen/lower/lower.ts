@@ -861,13 +861,20 @@ function pushCtx(
     return pushCtxExpr(r, k);
 }
 function floatLets(lets: ReadonlyArray<IrLet>): IrLet[] {
-    return lets.map((l) => ({ ...l, expr: floatValue(l.expr, `var "${l.name}"`) }));
+    // `var` darf einen `wähle`-Wert tragen (Phase 4) — der Emitter
+    // statement-lowert ihn (blank `final` + Zuweisungs-Sink). Daher
+    // floatWaehle (hebt eingebettete `wähle`), NICHT floatValue (wirft).
+    return lets.map((l) => ({ ...l, expr: floatWaehle(l.expr) }));
 }
 function pushCtxExpr(e: IrExpr, k: (leaf: IrExpr) => IrExpr): IrExpr {
     const f = floatWaehle(e);
     if (isChoice(f)) {
         return { ...f, arms: f.arms.map((a) => ({ ...a, result: pushCtx(a.result, k) })) };
     }
+    // `abbruch` wirft (kein Wert) → umgebenden Kontext (moneyAnno/box/
+    // cast/…) NICHT anwenden (wäre semantisch leer & emit-invalide),
+    // wie boxReturn.
+    if (f.kind === 'abort') return f;
     return floatWaehle(k(f));
 }
 
@@ -1063,9 +1070,10 @@ export function lowerTestProgram(program: Program, ctx: LowerContext): IrTestMod
                 lets.push({
                     name: s.name,
                     javaType: javaType(s.type, reg),
-                    expr: floatValue(
-                        maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
-                        `var "${s.name}"`),
+                    // `var` darf `wähle`-Wert tragen (Phase 4) → floatWaehle
+                    // (Emitter statement-lowert), nicht floatValue (wirft).
+                    expr: floatWaehle(
+                        maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`)),
                 });
             }
             const assertion = floatWaehle(lowerExpr(b.body.result, reg));

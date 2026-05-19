@@ -156,6 +156,7 @@ const MODULE = [
     { dir: 'examples/kst', test: 'KstTest', phase: '1 (kst, Skalar/Geld)' },
     { dir: 'examples/est', test: 'EstTest', phase: '2 (est, Listen/Lambda)' },
     { dir: 'examples/kraftst', test: 'KraftstTest', phase: '3 (kraftst, Cross-Modul)' },
+    { dir: 'examples/gewst', test: 'GewstTest', phase: '4 (gewst, var = wähle)' },
 ];
 
 for (const m of MODULE) {

@@ -161,20 +161,46 @@ function emitExpr(e: IrExpr): string {
  * Block (`{var…;ergebnis}`) / verschachteltem `wähle` / `abbruch` /
  * Ausdruck (ADR4 — kein Ternär).
  */
-function emitResult(r: IrExpr | IrBlockResult, indent: string): string {
+/**
+ * Ziel eines Statement-gelowerten Ergebnisses: `return` (fn-Body/
+ * `wähle`-Arm) ODER Zuweisung an eine `final`-Variable (`var x = wähle`
+ * — Phase 4). `abbruch` ist sink-unabhängig (`throw`).
+ */
+type Sink = { readonly kind: 'return' } | { readonly kind: 'assign'; readonly name: string };
+const RETURN_SINK: Sink = { kind: 'return' };
+
+/**
+ * `final <T> <name>;`-Deklaration + Statement-gelowerter `wähle` als
+ * Zuweisungs-Sink (`var x = wähle{…}`, Phase 4); sonst schlichtes
+ * `final <T> <name> = <expr>;`. (`IrLet.expr` ist ein `IrExpr` — ein
+ * `blockResult` kann hier nie stehen; ein `wähle`-`var`-Wert schon.)
+ */
+function emitLet(l: { javaType: string; name: string; expr: IrExpr }, indent: string): string {
+    const e = l.expr;
+    if (e.kind === 'waehle') {
+        return `${indent}final ${l.javaType} ${l.name};\n`
+            + emitResult(e, indent, { kind: 'assign', name: l.name });
+    }
+    return `${indent}final ${l.javaType} ${l.name} = ${emitExpr(e)};`;
+}
+
+function emitResult(
+    r: IrExpr | IrBlockResult, indent: string, sink: Sink = RETURN_SINK,
+): string {
     if (r.kind === 'blockResult') {
-        const lines = r.lets.map(
-            (l) => `${indent}final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`);
-        lines.push(emitResult(r.result, indent));
+        const lines = r.lets.map((l) => emitLet(l, indent));
+        lines.push(emitResult(r.result, indent, sink));
         return lines.join('\n');
     }
     if (r.kind === 'waehle') {
-        return emitWaehle(r, indent);
+        return emitWaehle(r, indent, sink);
     }
     if (r.kind === 'abort') {
         return `${indent}throw new FinDslAbort(${emitExpr(r.reason)});`;
     }
-    return `${indent}return ${emitExpr(r)};`;
+    return sink.kind === 'assign'
+        ? `${indent}${sink.name} = ${emitExpr(r)};`
+        : `${indent}return ${emitExpr(r)};`;
 }
 
 function emitArmCondition(arm: IrArm, subject: IrExpr | undefined): string {
@@ -194,23 +220,56 @@ function emitArmCondition(arm: IrArm, subject: IrExpr | undefined): string {
 function emitWaehle(
     w: Extract<IrExpr, { kind: 'waehle' }>,
     indent: string,
+    sink: Sink = RETURN_SINK,
 ): string {
+    const noMatch = `${indent}throw new FinDslRuntimeError(`
+        + `"Kein falls-Arm passte (wähle, Codegen).");`;
+
+    // Return-Sink: unverändert (sequenzielle `if (cond) { return … }` —
+    // `return` bricht ab, daher kein Durchfall). Byte-identisch zu
+    // bisher ⇒ Differential-Gate für kst/est/kraftst unberührt.
+    if (sink.kind === 'return') {
+        const lines: string[] = [];
+        let hasSonst = false;
+        for (const arm of w.arms) {
+            if (arm.isSonst) {
+                hasSonst = true;
+                lines.push(emitResult(arm.result, indent, sink));
+                break;
+            }
+            lines.push(`${indent}if (${emitArmCondition(arm, w.subject)}) {`);
+            lines.push(emitResult(arm.result, indent + IND, sink));
+            lines.push(`${indent}}`);
+        }
+        if (!hasSonst) lines.push(noMatch);
+        return lines.join('\n');
+    }
+
+    // Assign-Sink (`var x = wähle{…}`): echte if / else if / else-Kette
+    // — KEIN Durchfall (eine Zuweisung pro Pfad, sonst Überschreiben);
+    // `final`-Variable ist definit zugewiesen (jeder Pfad weist zu oder
+    // wirft: abbruch/Endwurf).
+    // Nur `sonst` (kein `falls`) → unbedingte Zuweisung, kein `if`.
+    if (w.arms.length === 1 && w.arms[0].isSonst) {
+        return emitResult(w.arms[0].result, indent, sink);
+    }
     const lines: string[] = [];
     let hasSonst = false;
-    for (const arm of w.arms) {
+    for (let i = 0; i < w.arms.length; i++) {
+        const arm = w.arms[i];
         if (arm.isSonst) {
             hasSonst = true;
-            lines.push(emitResult(arm.result, indent));
+            lines.push(`${indent}} else {`);
+            lines.push(emitResult(arm.result, indent + IND, sink));
             break;
         }
-        lines.push(`${indent}if (${emitArmCondition(arm, w.subject)}) {`);
-        lines.push(emitResult(arm.result, indent + IND));
-        lines.push(`${indent}}`);
+        const head = i === 0 ? `${indent}if (` : `${indent}} else if (`;
+        lines.push(`${head}${emitArmCondition(arm, w.subject)}) {`);
+        lines.push(emitResult(arm.result, indent + IND, sink));
     }
-    if (!hasSonst) {
-        lines.push(`${indent}throw new FinDslRuntimeError(`
-            + `"Kein falls-Arm passte (wähle, Codegen).");`);
-    }
+    lines.push(hasSonst
+        ? `${indent}}`
+        : `${indent}} else {\n${noMatch.replace(indent, indent + IND)}\n${indent}}`);
     return lines.join('\n');
 }
 
@@ -219,8 +278,7 @@ function emitFnBody(decl: Extract<IrDecl, { kind: 'fn' }>): string {
     if (b.kind === 'expr') {
         return emitResult(b.expr, IND + IND);
     }
-    const out = b.lets.map(
-        (l) => `${IND}${IND}final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`);
+    const out = b.lets.map((l) => emitLet(l, IND + IND));
     out.push(emitResult(b.result, IND + IND));
     return out.join('\n');
 }
@@ -404,10 +462,9 @@ export function emitJavaModuleFiles(m: IrModule): JavaModuleFiles {
     return { interfaceName, interfaceCode, implName, implCode };
 }
 
-/** `var`-Bindungen eines testfall → `final <T> <n> = <expr>;`-Zeilen. */
+/** `var`-Bindungen eines testfall → `final <T> <n> …;` (auch `= wähle`). */
 function emitTestLets(c: IrTestCase, indent: string): string[] {
-    return c.lets.map(
-        (l) => `${indent}final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`);
+    return c.lets.map((l) => emitLet(l, indent));
 }
 
 /**

@@ -32,15 +32,27 @@ export type IrExpr =
     | { readonly kind: 'numLit'; readonly factory: ZahlFactory; readonly arg: string }
     /** Lokale/Parameter-/konst-Referenz (Bezeichner verbatim). */
     | { readonly kind: 'ref'; readonly name: string }
+    /** Boxing an API-Grenze: Rechenkern → sprechender Wrapper (`Wrapper.von(e)`). */
+    | { readonly kind: 'box'; readonly wrapper: string; readonly expr: IrExpr }
+    /** Unboxing an API-Grenze: sprechender Wrapper → Rechenkern (`e.zahl()`). */
+    | { readonly kind: 'unbox'; readonly expr: IrExpr }
     /**
      * Aufzählungs-Wert. Lokal/Builtin → `EnumName.Value`; cross-modul →
      * `OwnerClass.EnumName.Value` (Enum ist nested-static der Owner-Klasse).
      */
     | { readonly kind: 'enumVal'; readonly enumName: string; readonly value: string; readonly ownerClass?: string }
-    /** Record-Feldzugriff → Java-Accessor `receiver.name()`. */
-    | { readonly kind: 'field'; readonly receiver: IrExpr; readonly name: string }
-    /** Statischer Funktionsaufruf `name(args…)`. */
-    | { readonly kind: 'call'; readonly name: string; readonly args: ReadonlyArray<IrExpr> }
+    /**
+     * Record-Feldzugriff → Java-Accessor `receiver.name()`. `unbox` ⇔
+     * das Feld ist ein numerischer Wrapper → `.zahl()` für die Rechen-
+     * Schicht anhängen.
+     */
+    | { readonly kind: 'field'; readonly receiver: IrExpr; readonly name: string; readonly unbox?: boolean }
+    /**
+     * Lokaler Funktionsaufruf. In Kern-Methoden wird die Kern-Variante
+     * gerufen: `kernName` (gesetzt bei öffentlichen `fn` → `_kern<Name>`)
+     * sonst `name` (interne `_`-fn behält ihren Namen).
+     */
+    | { readonly kind: 'call'; readonly name: string; readonly args: ReadonlyArray<IrExpr>; readonly kernName?: string }
     /**
      * Record-Konstruktion `new TypeName(args…)` — Args positionsaufgelöst.
      * Cross-modul → `new OwnerClass.TypeName(args…)` (nested-static Record).
@@ -114,12 +126,20 @@ export interface IrLet {
 
 export interface IrParam {
     readonly name: string;
+    /** Kern-Typ (Rechen-Schicht): numerisch → `FinDslNumber`. */
     readonly javaType: string;
+    /** API-Typ (Fassade): numerisch → sprechender Wrapper (`Euro` …). */
+    readonly apiType: string;
+    /** `true` ⇔ numerisch (apiType ≠ javaType → Box/Unbox in der Fassade). */
+    readonly numeric: boolean;
 }
 
 export interface IrField {
     readonly name: string;
+    /** API-Typ: numerisch → sprechender Wrapper (`record`-Felder sind API). */
     readonly javaType: string;
+    /** `true` ⇔ numerischer Wrapper (ctor-Arg boxen, Feldzugriff unboxen). */
+    readonly numeric: boolean;
     // Java `record` hat keine Feld-Defaults; Defaults werden callsite-
     // seitig in `resolveCtorArgs` (constructRecord-Spiegel) aufgelöst.
 }
@@ -133,16 +153,28 @@ export interface IrDoc {
 }
 
 export type IrDecl =
-    | { readonly kind: 'konst'; readonly name: string; readonly expr: IrExpr; readonly info: IrDoc }
+    | {
+        readonly kind: 'konst';
+        readonly name: string;
+        readonly expr: IrExpr;
+        /** Numerisch → sprechender Wrapper-Typ (`Euro` …), sonst undefined. */
+        readonly wrapper?: string;
+        readonly info: IrDoc;
+      }
     | { readonly kind: 'enum'; readonly name: string; readonly values: ReadonlyArray<string>; readonly info: IrDoc }
     | { readonly kind: 'record'; readonly name: string; readonly fields: ReadonlyArray<IrField>; readonly info: IrDoc }
     | {
         readonly kind: 'fn';
         readonly name: string;
-        /** Führendes `_` ⇒ `protected` statt `public` (Nutzer-Entscheidung). */
+        /** Führendes `_` ⇒ paket-private Kern-Methode (kein Interface-Eintrag). */
         readonly internal: boolean;
         readonly params: ReadonlyArray<IrParam>;
+        /** Kern-Rückgabetyp (Rechen-Schicht): numerisch → `FinDslNumber`. */
         readonly returnJavaType: string;
+        /** API-Rückgabetyp (Fassade): numerisch → Wrapper. */
+        readonly returnApiType: string;
+        /** `true` ⇔ numerischer Rückgabewert (Fassade boxt das Kern-Ergebnis). */
+        readonly returnNumeric: boolean;
         readonly body: IrFnBody;
         readonly info: IrDoc;
       };

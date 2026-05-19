@@ -112,14 +112,17 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         );
         expect(iface).toContain('static M newInstance() {');
         expect(iface).toContain('return new MImpl();');
-        expect(iface).toContain('FinDslNumber.prozent("0.15")');     // konst SATZ
+        // Konstanten Wrapper-getypt, Kern-Ausdruck geboxt:
         expect(iface).toContain(
-            'FinDslNumber.ganzzahl("5000").withMoneyAnnotation(FinDslNumber.Type.Euro,',
-        );
+            'public static final Prozent SATZ = Prozent.von(FinDslNumber.prozent("0.15"));');
+        expect(iface).toContain(
+            'public static final Euro FREIBETRAG = Euro.von(FinDslNumber.ganzzahl("5000")'
+            + '.withMoneyAnnotation(FinDslNumber.Type.Euro,');
         expect(iface).toContain('public enum Ausschluss {');
-        expect(iface).toContain('    FinDslNumber wahl(');           // Signatur, kein public
-        expect(iface).toContain('    FinDslNumber betrag(');
-        expect(iface).not.toContain('protected FinDslNumber _hilfe('); // intern nicht im Interface
+        // Sprechende Signaturen (kein `public`, kein Rumpf):
+        expect(iface).toContain('    Prozent wahl(Ganzzahl jahr, Ausschluss a);');
+        expect(iface).toContain('    Euro betrag(Euro zve, Ganzzahl jahr);');
+        expect(iface).not.toContain('_hilfe(');                      // intern nicht im Interface
         expect(iface).not.toContain('return einkommen');             // kein Rumpf im Interface
         // Kommentar-Übertragung steht im Interface:
         expect(iface).toContain('Datei-Doc → Klassen-Javadoc.');
@@ -129,19 +132,26 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         expect(iface).toContain(' * @return  Betrag (§ 31 Satz 2).');
         expect(iface).toContain(' * @Quelle § 23 Absatz 1 KStG');
 
-        // --- Impl: paket-private Klasse, @Override, protected `_`,
-        //     Rümpfe; KEINE Konstanten/Enums, kein privater Ctor ---
+        // --- Impl (C): EINE Methode (keine Fassade/_kern), kein
+        //     `.zahl()` (Sicht IS-A FinDslNumber), Box NUR an Schreib-
+        //     grenzen; interne `_`-fn = Kern (FinDslNumber, protected) ---
         expect(impl).toMatch(/@Generated[^\n]*\nclass MImpl implements M \{/);
         expect(impl).not.toContain('private MImpl()');
-        expect(impl).toContain('@Override');
-        expect(impl).toContain('public FinDslNumber wahl(');
-        expect(impl).toContain('public FinDslNumber betrag(');
-        expect(impl).toMatch(/\n {4}protected FinDslNumber _hilfe\(/);
+        expect(impl).not.toContain('_kern');                         // keine Doppelmethode
+        expect(impl).not.toContain('.zahl()');                       // IS-A, kein Unbox
+        expect(impl).toContain('public Prozent wahl(Ganzzahl jahr, Ausschluss a) {');
+        expect(impl).toContain('public Euro betrag(Euro zve, Ganzzahl jahr) {');
+        // Rückgabe an der Ergebnisposition geboxt (Sicht-Adapter):
+        expect(impl).toContain('return Prozent.von(SATZ);');
+        expect(impl).toMatch(/return Euro\.von\(zve\.mul\(SATZ\)\.abrunden\(FinDslNumber\.Type\.Euro\)\);/);
+        // Interne `_`-fn: Kern (FinDslNumber, protected), kein @Override,
+        // KEIN Return-Box, konst direkt (IS-A):
+        expect(impl).toMatch(/\n {4}protected FinDslNumber _hilfe\(FinDslNumber einkommen\) \{/);
         expect(impl).not.toContain('static FinDslNumber');
         expect(impl).toContain('if (einkommen.compareValue(FinDslNumber.ganzzahl("0")) <= 0) {');
+        expect(impl).toContain('return FREIBETRAG;');                // kein .zahl(), kein Box (intern)
         expect(impl).toContain('if (a == Ausschluss.Keiner) {');
         expect(impl).toContain('throw new FinDslRuntimeError(');
-        expect(impl).toContain('.abrunden(FinDslNumber.Type.Euro)');
         expect(impl).not.toContain('public enum Ausschluss {');      // Typen nur im Interface
 
         for (const code of [iface, impl]) {
@@ -238,9 +248,18 @@ describe('Cross-Modul-Komposition (Phase 3, Inkrement 2)', () => {
         expect(pick.body.expr.kind).toBe('waehle');
         expect(pick.body.expr.arms[0].patterns[0]).toEqual(
             { kind: 'enumVal', enumName: 'Art', value: 'A', ownerClass: 'Typen' });
+        // (C): Cross-Arg geboxt (callee-Param `Ganzzahl`), KEIN Unbox
+        // (Ergebnis IS-A FinDslNumber); öffentliche `fn` Pick gibt
+        // Ganzzahl zurück → Arm-Ergebnis an der Rückgabe geboxt.
         expect(pick.body.expr.arms[0].result).toEqual({
-            kind: 'crossCall', fieldName: 'typen', methodName: 'Helfer',
-            args: [{ kind: 'numLit', factory: 'ganzzahl', arg: '1' }],
+            kind: 'box', wrapper: 'Ganzzahl',
+            expr: {
+                kind: 'crossCall', fieldName: 'typen', methodName: 'Helfer',
+                args: [{
+                    kind: 'box', wrapper: 'Ganzzahl',
+                    expr: { kind: 'numLit', factory: 'ganzzahl', arg: '1' },
+                }],
+            },
         });
         expect(fn(ir, 'EqTest').body.expr).toEqual({
             kind: 'enumCmp', op: '==',
@@ -249,14 +268,24 @@ describe('Cross-Modul-Komposition (Phase 3, Inkrement 2)', () => {
         });
         // `n + wähle{…}` → `wähle` in Ergebnisposition gehoben (P2).
         expect(fn(ir, 'Floated').body.expr.kind).toBe('waehle');
-        const build = fn(ir, 'Build').body.expr;
+        const build = fn(ir, 'Build').body.expr;       // Record-ctor, Arg geboxt
         expect(build.kind).toBe('ctor');
         expect(build.typeName).toBe('Sache');
         expect(build.ownerClass).toBe('Typen');
-        expect(fn(ir, 'UseKonst').body.expr).toEqual(
-            { kind: 'crossRef', ownerClass: 'Typen', memberName: 'GRENZE' });
-        // Cross-Typ-Qualifizierung im Parameter.
+        expect(build.args[0]).toEqual({
+            kind: 'box', wrapper: 'Ganzzahl',
+            expr: { kind: 'numLit', factory: 'ganzzahl', arg: '7' },
+        });
+        // (C): Cross-`konst` direkt lesbar (IS-A); UseKonst gibt
+        // Ganzzahl zurück → an der Rückgabe geboxt, KEIN Unbox.
+        expect(fn(ir, 'UseKonst').body.expr).toEqual({
+            kind: 'box', wrapper: 'Ganzzahl',
+            expr: { kind: 'crossRef', ownerClass: 'Typen', memberName: 'GRENZE' },
+        });
+        // Cross-Typ-Qualifizierung im Parameter (Enum = nicht numerisch).
         expect(fn(ir, 'Pick').params[0].javaType).toBe('Typen.Art');
+        expect(fn(ir, 'Pick').params[0].apiType).toBe('Typen.Art');
+        expect(fn(ir, 'Pick').params[0].numeric).toBe(false);
     });
 
     it('emittiert Komposition + qualifizierte Cross-Referenzen + Cross-Package-Import', async () => {
@@ -322,9 +351,12 @@ describe('prüfe → JUnit5 (Phase 3, Inkrement 3)', () => {
             name: 'n', javaType: 'FinDslNumber',
             expr: { kind: 'neg', value: { kind: 'numLit', factory: 'ganzzahl', arg: '1' } },
         });
+        // (C): Cross-Aufruf-Arg geboxt (callee-Param `Ganzzahl`); KEIN
+        // Unbox (Ergebnis IS-A FinDslNumber). testfall-Ergebnis wird —
+        // anders als fn-Rückgaben — NICHT geboxt (kein Sicht-Typ-Ziel).
         expect(c2.assertion).toEqual({
             kind: 'crossCall', fieldName: 'kst', methodName: 'NurPositiv',
-            args: [{ kind: 'ref', name: 'n' }],
+            args: [{ kind: 'box', wrapper: 'Ganzzahl', expr: { kind: 'ref', name: 'n' } }],
         });
     });
 
@@ -343,7 +375,9 @@ describe('prüfe → JUnit5 (Phase 3, Inkrement 3)', () => {
         expect(out).toContain('assertTrue(!(false))');
         expect(out).toContain('assertThrows(FinDslAbort.class, () -> {');
         expect(out).toContain('final FinDslNumber n = FinDslNumber.ganzzahl("1").neg();');
-        expect(out).toContain('kst.nurPositiv(n);');
+        // (C): Cross-Arg geboxt, KEIN `.zahl()` (IS-A); Abbruch-Statement.
+        expect(out).toContain('kst.nurPositiv(Ganzzahl.von(n));');
+        expect(out).not.toContain('.zahl()');
     });
 });
 

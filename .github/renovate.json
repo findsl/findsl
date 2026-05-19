@@ -11,8 +11,8 @@
   "dependencyDashboard": true,
   "dependencyDashboardTitle": "Renovate Dependency Dashboard",
   "labels": ["chore"],
-  "prConcurrentLimit": 5,
-  "prHourlyLimit": 2,
+  "prConcurrentLimit": 20,
+  "prHourlyLimit": 0,
   "packageRules": [
     {
       "description": "GitHub Actions minor/patch/digest SHA-Bumps (gruppiert). Hält die SHA-Pins in ci.yml/cla.yml/renovate*.yml aktuell — siehe Pin-Hinweis in cla.yml.",

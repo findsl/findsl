@@ -7,9 +7,11 @@
  * IR → Java-21-Quelltext (ADR1 `emit-java/`).
  *
  * Reiner, deterministischer Pretty-Printer (Risiko R9). Ein FinDSL-Modul
- * → eine **instanziierbare** Klasse (Objekt; `fn` = Instanzmethoden, kein
- * privater Konstruktor) mit verschachtelten `enum`/`record` + statischen
- * `konst`. `_`-interne `fn` → `protected`. Methoden-Namen lowerCamel.
+ * → ZWEI Dateien: `public interface <Name>` (Datei-Doc, `newInstance()`,
+ * öffentliche Methodensignaturen, nested `enum`/`record`, `public static
+ * final` Konstanten) + paket-private `class <Name>Impl implements
+ * <Name>` (nur Methodenrümpfe). `_`-interne `fn` → `protected` (nur in
+ * der Impl). Methoden-Namen lowerCamel.
  * `wähle`/`abbruch`/Block-Arm → Statement-Lowering (ADR4). FinDSL-Doc +
  * `@Quelle` → Javadoc. Wert-/Tag-/Listen-Semantik liegt in der Runtime.
  */
@@ -215,7 +217,12 @@ function emitFnBody(decl: Extract<IrDecl, { kind: 'fn' }>): string {
     return out.join('\n');
 }
 
-function emitDecl(d: IrDecl): string {
+/**
+ * Interface-Member: `enum`/`record`/`konst` mit Javadoc; öffentliche
+ * `fn` als abstrakte Signatur (Javadoc, kein Rumpf). `_`-interne `fn`
+ * gehören NICHT ins Interface (nur in die Implementierung) → `undefined`.
+ */
+function emitInterfaceMember(d: IrDecl): string | undefined {
     const doc = javadoc(d.info, IND);
     const head = doc.length ? doc.join('\n') + '\n' : '';
     switch (d.kind) {
@@ -232,48 +239,103 @@ function emitDecl(d: IrDecl): string {
         case 'konst':
             return head + `${IND}public static final FinDslNumber ${d.name} = ${emitExpr(d.expr)};`;
         case 'fn': {
-            const vis = d.internal ? 'protected ' : 'public ';     // `_` → protected
+            if (d.internal) return undefined;        // `_` nur in der Impl
             const params = d.params.map((p) => `${p.javaType} ${p.name}`).join(', ');
-            return head + `${IND}${vis}${d.returnJavaType} ${javaMethodName(d.name)}(${params}) {\n`
-                + emitFnBody(d) + `\n${IND}}`;
+            return head + `${IND}${d.returnJavaType} ${javaMethodName(d.name)}(${params});`;
         }
     }
 }
 
-/** Rendert ein `IrModule` zu Java-21-Quelltext (deterministisch). */
-export function emitJavaModule(m: IrModule): string {
-    const order = { enum: 0, record: 1, konst: 2, fn: 3 } as const;
-    const decls = [...m.decls]
-        .map((d, i) => ({ d, i }))
-        .sort((a, b) => order[a.d.kind] - order[b.d.kind] || a.i - b.i)
-        .map(({ d }) => emitDecl(d));
+/**
+ * Implementierungs-Methode: öffentliche `fn` → `@Override` (Javadoc
+ * steht im Interface, hier keiner); `_`-interne `fn` → `protected` mit
+ * Javadoc (nicht im Interface). Nicht-`fn`-Decls liegen im Interface.
+ */
+function emitImplFn(d: IrDecl): string | undefined {
+    if (d.kind !== 'fn') return undefined;
+    const params = d.params.map((p) => `${p.javaType} ${p.name}`).join(', ');
+    const sig = `${d.returnJavaType} ${javaMethodName(d.name)}(${params})`;
+    if (d.internal) {
+        const doc = javadoc(d.info, IND);
+        const head = doc.length ? doc.join('\n') + '\n' : '';
+        return head + `${IND}protected ${sig} {\n` + emitFnBody(d) + `\n${IND}}`;
+    }
+    return `${IND}@Override\n${IND}public ${sig} {\n` + emitFnBody(d) + `\n${IND}}`;
+}
 
+/** Klassen-Javadoc (Datei-Doc) — identisch für Interface und Impl. */
+function moduleClassDoc(info: IrDoc): string[] {
     const classDoc: string[] = [
         '/**',
         ' * Generiert aus FinDSL — NICHT manuell editieren.',
         ' * Semantik-Orakel: der FinDSL-Interpreter (bit-genau).',
     ];
-    const fileDoc = javadoc(m.info, '');
-    if (fileDoc.length) {
-        classDoc.push(' *', ...fileDoc.slice(1, -1));
-    }
+    const fileDoc = javadoc(info, '');
+    if (fileDoc.length) classDoc.push(' *', ...fileDoc.slice(1, -1));
     classDoc.push(' */');
+    return classDoc;
+}
 
-    // Bedarfsgesteuerte Imports: nur Runtime-Typen, die im generierten
-    // Member-Code (NICHT Javadoc) namentlich vorkommen — vermeidet
-    // ungenutzte Imports (Checkstyle/IDE). `FinDslLambda1` taucht nie
-    // namentlich auf (nur strukturell via FinDslListe.zuordnen-Signatur).
-    const code = decls.join('\n\n');
-    const runtimeImports = [
+/** Bedarfsgesteuerte `org.findsl.runtime.*`-Importe für einen Code-Block. */
+function runtimeImportsFor(code: string): string[] {
+    return [
         'FinDslNumber', 'FinDslListe', 'Tarifart', 'Steuerklasse',
         'FinDslAbort', 'FinDslRuntimeError',
     ]
         .filter((t) => new RegExp(`\\b${t}\\b`).test(code))
         .map((t) => `import org.findsl.runtime.${t};`);
+}
 
-    // Cross-Modul-Komposition: `import` NUR bei abweichendem Java-
-    // Package (gleiches Package — z. B. kraftst, alle Dateien im selben
-    // Verzeichnis — braucht keinen Import; nested-Typen ebenso).
+function packageHeader(javaPackage: string | undefined): string[] {
+    return (javaPackage !== undefined && javaPackage !== '')
+        ? [`package ${javaPackage};`, '']
+        : [];
+}
+
+export interface JavaModuleFiles {
+    readonly interfaceName: string;
+    readonly interfaceCode: string;
+    readonly implName: string;
+    readonly implCode: string;
+}
+
+/**
+ * Rendert ein `IrModule` zu ZWEI Java-Dateien (deterministisch): das
+ * öffentliche `interface <Name>` (Datei-Doc, `newInstance()`, öffentliche
+ * Methodensignaturen, nested `enum`/`record`, `public static final`
+ * Konstanten) und die paket-private `class <Name>Impl implements <Name>`
+ * (nur Methodenrümpfe; Cross-Modul-SUTs via `<Iface>.newInstance()`).
+ */
+export function emitJavaModuleFiles(m: IrModule): JavaModuleFiles {
+    const interfaceName = m.className;
+    const implName = `${m.className}Impl`;
+    const classDoc = moduleClassDoc(m.info);
+    const pkgHeader = packageHeader(m.javaPackage);
+    const generated = '@Generated(value = "findsl.Generator")';
+
+    // --- Interface: newInstance ▸ öffentliche fn-Signaturen ▸ enum ▸
+    //     record ▸ konst (Quellreihenfolge je Gruppe, deterministisch). ---
+    const ifaceOrder = { fn: 0, enum: 1, record: 2, konst: 3 } as const;
+    const ifaceMembers = [...m.decls]
+        .map((d, i) => ({ d, i }))
+        .sort((a, b) => ifaceOrder[a.d.kind] - ifaceOrder[b.d.kind] || a.i - b.i)
+        .map(({ d }) => emitInterfaceMember(d))
+        .filter((s): s is string => s !== undefined);
+    const newInstance =
+        `${IND}static ${interfaceName} newInstance() {\n`
+        + `${IND}${IND}return new ${implName}();\n${IND}}`;
+    const interfaceBody = [newInstance, ...ifaceMembers].join('\n\n');
+
+    // --- Impl: nur `fn` in QUELLREIHENFOLGE (interne `_` an Ort und
+    //     Stelle); Cross-Modul-Komposition via Interface-Factory. ---
+    const implFns = m.decls
+        .map(emitImplFn)
+        .filter((s): s is string => s !== undefined);
+    const implBody = implFns.join('\n\n');
+
+    // Cross-Modul: `import` NUR bei abweichendem Package; Komposition
+    // hält das IMPLEMENTIERTE Interface, instanziiert via `newInstance()`
+    // (die Impl-Klasse des Zielmoduls ist paket-privat).
     const crossImports = m.composedModules
         .filter((c) => c.javaPackage !== undefined && c.javaPackage !== m.javaPackage)
         .map((c) => `import ${c.javaPackage}.${c.className};`);
@@ -281,33 +343,43 @@ export function emitJavaModule(m: IrModule): string {
         ? [
             ...m.composedModules.map(
                 (c) => `${IND}private final ${c.className} ${c.fieldName} `
-                    + `= new ${c.className}();`),
+                    + `= ${c.className}.newInstance();`),
             '',
         ]
         : [];
 
-    // Unbenanntes (Default-)Package, wenn die Quelldatei direkt im
-    // Basisverzeichnis liegt → KEIN `package …;` (ADR8). Sonst: Package
-    // = sanierter relativer Verzeichnispfad.
-    const pkgHeader = (m.javaPackage !== undefined && m.javaPackage !== '')
-        ? [`package ${m.javaPackage};`, '']
-        : [];
-
-    return [
+    const interfaceCode = [
         ...pkgHeader,
-        'import javax.annotation.processing.Generated;',
-        ...runtimeImports,
+        ...runtimeImportsFor(interfaceBody),
         ...crossImports,
+        'import javax.annotation.processing.Generated;',
         '',
         ...classDoc,
-        '@Generated(value = "findsl.Generator")',
-        `public final class ${m.className} {`,
+        generated,
+        `public interface ${interfaceName} {`,
         '',
-        ...composedFields,
-        code,
+        interfaceBody,
         '}',
         '',
     ].join('\n');
+
+    const implCode = [
+        ...pkgHeader,
+        ...runtimeImportsFor(implBody),
+        ...crossImports,
+        'import javax.annotation.processing.Generated;',
+        '',
+        ...classDoc,
+        generated,
+        `class ${implName} implements ${interfaceName} {`,
+        '',
+        ...composedFields,
+        implBody,
+        '}',
+        '',
+    ].join('\n');
+
+    return { interfaceName, interfaceCode, implName, implCode };
 }
 
 /** `var`-Bindungen eines testfall → `final <T> <n> = <expr>;`-Zeilen. */
@@ -423,7 +495,7 @@ export function emitJavaTestModule(m: IrTestModule): string {
         ? [
             ...m.composedModules.map(
                 (c) => `${IND}private final ${c.className} ${c.fieldName} `
-                    + `= new ${c.className}();`),
+                    + `= ${c.className}.newInstance();`),
             '',
         ]
         : [];

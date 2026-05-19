@@ -13,7 +13,7 @@ import org.findsl.runtime.FinDslNumber;
  */
 public final class KstDifferential {
     private static int fails = 0;
-    private static final Kst k = new Kst();
+    private static final Kst k = Kst.newInstance();
 
     static FinDslNumber g(String s) { return FinDslNumber.ganzzahl(s); }
     static FinDslNumber e(String s) { return FinDslNumber.euro(s); }

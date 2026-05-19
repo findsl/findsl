@@ -18,7 +18,7 @@ import org.findsl.runtime.Tarifart;
  */
 public final class EstDifferential {
     private static int fails = 0;
-    private static final Est e = new Est();
+    private static final Est e = Est.newInstance();
 
     static FinDslNumber g(String s) { return FinDslNumber.ganzzahl(s); }
     static FinDslNumber eu(String s) { return FinDslNumber.euro(s); }

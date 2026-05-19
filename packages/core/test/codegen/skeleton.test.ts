@@ -15,7 +15,7 @@ import {
     render, concat, text, line, indent,
 } from '../../src/codegen/emit/doc.js';
 import { lowerProgram, lowerTestProgram } from '../../src/codegen/lower/lower.js';
-import { emitJavaModule, emitJavaTestModule } from '../../src/codegen/emit-java/emitter.js';
+import { emitJavaModuleFiles, emitJavaTestModule } from '../../src/codegen/emit-java/emitter.js';
 import {
     istUnterstuetzteSprache,
     sanitizePackageSegment, derivePackage, deriveClassName, isTestFile,
@@ -93,50 +93,61 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         );
     });
 
-    it('emittiert deterministisch korrektes Java-21 (Objekt-Form)', async () => {
+    it('emittiert deterministisch Interface + Impl (Java-21)', async () => {
         const program = await parseSource(KST);
         const ctx = { javaPackage: 'com.x', className: 'M' };
         // Zweimal UNABHÄNGIG lowern+emittieren — deckt auch den
         // Registry-/Map-Aufbau im Lowering ab (echter Determinismus).
-        const out1 = emitJavaModule(lowerProgram(program, ctx));
-        const out2 = emitJavaModule(lowerProgram(await parseSource(KST), ctx));
-        expect(out1).toBe(out2);                                    // byte-deterministisch
+        const a = emitJavaModuleFiles(lowerProgram(program, ctx));
+        const b = emitJavaModuleFiles(lowerProgram(await parseSource(KST), ctx));
+        expect(a).toEqual(b);                                       // byte-deterministisch
+        const { interfaceCode: iface, implCode: impl } = a;
 
-        expect(out1).toContain('package com.x;');                   // --package
-        // @Generated-Markierung jeder generierten Klasse:
-        expect(out1).toContain('import javax.annotation.processing.Generated;');
-        expect(out1).toMatch(
-            /@Generated\(value = "findsl\.Generator"\)\npublic final class M \{/,
+        // --- Interface: Package, @Generated, newInstance, Konstanten,
+        //     enum, öffentliche Signaturen (KEIN Rumpf), Javadoc ---
+        expect(iface).toContain('package com.x;');
+        expect(iface).toContain('import javax.annotation.processing.Generated;');
+        expect(iface).toMatch(
+            /@Generated\(value = "findsl\.Generator"\)\npublic interface M \{/,
         );
-        // Objekt-Form: instanziierbar, KEIN privater Konstruktor.
-        expect(out1).not.toContain(`private M()`);
-        expect(out1).toContain('public final class M {');
-        // Prozent-/Euro-Literal + applyMoneyAnnotation-Delegation:
-        expect(out1).toContain('FinDslNumber.prozent("0.15")');
-        expect(out1).toContain(
+        expect(iface).toContain('static M newInstance() {');
+        expect(iface).toContain('return new MImpl();');
+        expect(iface).toContain('FinDslNumber.prozent("0.15")');     // konst SATZ
+        expect(iface).toContain(
             'FinDslNumber.ganzzahl("5000").withMoneyAnnotation(FinDslNumber.Type.Euro,',
         );
-        expect(out1).toContain('public enum Ausschluss {');
-        // `_`-intern → protected, Methodenname lowerCamel, KEIN static:
-        expect(out1).toMatch(/\n {4}protected FinDslNumber _hilfe\(/);
-        expect(out1).not.toContain('static FinDslNumber');
-        // Java-Namenskonvention: erster Buchstabe klein.
-        expect(out1).toContain('public FinDslNumber wahl(');
-        expect(out1).toContain('public FinDslNumber betrag(');
-        // wähle → if/return, Enum-`==`, Endwurf, governingMoneyTarget:
-        expect(out1).toContain('if (einkommen.compareValue(FinDslNumber.ganzzahl("0")) <= 0) {');
-        expect(out1).toContain('if (a == Ausschluss.Keiner) {');
-        expect(out1).toContain('throw new FinDslRuntimeError(');
-        expect(out1).toContain('.abrunden(FinDslNumber.Type.Euro)');
-        // Kommentar-Übertragung: Datei-Doc → Klassen-Javadoc;
-        // Decl-Doc + @rückgabe→@return + @Quelle → Member-Javadoc.
-        expect(out1).toContain('Datei-Doc → Klassen-Javadoc.');
-        expect(out1).toContain(' * @Quelle § 23 KStG');
-        expect(out1).toContain('Steuerbetrag, auf volle Euro abgerundet.');
-        expect(out1).toContain(' * @param zve');
-        expect(out1).toContain(' * @return  Betrag (§ 31 Satz 2).');
-        expect(out1).toContain(' * @Quelle § 23 Absatz 1 KStG');
-        expect((out1.match(/\{/g) ?? []).length).toBe((out1.match(/\}/g) ?? []).length);
+        expect(iface).toContain('public enum Ausschluss {');
+        expect(iface).toContain('    FinDslNumber wahl(');           // Signatur, kein public
+        expect(iface).toContain('    FinDslNumber betrag(');
+        expect(iface).not.toContain('protected FinDslNumber _hilfe('); // intern nicht im Interface
+        expect(iface).not.toContain('return einkommen');             // kein Rumpf im Interface
+        // Kommentar-Übertragung steht im Interface:
+        expect(iface).toContain('Datei-Doc → Klassen-Javadoc.');
+        expect(iface).toContain(' * @Quelle § 23 KStG');
+        expect(iface).toContain('Steuerbetrag, auf volle Euro abgerundet.');
+        expect(iface).toContain(' * @param zve');
+        expect(iface).toContain(' * @return  Betrag (§ 31 Satz 2).');
+        expect(iface).toContain(' * @Quelle § 23 Absatz 1 KStG');
+
+        // --- Impl: paket-private Klasse, @Override, protected `_`,
+        //     Rümpfe; KEINE Konstanten/Enums, kein privater Ctor ---
+        expect(impl).toMatch(/@Generated[^\n]*\nclass MImpl implements M \{/);
+        expect(impl).not.toContain('private MImpl()');
+        expect(impl).toContain('@Override');
+        expect(impl).toContain('public FinDslNumber wahl(');
+        expect(impl).toContain('public FinDslNumber betrag(');
+        expect(impl).toMatch(/\n {4}protected FinDslNumber _hilfe\(/);
+        expect(impl).not.toContain('static FinDslNumber');
+        expect(impl).toContain('if (einkommen.compareValue(FinDslNumber.ganzzahl("0")) <= 0) {');
+        expect(impl).toContain('if (a == Ausschluss.Keiner) {');
+        expect(impl).toContain('throw new FinDslRuntimeError(');
+        expect(impl).toContain('.abrunden(FinDslNumber.Type.Euro)');
+        expect(impl).not.toContain('public enum Ausschluss {');      // Typen nur im Interface
+
+        for (const code of [iface, impl]) {
+            expect((code.match(/\{/g) ?? []).length)
+                .toBe((code.match(/\}/g) ?? []).length);
+        }
     });
 });
 
@@ -173,11 +184,12 @@ describe('Pfad → Java-Package/Klassenname (ADR8, Phase 3)', () => {
 
     it('javaPackage=undefined → kein package-Statement (unbenanntes Package)', async () => {
         const program = await parseSource(KST);
-        const out = emitJavaModule(
+        const { interfaceCode, implCode } = emitJavaModuleFiles(
             lowerProgram(program, { javaPackage: undefined, className: 'M' }));
-        expect(out).not.toMatch(/^package /m);
-        expect(out.startsWith('import javax.annotation.processing.Generated;'))
-            .toBe(true);
+        for (const code of [interfaceCode, implCode]) {
+            expect(code).not.toMatch(/^package /m);
+            expect(code.startsWith('import ')).toBe(true);
+        }
     });
 });
 
@@ -248,14 +260,19 @@ describe('Cross-Modul-Komposition (Phase 3, Inkrement 2)', () => {
     });
 
     it('emittiert Komposition + qualifizierte Cross-Referenzen + Cross-Package-Import', async () => {
-        const out = emitJavaModule(await lowerNutzer());
-        expect(out).toContain('import pkg.typen.Typen;');           // anderes Package
-        expect(out).toContain('private final Typen typen = new Typen();');
-        expect(out).toContain('typen.helfer(');                     // lowerCamel-Cross-Aufruf
-        expect(out).toContain('a == Typen.Art.A');                  // enumCmp + owner
-        expect(out).toContain('new Typen.Sache(');                  // nested-static ctor
-        expect(out).toContain('Typen.GRENZE');                      // static konst
-        expect(out).toContain('pick(Typen.Art a)');                 // qualifizierter Param
+        const { interfaceCode: iface, implCode: impl } =
+            emitJavaModuleFiles(await lowerNutzer());
+        // Cross-Package-Import in beiden Dateien:
+        expect(iface).toContain('import pkg.typen.Typen;');
+        expect(impl).toContain('import pkg.typen.Typen;');
+        // Komposition hält das Interface, instanziiert via newInstance():
+        expect(impl).toContain('private final Typen typen = Typen.newInstance();');
+        expect(impl).toContain('typen.helfer(');                    // lowerCamel-Cross-Aufruf
+        expect(impl).toContain('a == Typen.Art.A');                 // enumCmp + owner
+        expect(impl).toContain('new Typen.Sache(');                 // nested-static ctor
+        expect(impl).toContain('Typen.GRENZE');                     // static konst
+        expect(impl).toContain('pick(Typen.Art a)');                // @Override-Impl
+        expect(iface).toContain('pick(Typen.Art a)');               // qualifizierte Signatur
     });
 });
 
@@ -317,7 +334,7 @@ describe('prüfe → JUnit5 (Phase 3, Inkrement 3)', () => {
         expect(out).toContain('import org.junit.jupiter.api.Test;');
         expect(out).toContain('import static org.junit.jupiter.api.Assertions.assertTrue;');
         expect(out).toContain('import static org.junit.jupiter.api.Assertions.assertThrows;');
-        expect(out).toContain('private final Kst kst = new Kst();');
+        expect(out).toContain('private final Kst kst = Kst.newInstance();');
         expect(out).toContain('@Nested');
         expect(out).toContain('@DisplayName("Doppel-Block")');
         expect(out).toContain('@DisplayName("2*3 \\u2192 6")'.replace('\\u2192', '→'));

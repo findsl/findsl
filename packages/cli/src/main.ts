@@ -513,7 +513,7 @@ Beispiele:
     ) => {
         const {
             istUnterstuetzteSprache, GEPLANTE_SPRACHEN,
-            lowerProgram, lowerTestProgram, emitJavaModule, emitJavaTestModule,
+            lowerProgram, lowerTestProgram, emitJavaModuleFiles, emitJavaTestModule,
             derivePackage, deriveClassName, isTestFile,
         } = await import('@findsl/core/codegen/index.js');
 
@@ -669,14 +669,19 @@ Beispiele:
             // unterstütztes Konstrukt (Phase-4-Scope) darf NUR diese
             // Datei überspringen, nicht den ganzen Batch abbrechen
             // (analog zur Parse-Fehler-Behandlung).
-            let java: string;
+            // Lowering/Emission pro Modul kapseln: ein noch nicht
+            // unterstütztes Konstrukt (Phase-4-Scope) darf NUR diese
+            // Datei überspringen, nicht den ganzen Batch abbrechen
+            // (analog zur Parse-Fehler-Behandlung). Pro Modul ZWEI
+            // Dateien: `<Name>.java` (Interface) + `<Name>Impl.java`.
+            let files;
             try {
                 const ir = lowerProgram(mod.program, {
                     javaPackage: mod.javaPackage,
                     className: mod.className,
                     imports: [...byPath.values()],
                 });
-                java = emitJavaModule(ir);
+                files = emitJavaModuleFiles(ir);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.error(`✗ ${disp(mod.absFile)}: ${msg}`);
@@ -689,9 +694,11 @@ Beispiele:
                 ? outDir
                 : path.join(outDir, ...mod.javaPackage.split('.'));
             await fs.mkdir(targetDir, { recursive: true });
-            const target = path.join(targetDir, `${mod.className}.java`);
-            await fs.writeFile(target, java, 'utf-8');
-            written.push(target);
+            const ifaceTarget = path.join(targetDir, `${files.interfaceName}.java`);
+            const implTarget = path.join(targetDir, `${files.implName}.java`);
+            await fs.writeFile(ifaceTarget, files.interfaceCode, 'utf-8');
+            await fs.writeFile(implTarget, files.implCode, 'utf-8');
+            written.push(ifaceTarget, implTarget);
         }
 
         // Durchgang 2b: `*.test.findsl` → JUnit5-Testklassen. Das SUT

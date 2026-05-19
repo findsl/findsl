@@ -111,8 +111,15 @@ for (const m of MODULE) {
         {}, `${m.cls}-Codegen`);
     copyFileSync(join(fixtures, m.driver), join(work, m.driver));
     const cp = isWin ? `${work};${rtClasses}` : `${work}:${rtClasses}`;
+    // Pro Modul ZWEI generierte Dateien (Interface + `…Impl`) + Treiber.
+    // Die ebenfalls erzeugte JUnit-Klasse `<Name>Test.java` (–t fällt
+    // auf –o zurück) wird hier ausgeschlossen — sie braucht JUnit im
+    // Klassenpfad und wird separat (Phase 3) verifiziert.
+    const javaSrcs = readdirSync(work)
+        .filter((f) => f.endsWith('.java') && !f.endsWith('Test.java'))
+        .map((f) => join(work, f));
     run('javac', ['-encoding', 'UTF-8', '-cp', rtClasses, '-d', work,
-        join(work, `${m.cls}.java`), join(work, m.driver)], {}, `javac ${m.cls}`);
+        ...javaSrcs], {}, `javac ${m.cls}`);
     const status = run('java', ['-cp', cp,
         m.driver.replace('.java', '')],
         {}, `Differential ${m.cls}`);

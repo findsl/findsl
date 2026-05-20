@@ -142,14 +142,19 @@ fn g(): Prozent = f(42%)
         expect(labels(types(hs))).not.toContain(': Prozent');
     });
 
-    it('als-Cast-Argument bekommt KEINEN Einheit-Hint', async () => {
+    it('als-Cast-Argument bekommt KEINEN Einheit-Hint am Aufruf', async () => {
         // Rückgabetyp Wahrheitswert → kein Aufrufergebnis-€; Fokus: das
-        // `als`-Cast-Argument selbst bekommt keine Einheit.
+        // `als`-Cast-Argument selbst bekommt keine Einheit. Seit Issue
+        // #65 bekommt der Param `zve: Euro` (ohne Default) einen
+        // €-Hint nach der Typ-Annotation in der `est`-Signatur — der
+        // Cast-Argument-Pfad bleibt aber weiterhin hint-frei.
         const hs = await hints(`fn est(zve: Euro): Wahrheitswert = wahr
 fn ruf(): Wahrheitswert = est(50.000 als Euro)
 `);
         expect(labels(param(hs))).toContain('zve:');
-        expect(types(hs)).toHaveLength(0);
+        // €-Hint nur an der Param-Deklaration (Zeile 0), nicht am Aufruf (Zeile 1):
+        expect(types(hs).filter((h) => h.position.line === 1)).toHaveLength(0);
+        expect(types(hs).filter((h) => h.position.line === 0 && h.label === '€')).toHaveLength(1);
     });
 
     it('Nicht-Geld-Parameter bekommt KEINEN Einheit-Hint', async () => {
@@ -217,9 +222,19 @@ describe('Inlay-Hints: var-Bindung + datensatz-Feld-Default mit Symbol', () => {
         expect(labels(types(hs))).toContain('¢');
     });
 
-    it('Feld OHNE Default bekommt KEINEN Symbol-Hint', async () => {
+    it('Feld OHNE Default bekommt Symbol-Hint NACH der Typ-Annotation (Issue #65)', async () => {
         const hs = await hints('datensatz Z(b: Euro)\n');
-        expect(types(hs)).toHaveLength(0);
+        expect(labels(types(hs))).toContain('€');
+    });
+
+    it('Feld OHNE Default Cent → "¢" nach der Typ-Annotation', async () => {
+        const hs = await hints('datensatz Y(c: Cent)\n');
+        expect(labels(types(hs))).toContain('¢');
+    });
+
+    it('Feld OHNE Default EuroCent → "€" nach der Typ-Annotation', async () => {
+        const hs = await hints('datensatz X(p: EuroCent)\n');
+        expect(labels(types(hs))).toContain('€');
     });
 
     it('fn-Parameter-Default Euro → "€"', async () => {
@@ -232,12 +247,61 @@ describe('Inlay-Hints: var-Bindung + datensatz-Feld-Default mit Symbol', () => {
         expect(labels(types(hs))).toContain('¢');
     });
 
-    it('Param ohne Default / mit als-Cast-Default → KEIN Symbol', async () => {
+    it('Param ohne Default → Symbol-Hint NACH der Typ-Annotation (Issue #65)', async () => {
         // Rückgabetyp Wahrheitswert → kein fn-Rumpf-Symbol; Fokus: Params.
+        // `b: Euro` ohne Default bekommt Hint nach Typ; `y: Euro = 0 als Euro`
+        // bekommt KEINEN Hint (als-Cast macht Typ explizit sichtbar — bestehendes Verhalten).
         const hs = await hints(
             'fn h(b: Euro, y: Euro = 0 als Euro): Wahrheitswert = wahr\n',
         );
-        expect(types(hs)).toHaveLength(0);
+        expect(labels(types(hs))).toEqual(['€']);
+    });
+
+    it('Param ohne Default Cent → "¢"', async () => {
+        const hs = await hints('fn k(c: Cent): Wahrheitswert = wahr\n');
+        expect(labels(types(hs))).toContain('¢');
+    });
+});
+
+describe('Inlay-Hints: Prozent-Einheit (Issue #65)', () => {
+    it('konst mit Prozent (Nicht-Literal-Wert) → "%"', async () => {
+        const hs = await hints(
+            'fn berechne(): Prozent = 19%\nkonst SATZ: Prozent = berechne()\n',
+        );
+        // Hint am Aufruf-Ergebnis (Leaf), nicht am Literal in `berechne`.
+        const prozentHints = types(hs).filter((h) => h.label === '%');
+        expect(prozentHints.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('konst mit Prozent-Literal (`19%`) → KEIN doppelter "%" am Literal', async () => {
+        const hs = await hints('konst SATZ: Prozent = 19%\n');
+        // Suffix-Skip: das `%` ist im Literal sichtbar.
+        expect(types(hs).filter((h) => h.label === '%')).toHaveLength(0);
+    });
+
+    it('var mit Prozent (Nicht-Literal) → "%"', async () => {
+        const hs = await hints(
+            'fn berechne(): Prozent = 7%\n'
+            + 'fn f(): Prozent = {\n  var s: Prozent = berechne()\n  s\n}\n',
+        );
+        expect(labels(types(hs))).toContain('%');
+    });
+
+    it('Field OHNE Default Prozent → "%" nach Typ-Annotation', async () => {
+        const hs = await hints('datensatz Tarif(satz: Prozent)\n');
+        expect(labels(types(hs))).toContain('%');
+    });
+
+    it('Field MIT Prozent-Literal-Default → KEIN doppelter "%"', async () => {
+        const hs = await hints('datensatz Tarif(satz: Prozent = 19%)\n');
+        expect(types(hs).filter((h) => h.label === '%')).toHaveLength(0);
+    });
+
+    it('Param OHNE Default Prozent → "%" nach Typ-Annotation', async () => {
+        const hs = await hints(
+            'fn anwende(satz: Prozent): Prozent = satz\n',
+        );
+        expect(labels(types(hs))).toContain('%');
     });
 });
 

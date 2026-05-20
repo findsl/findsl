@@ -853,6 +853,48 @@ describe('Issue #44 — für-jeden-Schleife lowert nach .zuordnen', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Nullable-Modell Teil 1: Boolean-`oder`, `nichts`-Literal,
+// `ist nichts` / `ist nicht nichts` (NullCheck)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Nullable Teil 1 (oder/nichts/NullCheck)', () => {
+    it('Boolean a oder b → `(a) || (b)`', async () => {
+        const program = await parseSource(
+            'fn LogischOder(a: Wahrheitswert, b: Wahrheitswert): Wahrheitswert = a oder b\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return (a) || (b);');
+    });
+
+    it('Boolean wahr oder falsch (Literale) → `(true) || (false)`', async () => {
+        const program = await parseSource(
+            'fn Konst(): Wahrheitswert = wahr oder falsch\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return (true) || (false);');
+    });
+
+    it('`x ist nichts` → `x == null`', async () => {
+        const program = await parseSource(
+            'fn IstLeer(x: Ganzzahl?): Wahrheitswert = x ist nichts\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return x == null;');
+    });
+
+    it('`x ist nicht nichts` → `x != null`', async () => {
+        const program = await parseSource(
+            'fn HatWert(x: Ganzzahl?): Wahrheitswert = x ist nicht nichts\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return x != null;');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

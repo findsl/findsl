@@ -215,7 +215,7 @@ describe('LSP-Provider-Smoke gegen examples/korpus/ (Issue #43 Phase 2)', () => 
         expect(st?.data?.length ?? 0).toBeGreaterThan(0);
     });
 
-    it('InlayHints liefert mindestens 1 Hint (Geld-Symbol o. ä.)', async () => {
+    it('InlayHints liefert Geld-/Prozent-Symbole (Issue #65: Euro/EuroCent/Cent/Prozent überall)', async () => {
         const d = doc('korpus-typen.findsl');
         const hints = await services.lsp.InlayHintProvider!.getInlayHints(d, {
             textDocument: { uri: d.uri.toString() },
@@ -225,7 +225,10 @@ describe('LSP-Provider-Smoke gegen examples/korpus/ (Issue #43 Phase 2)', () => 
             },
         });
         expect(Array.isArray(hints)).toBe(true);
-        expect((hints ?? []).length).toBeGreaterThan(0);
+        const labels = (hints ?? []).map((h) => typeof h.label === 'string' ? h.label : '');
+        expect(labels).toContain('€');     // BEISPIEL_EURO/EUROCENT
+        expect(labels).toContain('¢');     // BEISPIEL_CENT
+        expect(labels).toContain('%');     // BEISPIEL_PROZENT_BERECHNET (Issue #65)
     });
 
     it('SignatureHelp liefert eine Signatur an einer Aufrufstelle', async () => {

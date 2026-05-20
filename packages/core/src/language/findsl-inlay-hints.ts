@@ -51,6 +51,7 @@ import {
     isKonstDecl,
     isLambda,
     isLetStmt,
+    isNamedType,
     isNumberLiteral,
     isParenChain,
     isParam,
@@ -150,7 +151,15 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
             return;
         }
         if (isField(node) || isParam(node)) {
-            this.emitMoney(node.default, acceptor);
+            // Mit Default: Symbol am Default-Wert (wie bisher).
+            // Ohne Default: Symbol nach der Typ-Annotation, damit der
+            // Geld-/Prozent-Tag in der Signatur direkt sichtbar ist
+            // (Issue #65: „Inlay-Hints überall, nicht nur am Wert").
+            if (node.default) {
+                this.emitMoney(node.default, acceptor);
+            } else {
+                this.emitTypeAnnotationHint(node, acceptor);
+            }
             return;
         }
         if (isFunktionDecl(node)) {
@@ -202,6 +211,30 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
     }
 
     /**
+     * Emittiert ein Einheiten-Symbol nach der Typ-Annotation einer
+     * `Field`-/`Param`-Deklaration ohne Default-Wert. Greift den Typ
+     * aus der Annotation selbst (nicht aus dem Type-Checker, weil
+     * Felder/Params keine Ausdrücke sind und nicht in `typeMap` stehen).
+     */
+    private emitTypeAnnotationHint(
+        node: import('./generated/ast.js').Field | import('./generated/ast.js').Param,
+        acceptor: InlayHintAcceptor,
+    ): void {
+        const atom = node.type?.atom;
+        if (!atom || !isNamedType(atom)) return;
+        const symbol = unitNameSymbol(atom.name);
+        if (!symbol) return;
+        const cst = node.type.$cstNode;
+        if (!cst) return;
+        acceptor({
+            position: cst.range.end,
+            label: symbol,
+            kind: InlayHintKind.Type,
+            paddingLeft: true,
+        });
+    }
+
+    /**
      * Emittiert das Währungssymbol an den Geld-Leaves eines Wert-
      * Ausdrucks. Ob ein Knoten Geld ist, sagt der Type-Checker
      * (`this.typeMap`, kontextuell). Die Struktur-Rekursion steuert nur
@@ -215,16 +248,25 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
     private emitMoney(expr: Expr | undefined, acceptor: InlayHintAcceptor): void {
         if (!expr) return;
         const emitLeaf = (): void => {
-            const sym = moneySymbol(this.typeMap.get(expr));
+            const sym = unitSymbol(this.typeMap.get(expr));
+            if (!sym) return;
             const cst = expr.$cstNode;
-            if (sym && cst) {
-                acceptor({
-                    position: cst.range.end,
-                    label: sym,
-                    kind: InlayHintKind.Type,
-                    paddingLeft: true,
-                });
+            if (!cst) return;
+            // Doppelhints vermeiden: ein `19%`-Literal trägt das `%`
+            // bereits als Suffix; analog Geld-Literale haben kein Suffix,
+            // sind also unproblematisch. Symmetrisch implementiert für
+            // den Fall, dass Geld-Literale in Zukunft Suffix-Schreibweisen
+            // erhalten — der Endmenge-Check ist billig.
+            if (sym === '%' && isNumberLiteral(expr)) {
+                const text = cst.text ?? '';
+                if (text.trimEnd().endsWith('%')) return;
             }
+            acceptor({
+                position: cst.range.end,
+                label: sym,
+                kind: InlayHintKind.Type,
+                paddingLeft: true,
+            });
         };
         if (isBinaryOp(expr)) {
             const op = expr.op;
@@ -311,17 +353,30 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
 }
 
 /**
- * Währungssymbol für einen (ggf. nullable) Geldtyp: `Euro`/`EuroCent`
- * → `€`, `Cent` → `¢`; sonst (Prozent, Zahl, Nicht-Geld) `undefined`
- * (kein Symbol). `Prozent` bleibt absichtlich ohne Inlay (das `%` ist
- * an Literalen ohnehin sichtbar; Symbol-Rauschen vermeiden).
+ * Einheiten-Symbol für einen (ggf. nullable) Geld-/Prozent-Typ:
+ * `Euro`/`EuroCent` → `€`, `Cent` → `¢`, `Prozent` → `%`; sonst
+ * (Zahl, Nicht-Einheit) `undefined`. Doppelhints an `19%`-Literalen
+ * werden in `emitLeaf` verhindert (Suffix-Skip).
  */
-function moneySymbol(t: Type | undefined): string | undefined {
+/**
+ * Einheiten-Symbol aus dem Typ-AST-Namen (für Stellen, an denen es
+ * nur eine Typ-Annotation gibt, nicht ein typisierter Ausdruck — z. B.
+ * `Field`/`Param` ohne Default).
+ */
+function unitNameSymbol(typeName: string | undefined): string | undefined {
+    if (typeName === 'Euro' || typeName === 'EuroCent') return '€';
+    if (typeName === 'Cent')    return '¢';
+    if (typeName === 'Prozent') return '%';
+    return undefined;
+}
+
+function unitSymbol(t: Type | undefined): string | undefined {
     let cur = t;
     while (cur && cur.kind === 'nullable') cur = cur.inner;
     if (!cur || cur.kind !== 'primitive') return undefined;
     if (cur.name === 'Euro' || cur.name === 'EuroCent') return '€';
-    if (cur.name === 'Cent') return '¢';
+    if (cur.name === 'Cent')    return '¢';
+    if (cur.name === 'Prozent') return '%';
     return undefined;
 }
 

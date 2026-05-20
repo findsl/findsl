@@ -115,6 +115,15 @@ konst BEISPIEL_CENT: Cent = 50
 @Quelle("examples/korpus, Prozent-Demo")
 konst BEISPIEL_PROZENT: Prozent = 19%
 
+--
+Prozent-Wert OHNE `%`-Literal-Suffix — Editor zeigt hier den
+`%`-Inlay-Hint nach dem Wert (Issue #65), weil das Literal selbst
+kein Suffix trägt. Bei `BEISPIEL_PROZENT` oben (Literal `19%`) wird
+der Hint dagegen unterdrückt, damit das `%` nicht doppelt erscheint.
+--
+@Quelle("examples/korpus, Prozent-Inlay-Demo")
+konst BEISPIEL_PROZENT_BERECHNET: Prozent = BEISPIEL_PROZENT
+
 -- Boolean-Literal (§ 2.7.5). --
 @Quelle("examples/korpus, Wahrheitswert-Demo")
 konst BEISPIEL_WAHR: Wahrheitswert = wahr

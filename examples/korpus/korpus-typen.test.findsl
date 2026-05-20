@@ -13,6 +13,7 @@ verwende {
     BEISPIEL_EUROCENT,
     BEISPIEL_CENT,
     BEISPIEL_PROZENT,
+    BEISPIEL_PROZENT_BERECHNET,
     BEISPIEL_WAHR,
     BEISPIEL_TEXT,
     BEISPIEL_LISTE,
@@ -45,6 +46,9 @@ prüfe "§ 2.7 Literale — Konstanten-Identität" {
     }
     testfall "Prozent-Konstante" {
         BEISPIEL_PROZENT == 19%
+    }
+    testfall "Prozent-Konstante ohne Literal-Suffix (Issue #65, Inlay-Demo)" {
+        BEISPIEL_PROZENT_BERECHNET == 19%
     }
     testfall "Wahrheitswert-Konstante" {
         BEISPIEL_WAHR

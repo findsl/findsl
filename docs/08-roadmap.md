@@ -17,14 +17,43 @@ Robustheit; **deutsche Zahl-Notation** (`.`-Tausender, `,`-Dezimal),
 **`testfall`-Blockform** (`{ … }` statt `:`), **harte
 `konst`-UPPER_SNAKE-Regel** (§ 2.5), **DocumentLink Mehrfach-§ /
 geteiltes Gesetz**, **Doc-Generator Phase 1** (CLI `doku` →
-aggregiertes MD/HTML/PDF).
+aggregiertes MD/HTML/PDF), **Codegen Java** (siehe (a) unten).
 
 ### Offen — Kurzfristig (NÄCHSTE TODOs)
 
-**(a) Codegen Java.** AST-Visitor mit Java-Text-Templates: `BigDecimal`
-für Geld, `Optional`/`@Nullable` für `T?`, `throw`-Mapping für `abbruch`
-(unchecked RuntimeException), Enum-Mapping für Aufzählungen. Pfad:
-`findsl-ts/src/codegen/java-target.ts` (neu) + CLI-`uebersetze`.
+**(a) ✓ ERLEDIGT 2026-05-19 — Codegen Java (Issue #7).** Architektur
+weicht bewusst vom ursprünglichen Plan ab (statt direkter AST→Java-
+Text-Templates):
+- **IR + Emitter** statt monolithischer Text-Templates:
+  `packages/core/src/codegen/{ir,lower,emit,emit-java}/` — sprach-
+  neutrale IR, AST-Lowering, gemeinsame Emit-Utilities, Java-Emitter.
+- **`findsl-runtime` (Gradle, JDK 21)** unter `runtimes/java/` mit
+  `FinDslNumber` als `sealed` Basisklasse + IS-A-Sicht-Subtypen
+  (`Euro`/`EuroCent`/`Cent`/`Prozent`/`Ganzzahl`/`Dezimal`) statt rohem
+  `BigDecimal` — kein Unboxing-Leak, sprechende öffentliche Signaturen.
+- **`abbruch` → Exception** (`FinDslAbbruch` extends RuntimeException);
+  Geld bit-genau via `BigDecimal` mit identischer Rundung/Skalierung
+  wie der Interpreter (`decimal.js`).
+- **Listen/Lambda/Closures/Cross-Modul `verwende`/`ausgabe`** voll-
+  ständig; `testfall`/`prüfe` → JUnit-5-Klassen, Interface+Impl je
+  Modul (paket-private Impl, `<Name>.newInstance()`-Factory).
+- **Phase 4 `var = wähle`** als Statement-Lowering (Switch statt
+  verschachtelter Ternäre).
+- **Gradle-Codegen-Gate** an `check`: `generateFindslJava` (Node-CLI →
+  generated/{,-test}) + `generatedTest` (bit-genaues `prüfe`→JUnit
+  gegen `runPruefeDecl`-Orakel) + `structureTest` (JavaParser-Form-
+  Invarianten: Interface+Impl-Trennung, sprechende Typen, keine
+  `.zahl()`/`_kern`-Leckage, Cross-Modul-Komposition nur via
+  `newInstance`).
+- **CLI**: `findsl codegen <pfad> -l java [-o <main>] [-t <test>]`;
+  deterministische byte-identische Ausgabe.
+- **CI**: paralleler `java`-Job in `.github/workflows/ci.yml` (JDK 21
+  Temurin + Gradle, Audit-Modus `--no-daemon --no-configuration-cache
+  --rerun-tasks`); Bundle-Delegator `scripts/codegen-difftest.mjs`.
+
+PRs: #38, #39 (Phase 4 + Gate + CI), #37 (FinDslNumber sealed/IS-A),
+plus Phase-0–3-Commits `733c471`, `05b33e4`, `72ee2fe`, `75b0dfc`,
+`988a455`. Folge-Codegen-Targets (TS/JS): **Issue #41**.
 
 **(b) Doc-Generator — ✓ Phase 1 erledigt (2026-05-16).** `src/docs/`:
 `model.ts` (aggregiertes `DocModel` über alle `.findsl`), `markdown.ts`
@@ -65,7 +94,8 @@ breitere Methoden-/Syntax-Frage bleibt davon unberührt offen.
 
 ### Offen — Mittelfristig
 
-- **Codegen TypeScript + JavaScript** (analog Java-Target).
+- **Codegen TypeScript + JavaScript** (analog Java-Target — gleiche
+  IR/Lowering/Emitter-Architektur aus (a) wiederverwenden). **Issue #41.**
 - **Restliche LSP-Politur**: SelectionRange, Refactoring-CodeActions
   (Konstante extrahieren, Importe organisieren, ungenutzten Import
   entfernen), LinkedEditing.

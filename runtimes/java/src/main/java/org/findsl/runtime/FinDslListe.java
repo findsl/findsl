@@ -284,6 +284,25 @@ public record FinDslListe<E>(List<E> elements) {
     }
 
     /**
+     * {@code .zusammenfassen(start, fn)} (SPEC § 11.2 — Fold/Reduce):
+     * läuft eager links-nach-rechts über die Elemente und akkumuliert
+     * mit der zweistelligen Reduktionsfunktion. Bit-genauer Spiegel
+     * des Interpreters.
+     *
+     * @param <A>   Akkumulator-Typ.
+     * @param start Startwert.
+     * @param fn    Reduktionsfunktion {@code (akku, element) -> neuer akku}.
+     * @return Endakkumulator.
+     */
+    public <A> A zusammenfassen(A start, FinDslLambda2<A, E, A> fn) {
+        A acc = start;
+        for (E e : elements) {
+            acc = fn.apply(acc, e);
+        }
+        return acc;
+    }
+
+    /**
      * Castet ein Element zu {@link FinDslNumber} oder wirft (wie das
      * Orakel bei nicht-numerischer Liste).
      *

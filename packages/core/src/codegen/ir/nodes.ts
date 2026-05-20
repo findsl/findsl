@@ -137,6 +137,22 @@ export type IrExpr =
      * Syntax-Formen sind semantisch identisch.
      */
     | { readonly kind: 'listAt'; readonly receiver: IrExpr; readonly index: IrExpr }
+    /**
+     * §-11.2 `.zusammenfassen(start, f)` — Fold/Reduce. `f` ist ein
+     * 2-stelliges Lambda `(akku, element) -> akku`; lowert zu
+     * {@link FinDslLambda2}. Bit-genauer Spiegel des Interpreters.
+     */
+    | {
+        readonly kind: 'listFold';
+        readonly receiver: IrExpr;
+        readonly start: IrExpr;
+        readonly fn: IrExpr;
+      }
+    /**
+     * Zweistelliges Lambda `{ a, b -> body }` → `(a, b) -> body` für
+     * FinDslLambda2. Pendant zu `lambda1` für 2-arg-Reduktionen.
+     */
+    | { readonly kind: 'lambda2'; readonly param1: string; readonly param2: string; readonly body: IrExpr }
     /** Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1). */
     | { readonly kind: 'lambda1'; readonly param: string; readonly body: IrExpr }
     /**

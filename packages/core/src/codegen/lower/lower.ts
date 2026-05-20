@@ -28,7 +28,7 @@ import {
     isCall, isFieldAccess, isBinaryOp, isWaehleExpr, isFallArm,
     isSonstArm, isCast, isAbbruchExpr, isLetStmt, isFunktionBody,
     isNamedType, isListLiteral, isLambda, isIndex, isPruefeDecl,
-    isBoolLiteral, isUnaryOp,
+    isBoolLiteral, isUnaryOp, isWennExpr,
 } from '../../language/generated/ast.js';
 import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrFnBody, IrField,
@@ -505,6 +505,30 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
     }
     if (isWaehleExpr(expr)) {
         return lowerWaehle(expr, reg);
+    }
+    if (isWennExpr(expr)) {
+        // (#44 L6) `wenn (c) a sonst b` lowert zu `wähle { falls c -> a; sonst -> b }`
+        // — kein neuer IR-Knoten/Emit-Pfad, der bestehende Statement-
+        // Lowering-Pfad (if/return) deckt das ab.
+        if (!expr.condition) throw new Error('wenn ohne Bedingung (Teil-Parse).');
+        if (!expr.then) throw new Error('wenn ohne then-Zweig (Teil-Parse).');
+        if (!expr.else) throw new Error('wenn ohne sonst-Zweig (Teil-Parse).');
+        return {
+            kind: 'waehle',
+            subject: undefined,
+            arms: [
+                {
+                    patterns: [lowerExpr(expr.condition, reg)],
+                    result: lowerExpr(expr.then, reg),
+                    isSonst: false,
+                },
+                {
+                    patterns: [],
+                    result: lowerExpr(expr.else, reg),
+                    isSonst: true,
+                },
+            ],
+        };
     }
     if (isParenChain(expr)) {
         return lowerChainOps(lowerExpr(expr.receiver, reg), expr.chain, reg);

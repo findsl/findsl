@@ -1,0 +1,159 @@
+--
+# Akzeptanztests — Simple-Ausdrücke
+
+`prüfe`-Blöcke zu `korpus-ausdruecke.findsl`. Jeder SPEC § 4-Ausdruck
+hat mindestens einen `testfall`. Enthält außerdem den **`erwartet
+abbruch`**-Fall (§ 10.2 + § 4.19), der den Generat-Pfad für
+`FinDslAbbruch` triggert.
+--
+
+verwende {
+    Addition,
+    Subtraktion,
+    MultiplikationEuroProzent,
+    Division,
+    IstGleich,
+    IstUngleich,
+    IstKleiner,
+    IstKleinerGleich,
+    IstGroesser,
+    IstGroesserGleich,
+    LogischUnd,
+    LogischOder,
+    LogischNicht,
+    ElvisFallback,
+    EmailVonPerson,
+    ForceUnwrap,
+    CastEuroZuEuroCent,
+    CastGanzzahlZuCent,
+    WennEuroPositiv,
+    AmpelGuard,
+    FarbBeschreibung,
+    AufrufPositional,
+    AufrufBenannt,
+    Quadriere,
+    PunktX,
+    PunktVon,
+    DreiZahlen,
+    BereichInklusiv,
+    BereichExklusiv,
+    BereichMitSchritt,
+    BlockMitVar,
+    KehrwertOderAbbruch,
+} aus "./korpus-ausdruecke"
+
+verwende { Person, Rot, Grün, Blau } aus "./korpus-typen"
+
+prüfe "§ 4.2 Arithmetik" {
+    testfall "Addition 1 € + 2 € = 3 €" {
+        Addition(1, 2) == 3
+    }
+    testfall "Subtraktion 10 - 3 = 7" {
+        Subtraktion(10, 3) == 7
+    }
+    testfall "100 € × 19% = 19,00 € (Euro × Prozent → EuroCent)" {
+        MultiplikationEuroProzent(100, 19%) == 19,00
+    }
+    testfall "Division 10,0 / 4,0 = 2,5" {
+        Division(10,0, 4,0) == 2,5
+    }
+}
+
+prüfe "§ 4.3 Vergleichsoperatoren" {
+    testfall "== identisch" { IstGleich(5, 5) }
+    testfall "== verschieden ist falsch" { nicht IstGleich(5, 6) }
+    testfall "!= verschieden" { IstUngleich(5, 6) }
+    testfall "< echt kleiner" { IstKleiner(3, 5) }
+    testfall "<= gleich gilt" { IstKleinerGleich(5, 5) }
+    testfall "> echt größer" { IstGroesser(7, 5) }
+    testfall ">= gleich gilt" { IstGroesserGleich(5, 5) }
+}
+
+prüfe "§ 4.4 Logische Operatoren" {
+    testfall "und: wahr und wahr = wahr" { LogischUnd(wahr, wahr) }
+    testfall "und: wahr und falsch = falsch" { nicht LogischUnd(wahr, falsch) }
+    testfall "oder (Bool): wahr oder falsch = wahr" { LogischOder(wahr, falsch) }
+    testfall "nicht: nicht falsch = wahr" { LogischNicht(falsch) }
+}
+
+prüfe "§ 4.5 Elvis (`oder` auf Nullable)" {
+    testfall "vorhanden → linker Wert" {
+        ElvisFallback("Anna", "Ersatz") == "Anna"
+    }
+    testfall "nichts → rechter Wert" {
+        ElvisFallback(nichts, "Ersatz") == "Ersatz"
+    }
+}
+
+prüfe "§ 4.6 Sicher-Zugriff (`?.`)" {
+    testfall "Person nichts → email ist nichts" {
+        EmailVonPerson(Person(name = "Anna")) ist nichts
+    }
+}
+
+prüfe "§ 4.7 Force-Unwrap (`!!`)" {
+    testfall "vorhandener Wert wird ausgepackt" {
+        ForceUnwrap(42) == 42
+    }
+}
+
+prüfe "§ 4.8 Cast (`als`)" {
+    testfall "Euro → EuroCent: 100 € als EuroCent = 100,00" {
+        CastEuroZuEuroCent(100) == 100,00
+    }
+    testfall "Ganzzahl → Cent: 250 als Cent" {
+        CastGanzzahlZuCent(250) == (250 als Cent)
+    }
+}
+
+prüfe "§ 4.9 Wenn-Sonst" {
+    testfall "positiv → \"positiv\"" { WennEuroPositiv(10) == "positiv" }
+    testfall "0 → \"nicht positiv\"" { WennEuroPositiv(0) == "nicht positiv" }
+}
+
+prüfe "§ 4.10 Wähle" {
+    testfall "Guard: 20 km/h → langsam" { AmpelGuard(20) == "langsam" }
+    testfall "Guard: 45 km/h → normal"  { AmpelGuard(45) == "normal" }
+    testfall "Guard: 80 km/h → schnell" { AmpelGuard(80) == "schnell" }
+    testfall "Guard: 200 km/h → rasant" { AmpelGuard(200) == "rasant" }
+    testfall "Subjekt: Rot → warm" { FarbBeschreibung(Rot) == "warm" }
+    testfall "Subjekt: Grün → kühl (Mehrfach-Pattern)" { FarbBeschreibung(Grün) == "kühl" }
+    testfall "Subjekt: Blau → kühl (Mehrfach-Pattern)" { FarbBeschreibung(Blau) == "kühl" }
+}
+
+prüfe "§ 4.11 Funktionsaufruf" {
+    testfall "positional" { AufrufPositional() == "Servus, Anna!" }
+    testfall "benannt mit Default" { AufrufBenannt() == "Hallo, Bertha!" }
+}
+
+prüfe "§ 4.12 Lambda (Higher-Order-Method-Kontext)" {
+    testfall "Quadriere([1,2,3]) = [1, 4, 9]" {
+        var qs: Liste<Ganzzahl> = Quadriere([1, 2, 3])
+        qs.länge == 3 und qs.kopf == 1
+    }
+}
+
+prüfe "§ 4.13 + 4.14 Feldzugriff & Datensatz-Konstruktor" {
+    testfall "Feldzugriff x" { PunktX(PunktVon(3, 4)) == 3 }
+    testfall "Konstruierter Punkt hat erwartetes y" { PunktVon(3, 4).y == 4 }
+}
+
+prüfe "§ 4.15 + 4.16 Listen-/Bereich-Konstruktor" {
+    testfall "Liste [1,2,3] hat Länge 3" { DreiZahlen().länge == 3 }
+    testfall "1 bis 10 hat 10 Elemente" { BereichInklusiv().länge == 10 }
+    testfall "0 bis unter 10 hat 10 Elemente" { BereichExklusiv().länge == 10 }
+    testfall "0 bis 20 schritt 5 hat 5 Elemente" { BereichMitSchritt().länge == 5 }
+}
+
+prüfe "§ 4.17 Block-Ausdruck mit var" {
+    testfall "(2+3) × 2 = 10" { BlockMitVar(2, 3) == 10 }
+}
+
+prüfe "§ 4.19 Abbruch-Ausdruck" {
+    testfall "Kehrwert von 2,0 = 0,5" {
+        KehrwertOderAbbruch(2,0) == 0,5
+    }
+    testfall "Kehrwert von 0 bricht ab (Typ never)" erwartet abbruch {
+        KehrwertOderAbbruch(0,0)
+    }
+}

@@ -1,0 +1,71 @@
+--
+# Korpus — Schleifen-Tests (SPEC § 5.3 + § 10)
+
+`prüfe`/`testfall`-Suite zu `korpus-schleifen.findsl`. Die
+`ausgabe`-Trace ist nicht über `prüfe` direkt beobachtbar, daher
+werden nur die Rückgabewerte der Funktionen verifiziert; dass
+`ausgabe` weder den Rückgabewert noch den Block-Ablauf stört, ist
+die eigentliche Aussage.
+--
+
+verwende {
+    Verdopple,
+    QuadrateBis,
+    VerdoppleBereich,
+    Geschachtelt,
+    MitZwischenwert,
+    MitAusgabe,
+    MehrereTrace,
+} aus "./korpus-schleifen"
+
+prüfe "§ 5.3 Für-Jeden über Liste" {
+    testfall "Verdopple([1,2,3]) → [2,4,6]" {
+        var r: Liste<Ganzzahl> = Verdopple([1, 2, 3])
+        r.länge == 3 und r[0] == 2 und r[1] == 4 und r[2] == 6
+    }
+    testfall "Verdopple([]) → []" { Verdopple([]<Ganzzahl>).leer }
+}
+
+prüfe "§ 5.3 Für-Jeden über Bereich" {
+    testfall "QuadrateBis(4) → [1,4,9,16]" {
+        var q: Liste<Ganzzahl> = QuadrateBis(4)
+        q.länge == 4 und q[0] == 1 und q[3] == 16
+    }
+    testfall "VerdoppleBereich() liefert 10 Elemente (1..10)" {
+        VerdoppleBereich().länge == 10
+    }
+    testfall "VerdoppleBereich() erstes Element = 2" {
+        VerdoppleBereich()[0] == 2
+    }
+    testfall "VerdoppleBereich() letztes Element = 20" {
+        VerdoppleBereich()[9] == 20
+    }
+}
+
+prüfe "§ 5.3 Für-Jeden geschachtelt → Liste<Liste<…>>" {
+    testfall "Geschachtelt() liefert 2 Zeilen" {
+        Geschachtelt().länge == 2
+    }
+    testfall "Geschachtelt()[1] liefert 3 Spalten" {
+        Geschachtelt()[1].länge == 3
+    }
+    testfall "Geschachtelt()[1][2] = 1*2 = 2" {
+        Geschachtelt()[1][2] == 2
+    }
+}
+
+prüfe "§ 5.3 Für-Jeden mit var im Body" {
+    testfall "MitZwischenwert([1,2,3]) → [3,5,7]" {
+        var r: Liste<Ganzzahl> = MitZwischenwert([1, 2, 3])
+        r.länge == 3 und r[0] == 3 und r[1] == 5 und r[2] == 7
+    }
+}
+
+prüfe "§ 5.4 ausgabe stört Rückgabewert nicht" {
+    testfall "MitAusgabe(100€) gibt 100€ zurück (Trace egal)" {
+        MitAusgabe(100) == 100
+    }
+    testfall "MehrereTrace() liefert 15 (3 ausgabe-Zeilen ignoriert)" {
+        MehrereTrace() == 15
+    }
+}

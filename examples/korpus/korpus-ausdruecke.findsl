@@ -1,36 +1,34 @@
 --
-# Simple — Ausdrücke (SPEC § 4)
+# Korpus — Ausdrücke (SPEC § 4)
 
 Demonstriert jede Ausdrucksform aus SPEC § 4 als eigenständige `fn`,
 damit jeder Ausdruck per `prüfe` einzeln testbar ist und im Generat
 eine eigene Java-Methode bildet.
 
-Importiert aus [`simple-typen`](./simple-typen) — erfüllt damit
+Importiert aus [`korpus-typen`](./korpus-typen) — erfüllt damit
 **§ 8.3 `verwende`** (Cross-Modul) und stellt sicher, dass auch der
 Codegen-Pfad für modulübergreifende Komposition durchlaufen wird.
 
-Abdeckung:
+Abdeckung (komplette SPEC § 4 — alle Codegen-Lücken aus #44 geschlossen):
 
 - **§ 4.2** Arithmetik (`+ - * /`)
 - **§ 4.3** Vergleich (`== != < <= > >=`)
 - **§ 4.4** Logik (`und oder nicht`)
+- **§ 4.5** Elvis (`oder` auf Nullable)
+- **§ 4.6** Sicher-Zugriff (`?.`)
 - **§ 4.7** Force-Unwrap (`!!`)
 - **§ 4.8** Cast (`als`)
 - **§ 4.9** Wenn-Sonst-Ausdruck
 - **§ 4.10** Wähle ohne Subjekt (Guards) + Wähle mit Subjekt
-- **§ 4.11** Funktionsaufruf (positional + benannt)
-- **§ 4.12** Lambda
+- **§ 4.11** Funktionsaufruf (positional + benannt, String-Interpolation)
+- **§ 4.12** Lambda (Higher-Order-Method-Kontext mit Closure)
 - **§ 4.13** Feldzugriff
 - **§ 4.14** Datensatz-Konstruktor
 - **§ 4.15** Listen-Konstruktor
+- **§ 4.16** Bereich-Konstruktor (inkl./exkl./mit Schrittweite)
 - **§ 4.17** Block-Ausdruck
 - **§ 4.19** Abbruch-Ausdruck (Typ `never`)
 - **§ 5.1** `var`-Bindung im Block
-
-**Codegen-Lücken (TODO #44):** § 4.5 Elvis (`oder` auf Nullable),
-§ 4.6 Sicher-Zugriff (`?.`) und § 4.16 Bereich-Konstruktor sind in
-diesem Cluster aktuell ausgespart — der Java-Codegen lowert sie noch
-nicht. Sie werden ergänzt, sobald Issue #44 geschlossen ist.
 --
 
 verwende {
@@ -38,8 +36,9 @@ verwende {
     Rot,
     Grün,
     Blau,
+    Person,
     Punkt,
-} aus "./simple-typen"
+} aus "./korpus-typen"
 
 // ===========================================================================
 // § 4.2 Arithmetik
@@ -87,41 +86,73 @@ fn IstGroesser(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a > b
 fn IstGroesserGleich(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a >= b
 
 // ===========================================================================
-// § 4.4 Logische Operatoren — `und` und `nicht`
+// § 4.4 Logische Operatoren
 // ===========================================================================
-// TODO(#44): `oder` als logischer Operator ist aktuell Codegen-out-of-scope:
-//   fn LogischOder(a: Wahrheitswert, b: Wahrheitswert): Wahrheitswert = a oder b
 
 -- Logisches `und`. --
 fn LogischUnd(a: Wahrheitswert, b: Wahrheitswert): Wahrheitswert = a und b
 
+-- Logisches `oder` (auf Wahrheitswerten, NICHT Elvis). --
+fn LogischOder(a: Wahrheitswert, b: Wahrheitswert): Wahrheitswert = a oder b
+
 -- Logisches `nicht`. --
 fn LogischNicht(a: Wahrheitswert): Wahrheitswert = nicht a
 
-// === § 4.5 Elvis (`oder` auf Nullable) + § 4.6 Sicher-Zugriff (`?.`) ===
-// TODO(#44): Sobald Codegen NullLiteral und Elvis-`oder` lowert,
-// kommen diese Beispiele zurück:
-//
-//   fn ElvisFallback(eingabe: Text?, ersatz: Text): Text = eingabe oder ersatz
-//   fn EmailLänge(p: Person): Ganzzahl? = p.email?.länge
+// ===========================================================================
+// § 4.5 Elvis (`oder` auf Nullable)
+// ===========================================================================
 
-// TODO(#44): § 4.7 Force-Unwrap (`!!`) ist Codegen-out-of-scope
-// ("Ketten-Glied außerhalb des Scopes"):
-//   fn ForceUnwrap(eingabe: Ganzzahl?): Ganzzahl = eingabe!!
+--
+Elvis-Operator: liefert den linken Wert wenn nicht `nichts`, sonst den
+rechten. Wird hier mit einem `Text?`-Parameter demonstriert.
+--
+fn ElvisFallback(eingabe: Text?, ersatz: Text): Text = eingabe oder ersatz
+
+// ===========================================================================
+// § 4.6 Sicher-Zugriff (`?.`)
+// ===========================================================================
+
+--
+Sicher-Zugriff auf das nullable `email`-Feld einer Person.
+Liefert `nichts`, wenn die Person keine E-Mail hat.
+--
+fn EmailVonPerson(p: Person): Text? = p?.email
+
+// ===========================================================================
+// § 4.7 Force-Unwrap (`!!`)
+// ===========================================================================
+
+--
+Force-Unwrap einer Nullable-Eingabe — wirft Laufzeitfehler wenn
+`nichts`. Bewusst gefährlich, sollte nur verwendet werden wenn der
+Programmierer Garantien hat.
+--
+fn ForceUnwrap(eingabe: Ganzzahl?): Ganzzahl = eingabe!!
 
 // ===========================================================================
 // § 4.8 Cast (`als`)
 // ===========================================================================
 
-// TODO(#44): `als`-Cast scheint in dieser Konstellation Codegen-out-of-scope
-// zu sein ("Ketten-Glied außerhalb des Scopes"). Geplante Wiederaufnahme
-// sobald Codegen-Lücke geschlossen:
-//   fn CastEuroZuEuroCent(e: Euro): EuroCent = e als EuroCent
-//   fn CastGanzzahlZuCent(n: Ganzzahl): Cent = n als Cent
+--
+Cast Euro → EuroCent (verlustfreier Skalenwechsel — Euro ist ganzzahlig
+gröber, EuroCent hat Cent-Auflösung). Cast in die andere Richtung
+(EuroCent → Euro) wäre verlustbehaftet und damit ein Compile-Fehler;
+für das Abschneiden gibt es `.abrunden()` / `.aufrunden()` (§ 11.1).
+--
+fn CastEuroZuEuroCent(e: Euro): EuroCent = e als EuroCent
 
-// TODO(#44): § 4.9 `wenn … sonst …`-Ausdruck ist Codegen-out-of-scope:
-//   fn WennEuroPositiv(betrag: Euro): Text =
-//       wenn (betrag > 0) "positiv" sonst "nicht positiv"
+-- Cast Ganzzahl → Cent (Cent ist ganzzahliger Geld-Tag). --
+fn CastGanzzahlZuCent(n: Ganzzahl): Cent = n als Cent
+
+// ===========================================================================
+// § 4.9 Wenn-Sonst-Ausdruck
+// ===========================================================================
+
+--
+`wenn … sonst …` als Ausdruck — beide Zweige müssen typkompatibel sein.
+--
+fn WennEuroPositiv(betrag: Euro): Text =
+    wenn (betrag > 0) "positiv" sonst "nicht positiv"
 
 // ===========================================================================
 // § 4.10 Wähle-Ausdruck
@@ -130,64 +161,52 @@ fn LogischNicht(a: Wahrheitswert): Wahrheitswert = nicht a
 --
 **§ 4.10.1 Wähle ohne Subjekt** — Guard-Form. Jeder `falls`-Zweig ist
 eine Boolean-Bedingung, der erste passende gewinnt.
-
-TODO(#44): die natürliche Text-Variante `→ "langsam"` triggert den
-Codegen-Bug (Text als FinDslNumber typisiert). Bis #44 mit Ganzzahl-
-Rückgabe (Score) statt Text.
 --
-fn AmpelGuard(geschwindigkeit: Ganzzahl): Ganzzahl = wähle {
-    falls geschwindigkeit < 30  -> 1
-    falls geschwindigkeit < 60  -> 2
-    falls geschwindigkeit < 100 -> 3
-    sonst                       -> 4
+fn AmpelGuard(geschwindigkeit: Ganzzahl): Text = wähle {
+    falls geschwindigkeit < 30  -> "langsam"
+    falls geschwindigkeit < 60  -> "normal"
+    falls geschwindigkeit < 100 -> "schnell"
+    sonst                       -> "rasant"
 }
 
 --
 **§ 4.10.2 Wähle mit Subjekt** — Pattern-Matching auf eine Aufzählung.
 Mehrere Werte können in einer `falls`-Klausel zusammengefasst werden.
-Rückgabe als Ganzzahl (siehe TODO oben).
 --
-fn FarbBeschreibung(f: Farbe): Ganzzahl = wähle (f) {
-    falls Rot         -> 1
-    falls Grün, Blau  -> 2
+fn FarbBeschreibung(f: Farbe): Text = wähle (f) {
+    falls Rot         -> "warm"
+    falls Grün, Blau  -> "kühl"
 }
 
 // ===========================================================================
 // § 4.11 Funktionsaufruf
 // ===========================================================================
 
-// TODO(#44): String-Interpolation `"${x}"` und String-Konkatenation
-// (`+` auf Text) sind im aktuellen Codegen kaputt — er generiert
-// `anrede.asText()` auf einer Java-`String`-Variable, was nicht
-// kompiliert. Wiederaufnahme nach Schließen Issue #44:
-//
-//   fn _Begrüßung(name: Text, anrede: Text = "Hallo"): Text =
-//       "${anrede}, ${name}!"
-//   fn AufrufPositional(): Text = _Begrüßung("Anna", "Servus")
-//   fn AufrufBenannt(): Text    = _Begrüßung(name = "Bertha")
-//
-// Bis dahin demonstrieren wir Funktionsaufrufe ohne Text-Rückgabe:
-
--- Hilfsfunktion (Ganzzahl-Arithmetik) mit Default-Parameter. --
-fn _Skaliere(n: Ganzzahl, faktor: Ganzzahl = 10): Ganzzahl = n * faktor
+--
+Hilfsfunktion mit String-Interpolation + Default-Parameter — Ziel für
+positionale und benannte Aufrufe.
+--
+fn _Begrüßung(name: Text, anrede: Text = "Hallo"): Text = "${anrede}, ${name}!"
 
 -- Positionaler Aufruf — beide Parameter in Reihenfolge. --
-fn AufrufPositional(): Ganzzahl = _Skaliere(5, 3)
+fn AufrufPositional(): Text = _Begrüßung("Anna", "Servus")
 
--- Benannter Aufruf — Default für `faktor` greift. --
-// TODO(#44): Default-Parameter werden beim Aufruf nicht expandiert
-// (Codegen-Bug: `_skaliere(n)` statt `_skaliere(n, 10)`). Workaround:
-// alle Parameter explizit:
-fn AufrufBenannt(): Ganzzahl = _Skaliere(n = 5, faktor = 10)
+-- Benannter Aufruf — Default für `anrede` greift. --
+fn AufrufBenannt(): Text = _Begrüßung(name = "Bertha")
 
-// === § 4.12 Lambda ===
-// TODO(#44): Auch die Lambda-in-Higher-Order-Method-Kette (sowohl in
-// `var`-Bindung als auch direkt als `.zuordnen { x -> … }`) wirft
-// derzeit `Ketten-Glied außerhalb des Scopes`. Geplante Wiederaufnahme
-// nach Schließen der Codegen-Lücke (Issue #44):
-//
-//   fn QuadrateBis(n: Ganzzahl): Liste<Ganzzahl> =
-//       [1, 2, 3].zuordnen { x -> x * x * n }
+// ===========================================================================
+// § 4.12 Lambda (im Higher-Order-Method-Kontext)
+// ===========================================================================
+
+--
+Lambda als Argument einer Higher-Order-Listenmethode (`.zuordnen`).
+Closure auf externen Parameter wird durch `MachAddierer` in
+`korpus-funktionen.findsl` demonstriert.
+--
+fn Quadriere(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.zuordnen( {
+    x ->
+    x * x
+} )
 
 // ===========================================================================
 // § 4.13 Feldzugriff
@@ -210,11 +229,19 @@ fn PunktVon(x: Ganzzahl, y: Ganzzahl): Punkt = Punkt(x = x, y = y)
 -- Listen-Literal mit drei Elementen. --
 fn DreiZahlen(): Liste<Ganzzahl> = [1, 2, 3]
 
-// === § 4.16 Bereich-Konstruktor (auch § 11.3) ===
-// TODO(#44): Sobald Codegen `Range` lowert:
-//   fn BereichInklusiv():  Bereich<Ganzzahl> = 1 bis 10
-//   fn BereichExklusiv():  Bereich<Ganzzahl> = 0 bis unter 10
-//   fn BereichMitSchritt(): Bereich<Ganzzahl> = 0 bis 20 schritt 5
+// ===========================================================================
+// § 4.16 Bereich-Konstruktor (auch § 11.3)
+// ===========================================================================
+
+-- Inklusiver Bereich. --
+fn BereichInklusiv(): Bereich<Ganzzahl> = 1 bis 10
+
+-- Exklusiver Bereich. --
+fn BereichExklusiv(): Bereich<Ganzzahl> = 0 bis unter 10
+
+-- Bereich mit Schrittweite. --
+fn BereichMitSchritt(): Bereich<Ganzzahl> = 0 bis 20 schritt 5
+
 
 // ===========================================================================
 // § 4.17 Block-Ausdruck und § 5.1 var

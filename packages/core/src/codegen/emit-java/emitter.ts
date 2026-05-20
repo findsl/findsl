@@ -448,7 +448,8 @@ function moduleClassDoc(info: IrDoc): string[] {
 /** Bedarfsgesteuerte `org.findsl.runtime.*`-Importe für einen Code-Block. */
 function runtimeImportsFor(code: string): string[] {
     return [
-        'FinDslNumber', 'FinDslListe', 'Tarifart', 'Steuerklasse',
+        'FinDslNumber', 'FinDslListe', 'FinDslLambda1', 'FinDslLambda2',
+        'Tarifart', 'Steuerklasse',
         'FinDslAbort', 'FinDslRuntimeError',
         'Euro', 'EuroCent', 'Cent', 'Prozent', 'Ganzzahl', 'Dezimal',
     ]
@@ -640,7 +641,8 @@ export function emitJavaTestModule(m: IrTestModule): string {
     // Bedarfsgesteuerte Runtime-Importe (wie emitJavaModule): nur was im
     // Testrumpf namentlich vorkommt. `FinDslAbort` über `assertThrows`.
     const runtimeImports = [
-        'FinDslNumber', 'FinDslListe', 'Tarifart', 'Steuerklasse',
+        'FinDslNumber', 'FinDslListe', 'FinDslLambda1', 'FinDslLambda2',
+        'Tarifart', 'Steuerklasse',
         'FinDslAbort', 'FinDslRuntimeError',
         'Euro', 'EuroCent', 'Cent', 'Prozent', 'Ganzzahl', 'Dezimal',
     ]

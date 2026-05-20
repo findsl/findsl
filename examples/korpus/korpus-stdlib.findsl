@@ -1,0 +1,125 @@
+--
+# Korpus — Standard-Bibliothek (SPEC § 11)
+
+Demonstriert die Standard-Bibliothek aus SPEC § 11, soweit im
+Java-Codegen verfügbar:
+
+- **§ 11.1 Rundungs-Methoden** — `.abrunden()` / `.aufrunden()` auf
+  `EuroCent` (Ziel via Kontext), `Dezimal` und `Prozent`.
+- **§ 11.2 Listen-Methoden** — `.länge`, `.leer`, `.kopf`, `.rest`,
+  `.bei(i)` / `[i]`, `.enthält(x)`, `.zuordnen`, `.filtern`,
+  `.zusammenfassen`, `.zähle()` / `.zähle(p)`, `.summe()`,
+  `.größtes()` / `.kleinstes()`.
+- **§ 11.5 Text-`+`-Konkatenation** — verfügbar im Java-Codegen
+  (Test in `Konkat`).
+
+> **Hinweis:** Die weiteren § 11.5-Text-Methoden (`.alsText`,
+> `.alsGroßbuchstaben`/`.alsKleinbuchstaben`, `.beginntMit`,
+> `.endetMit`, `.enthält(teil)`, `.geteiltAn`,
+> `.einrückungEntfernen`) sind in LSP/Interpreter implementiert,
+> aber im Java-Codegen **noch nicht** verfügbar (Phase-3-Scope).
+> Sobald der Java-Pfad nachzieht, kommen sie zusammen mit Tests
+> hierher.
+--
+
+// ===========================================================================
+// § 11.1 Rundungs-Methoden
+// ===========================================================================
+
+--
+EuroCent → Euro via `.abrunden()` — Zieltyp `Euro` wird durch die
+Rückgabe-Annotation determiniert (bidirektionale Inferenz § 3.13).
+--
+fn AbrundenEuro(betrag: EuroCent): Euro = betrag.abrunden()
+
+-- EuroCent → Euro via `.aufrunden()`. --
+fn AufrundenEuro(betrag: EuroCent): Euro = betrag.aufrunden()
+
+-- EuroCent → Cent via `.abrunden()` (Cent als Zieltyp via Annotation). --
+fn AbrundenCent(betrag: EuroCent): Cent = betrag.abrunden()
+
+-- EuroCent → Cent via `.aufrunden()`. --
+fn AufrundenCent(betrag: EuroCent): Cent = betrag.aufrunden()
+
+-- Prozent.abrunden() → Prozent (volle Prozent, Einheit bleibt). --
+fn AbrundenProzent(p: Prozent): Prozent = p.abrunden()
+
+-- Prozent.aufrunden() → Prozent. --
+fn AufrundenProzent(p: Prozent): Prozent = p.aufrunden()
+
+-- Dezimal.abrunden() → Ganzzahl. --
+fn AbrundenDezimal(d: Dezimal): Ganzzahl = d.abrunden()
+
+-- Dezimal.aufrunden() → Ganzzahl (typischer „je angefangene Einheit"-Tarif). --
+fn AufrundenDezimal(d: Dezimal): Ganzzahl = d.aufrunden()
+
+// ===========================================================================
+// § 11.2 Listen-Methoden
+// ===========================================================================
+
+-- Anzahl der Elemente. --
+fn Länge(xs: Liste<Ganzzahl>): Ganzzahl = xs.länge
+
+-- `.leer` (Property) — true wenn `xs.länge == 0`. --
+fn IstLeer(xs: Liste<Ganzzahl>): Wahrheitswert = xs.leer
+
+-- Erstes Element (Fehler bei leer). --
+fn Kopf(xs: Liste<Ganzzahl>): Ganzzahl = xs.kopf
+
+-- Alle Elemente außer dem ersten. --
+fn Rest(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.rest
+
+-- Element an Index `i` per Methode `.bei(i)`. --
+fn ElementBei(xs: Liste<Ganzzahl>, i: Ganzzahl): Ganzzahl = xs.bei(i)
+
+-- Element an Index `i` per Index-Operator `[i]`. --
+fn ElementIndex(xs: Liste<Ganzzahl>, i: Ganzzahl): Ganzzahl = xs[i]
+
+-- `.enthält(x)` — Mitgliedschaft. --
+fn Enthält(xs: Liste<Ganzzahl>, x: Ganzzahl): Wahrheitswert = xs.enthält(x)
+
+-- `.zuordnen` (Map) — quadriere alle Elemente. --
+fn Quadrate(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.zuordnen( {
+    x ->
+    x * x
+} )
+
+-- `.filtern` (Predicate) — nur positive Werte. --
+fn NurPositive(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.filtern( {
+    x ->
+    x > 0
+} )
+
+-- `.zusammenfassen` (Fold/Reduce) — manuelle Summenbildung. --
+fn SummeViaFold(xs: Liste<Ganzzahl>): Ganzzahl = xs.zusammenfassen(0, {
+    acc, x ->
+    acc + x
+})
+
+-- `.zähle()` ohne Predikat — Element-Anzahl als Ganzzahl. --
+fn ZähleAlle(xs: Liste<Ganzzahl>): Ganzzahl = xs.zähle()
+
+-- `.zähle(p)` mit Predikat — Anzahl der Elemente, die größer als 0 sind. --
+fn ZähleGrößer(xs: Liste<Ganzzahl>, schwelle: Ganzzahl): Ganzzahl = xs.zähle( {
+    x ->
+    x > schwelle
+} )
+
+-- `.summe()` direkt auf numerischer Liste. --
+fn Summe(xs: Liste<Ganzzahl>): Ganzzahl = xs.summe()
+
+-- `.größtes()` — Max-Element. --
+fn Größtes(xs: Liste<Ganzzahl>): Ganzzahl = xs.größtes()
+
+-- `.kleinstes()` — Min-Element. --
+fn Kleinstes(xs: Liste<Ganzzahl>): Ganzzahl = xs.kleinstes()
+
+// ===========================================================================
+// § 11.5 Text-Methoden — Codegen-fähiger Teil (Text-`+`)
+// ===========================================================================
+
+-- Text-Konkatenation per `+`-Operator (SPEC § 3.6, § 11.5). --
+fn Konkat(a: Text, b: Text): Text = a + b
+
+-- Mehrfach-Konkatenation (link­s­assoziativ). --
+fn KonkatDrei(a: Text, b: Text, c: Text): Text = a + b + c

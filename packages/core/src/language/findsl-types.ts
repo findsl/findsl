@@ -821,6 +821,9 @@ function arithResult(op: string, lt: Type, rt: Type, node: AstNode, report: Repo
     const both = `${l}|${r}`;
 
     if (op === '+' || op === '-') {
+        // Text + Text → Text (Konkatenation, SPEC § 3.6, § 11.5).
+        // Subtraktion auf Text bleibt ungültig.
+        if (op === '+' && l === 'Text' && r === 'Text') return TText;
         if (lIsGeld && rIsGeld) {
             return GELD_PRECISION[l] >= GELD_PRECISION[r] ? lt : rt;     // präzisere Seite
         }

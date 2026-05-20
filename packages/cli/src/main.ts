@@ -753,6 +753,35 @@ Beispiele:
                 continue;
             }
 
+            // (#44 / Lücke 15) Transitive Schließung — Spiegel der
+            // Interpreter-Sicht: Aufzählungs-Werte sind in einem Modul
+            // bereits dann sichtbar, wenn der Aufzählungs-TYP aus einem
+            // Re-Export importiert wurde, auch ohne expliziten
+            // Wert-Import. Damit der Test-Codegen Enum-Werte korrekt zu
+            // `OwnerClass.Enum.Wert` qualifiziert, brauchen wir ALLE
+            // transitiv erreichbaren Sach-Module im `imports`-Array
+            // (das `buildRegistry`-Lowering registriert die Werte beim
+            // Durchlaufen jedes importierten Programms — auch ohne
+            // explizite Bindings für die Werte).
+            const worklist = [...byPath.keys()];
+            while (worklist.length > 0) {
+                const currentPath = worklist.shift()!;
+                const currentMod = modules.get(currentPath);
+                if (currentMod === undefined) continue;
+                for (const b of collectImportBindings(currentMod.program)) {
+                    if (!b.resolvedPath || byPath.has(b.resolvedPath)) continue;
+                    const target = modules.get(b.resolvedPath);
+                    if (target === undefined) continue;
+                    byPath.set(b.resolvedPath, {
+                        program: target.program,
+                        className: target.className,
+                        javaPackage: target.javaPackage,
+                        bindings: [],            // implizit (transitiv)
+                    });
+                    worklist.push(b.resolvedPath);
+                }
+            }
+
             let java: string;
             try {
                 const ir = lowerTestProgram(tm.program, {

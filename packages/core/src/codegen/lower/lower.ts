@@ -29,7 +29,7 @@ import {
     isSonstArm, isCast, isAbbruchExpr, isLetStmt, isFunktionBody,
     isNamedType, isListLiteral, isLambda, isIndex, isPruefeDecl,
     isBoolLiteral, isUnaryOp, isWennExpr, isRange, isFuerExpr,
-    isNullLiteral, isNullCheck,
+    isNullLiteral, isNullCheck, isForceUnwrap, isSafeFieldAccess,
 } from '../../language/generated/ast.js';
 import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrFnBody, IrField,
@@ -556,10 +556,15 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
             return { kind: 'cmp', op, left, right };
         }
         if (op === 'oder') {
-            // (#44 L3a) Boolean-`oder` → `||`. Elvis-`oder` auf
-            // Nullable-Operand wird in einem Folge-PR ergänzt.
             const left = lowerExpr(expr.left, reg);
             const right = lowerExpr(expr.right, reg);
+            // (#44 L3b) Elvis vs. Boolean-Disjunktion anhand des
+            // linken Operanden: Nullable → Elvis-Ternär, sonst
+            // Boolean-`||`. Spiegelt SPEC § 4.5 (Elvis lebt
+            // syntaktisch unter `oder`, semantisch unterschieden).
+            if (isNullableExpr(left, reg)) {
+                return { kind: 'elvis', left, right };
+            }
             return { kind: 'or', left, right };
         }
     }
@@ -642,6 +647,21 @@ function isTextExpr(e: IrExpr, reg: Registry): boolean {
     return atomName(exprFinDslType(e, reg)) === 'Text';
 }
 
+/**
+ * (#44 Nullable Teil 2) Ist der Ausdruck Nullable-typisiert?
+ *
+ * - `nullLit` (`nichts`) → immer nullable.
+ * - Sonst Typ via `exprFinDslType` und `Type.optional === true`.
+ *
+ * Wichtig für Elvis-`oder` (Boolean-Pfad vs. Nullable-Pfad) und für
+ * potenzielle Nullable-spezifische Box-Logik. `?.`/`!!` brauchen
+ * den Helper nicht — sie sind syntaktisch eindeutig.
+ */
+function isNullableExpr(e: IrExpr, reg: Registry): boolean {
+    if (e.kind === 'nullLit') return true;
+    return exprFinDslType(e, reg)?.optional === true;
+}
+
 
 function lowerChainOps(
     base: IrExpr,
@@ -657,6 +677,22 @@ function lowerChainOps(
         if (isIndex(op)) {
             const ix = (op as { index: Expr }).index;
             cur = { kind: 'listAt', receiver: cur, index: lowerExpr(ix, reg) };
+            i += 1;
+            continue;
+        }
+        // (#44 L8) `!!` Force-Unwrap → Objects.requireNonNull.
+        if (isForceUnwrap(op)) {
+            cur = {
+                kind: 'forceUnwrap',
+                value: cur,
+                hint: '!! Force-Unwrap auf nichts',
+            };
+            i += 1;
+            continue;
+        }
+        // (#44 `?.`) Sicher-Zugriff → ternär (recv != null ? recv.feld() : null).
+        if (isSafeFieldAccess(op) && op.name) {
+            cur = { kind: 'safeFieldAccess', receiver: cur, name: op.name };
             i += 1;
             continue;
         }

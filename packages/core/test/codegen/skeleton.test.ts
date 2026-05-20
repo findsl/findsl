@@ -895,6 +895,58 @@ describe('Issue #44 — Nullable Teil 1 (oder/nichts/NullCheck)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Nullable Teil 2: Elvis-oder + !! Force-Unwrap + ?. Sicher-Zugriff
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Nullable Teil 2 (Elvis/!!/?.)', () => {
+    it('Elvis-`oder`: Nullable-Operand → ternär `(left != null) ? left : right`', async () => {
+        const program = await parseSource(
+            'fn Fallback(x: Ganzzahl?, ersatz: Ganzzahl): Ganzzahl = x oder ersatz\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return Ganzzahl.von((x != null) ? x : ersatz);');
+    });
+
+    it('Elvis mit nichts-Fallback: x oder nichts', async () => {
+        const program = await parseSource(
+            'fn KeinFallback(x: Text?): Text? = x oder nichts\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('(x != null) ? x : null');
+    });
+
+    it('!! Force-Unwrap → Objects.requireNonNull(...)', async () => {
+        const program = await parseSource(
+            'fn MussWert(x: Ganzzahl?): Ganzzahl = x!!\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('java.util.Objects.requireNonNull(x');
+    });
+
+    it('?. Sicher-Zugriff Feld → ternär `(recv != null) ? recv.feld() : null`', async () => {
+        const program = await parseSource(
+            'datensatz Person(name: Text, alter: Ganzzahl?)\n'
+            + 'fn AlterOderNichts(p: Person?): Ganzzahl? = p?.alter\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // Sicher-Zugriff: receiver null-prüfen, dann feldaccessen, sonst null
+        expect(impl).toMatch(/\(p != null\) \? p\.alter\(\) : null/);
+    });
+
+    it('Regression Boolean-`oder`: bleibt `||` (kein Elvis-Fehlmapping)', async () => {
+        const program = await parseSource(
+            'fn LogischOder(a: Wahrheitswert, b: Wahrheitswert): Wahrheitswert = a oder b\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('(a) || (b)');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

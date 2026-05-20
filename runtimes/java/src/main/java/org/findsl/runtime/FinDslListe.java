@@ -48,6 +48,48 @@ public record FinDslListe<E>(List<E> elements) {
      * @param <E> Elementtyp.
      * @return leere {@link FinDslListe}.
      */
+    /**
+     * {@code a bis b} bzw. {@code a bis unter b} bzw.
+     * {@code a bis b schritt s} (SPEC § 4.16 / § 11.3) — eager
+     * materialisierter Bereich als {@link FinDslListe}.
+     *
+     * <p><b>Designentscheidung (#44):</b> Bereiche werden in FinDSL
+     * fast immer für kleine Wertebereiche genutzt (Steuerklassen,
+     * Skalen) → eager als Liste ist KISS, alle § 11.2-Methoden
+     * funktionieren ohne Spiegel-Pflege. Lazy {@code FinDslBereich}-
+     * Klasse wäre Overkill.
+     *
+     * @param from      Startwert (inklusiv).
+     * @param to        Endwert.
+     * @param exklusiv  {@code true} → {@code to} NICHT enthalten
+     *                  (`bis unter`-Variante).
+     * @param schritt   Schrittweite ({@code null} = 1; bei Aufzählungen
+     *                  steht Schrittweite v1.0-offen → hier numerisch).
+     * @return materialisierte {@link FinDslListe} der Bereichswerte.
+     */
+    public static FinDslListe<FinDslNumber> bereich(
+            FinDslNumber from, FinDslNumber to, boolean exklusiv, FinDslNumber schritt) {
+        FinDslNumber step = schritt != null ? schritt : FinDslNumber.ganzzahl("1");
+        List<FinDslNumber> out = new ArrayList<>();
+        FinDslNumber cur = from;
+        // Spiegel des Interpreter-Verhaltens: Lauf solange cur <= to
+        // (bzw. cur < to bei exklusiv). Negative Schritte würden nie
+        // terminieren → SPEC offen, hier konservativ: Schritt > 0.
+        if (step.compareValue(FinDslNumber.ganzzahl("0")) <= 0) {
+            throw new FinDslRuntimeError(
+                "Bereich-Schritt muss positiv sein (SPEC § 4.16).");
+        }
+        while (true) {
+            int cmp = cur.compareValue(to);
+            if (exklusiv ? cmp >= 0 : cmp > 0) {
+                break;
+            }
+            out.add(cur);
+            cur = cur.add(step);
+        }
+        return new FinDslListe<>(out);
+    }
+
     public static <E> FinDslListe<E> empty() {
         return new FinDslListe<>(List.of());
     }

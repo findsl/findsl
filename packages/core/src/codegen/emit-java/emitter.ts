@@ -147,6 +147,13 @@ function emitExpr(e: IrExpr): string {
             return e.items.length === 0
                 ? `FinDslListe.<${e.elementJavaType}>empty()`
                 : `FinDslListe.of(java.util.List.of(${e.items.map(emitExpr).join(', ')}))`;
+        case 'listRange': {
+            // (#44 L1) Schritt-Argument ist `null` wenn nicht gesetzt
+            // — die Runtime substituiert dann Schritt 1 (siehe
+            // FinDslListe.bereich).
+            const step = e.step !== undefined ? emitExpr(e.step) : 'null';
+            return `FinDslListe.bereich(${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+        }
         case 'listMethod':
             return `${emitExpr(e.receiver)}.${e.method}()`;
         case 'listMap':

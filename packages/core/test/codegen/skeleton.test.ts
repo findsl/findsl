@@ -777,6 +777,50 @@ describe('Issue #44 — wenn-Ausdruck (L6) lowert zu waehle-Statement', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — L1: Range-Literale (Lowering nach FinDslListe.bereich)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Range-Literale (L1) lowern nach FinDslListe.bereich', () => {
+    it('1 bis 10 (inklusiv) → FinDslListe.bereich(1, 10, false)', async () => {
+        const program = await parseSource(
+            'fn Eins(): Liste<Ganzzahl> = 1 bis 10\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain(
+            'return FinDslListe.bereich(FinDslNumber.ganzzahl("1"), FinDslNumber.ganzzahl("10"), false, null);');
+    });
+
+    it('0 bis unter 10 (exklusiv) → bereich(0, 10, true)', async () => {
+        const program = await parseSource(
+            'fn Zwei(): Liste<Ganzzahl> = 0 bis unter 10\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain(
+            'return FinDslListe.bereich(FinDslNumber.ganzzahl("0"), FinDslNumber.ganzzahl("10"), true, null);');
+    });
+
+    it('0 bis 20 schritt 5 → bereich mit Schrittweite', async () => {
+        const program = await parseSource(
+            'fn Drei(): Liste<Ganzzahl> = 0 bis 20 schritt 5\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain(
+            'return FinDslListe.bereich(FinDslNumber.ganzzahl("0"), FinDslNumber.ganzzahl("20"), false, FinDslNumber.ganzzahl("5"));');
+    });
+
+    it('Bereich + Listen-Methode (.länge): kompiliert sich kombiniert', async () => {
+        const program = await parseSource(
+            'fn LängeBis10(): Ganzzahl = (1 bis 10).länge\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('.laenge()');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

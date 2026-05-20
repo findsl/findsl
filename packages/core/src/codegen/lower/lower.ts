@@ -28,7 +28,7 @@ import {
     isCall, isFieldAccess, isBinaryOp, isWaehleExpr, isFallArm,
     isSonstArm, isCast, isAbbruchExpr, isLetStmt, isFunktionBody,
     isNamedType, isListLiteral, isLambda, isIndex, isPruefeDecl,
-    isBoolLiteral, isUnaryOp, isWennExpr,
+    isBoolLiteral, isUnaryOp, isWennExpr, isRange,
 } from '../../language/generated/ast.js';
 import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrFnBody, IrField,
@@ -449,6 +449,17 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
             kind: 'listLit',
             elementJavaType: elemType ? javaType(elemType, reg) : 'FinDslNumber',
             items: expr.items.map((e) => lowerExpr(e, reg)),
+        };
+    }
+    if (isRange(expr)) {
+        // (#44 L1) `a bis b` / `a bis unter b` / `a bis b schritt s`
+        // → eager materialisierte Liste via FinDslListe.bereich(...).
+        return {
+            kind: 'listRange',
+            from: lowerExpr(expr.from, reg),
+            to: lowerExpr(expr.to, reg),
+            exclusive: expr.exclusive === true,
+            step: expr.step ? lowerExpr(expr.step, reg) : undefined,
         };
     }
     if (isBinaryOp(expr)) {

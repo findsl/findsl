@@ -304,10 +304,12 @@ function emitInterfaceMember(d: IrDecl): string | undefined {
         }
         case 'konst': {
             // API-Konstante: numerisch → Wrapper-getypt, Kern-Ausdruck
-            // geboxt (`W.von(expr)`); sonst unverändert FinDslNumber.
+            // geboxt (`W.von(expr)`); nicht-numerisch (Text/Bool/Liste)
+            // → echter API-Typ aus `d.javaType` (#44 Lücke 10 — vorher
+            // wurde fälschlich auf `FinDslNumber` zurückgefallen).
             const w = d.wrapper;
             const init = w !== undefined ? `${w}.von(${emitExpr(d.expr)})` : emitExpr(d.expr);
-            return head + `${IND}public static final ${w ?? 'FinDslNumber'} ${d.name} = ${init};`;
+            return head + `${IND}public static final ${d.javaType} ${d.name} = ${init};`;
         }
         case 'fn': {
             if (d.internal) return undefined;        // `_` nur in der Impl

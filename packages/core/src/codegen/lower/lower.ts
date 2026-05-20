@@ -1075,12 +1075,15 @@ export function lowerProgram(program: Program, ctx: LowerContext): IrModule {
         if (isKonstDecl(d)) {
             // `konst` ist API → numerisch Wrapper-getypt; der Kern-
             // Ausdruck bleibt unverändert (Emitter boxt: `W.von(expr)`).
+            // Für nicht-numerische `konst` (Text/Wahrheitswert/Liste)
+            // trägt `javaType` den echten API-Typ (#44 Lücke 10).
             decls.push({
                 kind: 'konst',
                 name: d.name,
                 expr: floatValue(
                     maybeMoneyAnno(lowerExpr(d.value, reg), d.type, `Konstante "${d.name}"`),
                     `Konstante "${d.name}"`),
+                javaType: apiJavaType(d.type, reg),
                 wrapper: isNumericType(d.type) ? namedAtom(d.type)!.name : undefined,
                 info: extractDoc(d.docPrefix),
             });

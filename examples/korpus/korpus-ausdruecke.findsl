@@ -257,6 +257,27 @@ fn BlockMitVar(a: Ganzzahl, b: Ganzzahl): Ganzzahl = {
     doppelt
 }
 
+--
+**`var = wähle`** — `wähle` als rechte Seite einer `var`-Bindung
+(Statement-Lowering, SPEC § 5.1 + § 4.10). Demonstriert beide
+Wähle-Formen kombiniert: erst Subjekt-Pattern (Aufzählung), dann
+Guard-Form auf der gewählten Ampel-Stufe. Codegen lowert die
+`var = wähle`-Form in eine If-Kette mit Zwischen-Bindung.
+--
+fn AmpelTextFürFarbe(f: Farbe, geschwindigkeit: Ganzzahl): Text = {
+    var stufe: Text = wähle (f) {
+        falls Rot       -> "Stop"
+        falls Grün      -> "Fahre"
+        falls Blau      -> "Blink"
+    }
+    var tempo: Text = wähle {
+        falls geschwindigkeit < 30 -> "langsam"
+        falls geschwindigkeit < 60 -> "normal"
+        sonst                      -> "schnell"
+    }
+    stufe + " (" + tempo + ")"
+}
+
 // ===========================================================================
 // § 4.19 Abbruch-Ausdruck (Typ `never`)
 // ===========================================================================

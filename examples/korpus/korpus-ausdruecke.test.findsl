@@ -39,6 +39,7 @@ verwende {
     BereichExklusiv,
     BereichMitSchritt,
     BlockMitVar,
+    AmpelTextFürFarbe,
     KehrwertOderAbbruch,
 } aus "./korpus-ausdruecke"
 
@@ -147,6 +148,18 @@ prüfe "§ 4.15 + 4.16 Listen-/Bereich-Konstruktor" {
 
 prüfe "§ 4.17 Block-Ausdruck mit var" {
     testfall "(2+3) × 2 = 10" { BlockMitVar(2, 3) == 10 }
+}
+
+prüfe "§ 5.1 var = wähle (Statement-Lowering, beide wähle-Formen kombiniert)" {
+    testfall "Rot + 20 km/h → \"Stop (langsam)\"" {
+        AmpelTextFürFarbe(Rot, 20) == "Stop (langsam)"
+    }
+    testfall "Grün + 45 km/h → \"Fahre (normal)\"" {
+        AmpelTextFürFarbe(Grün, 45) == "Fahre (normal)"
+    }
+    testfall "Blau + 80 km/h → \"Blink (schnell)\"" {
+        AmpelTextFürFarbe(Blau, 80) == "Blink (schnell)"
+    }
 }
 
 prüfe "§ 4.19 Abbruch-Ausdruck" {

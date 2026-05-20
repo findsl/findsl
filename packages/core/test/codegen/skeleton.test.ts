@@ -821,6 +821,38 @@ describe('Issue #44 — Range-Literale (L1) lowern nach FinDslListe.bereich', ()
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — für-jeden-Schleife (Lowering nach .zuordnen)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — für-jeden-Schleife lowert nach .zuordnen', () => {
+    it('für jeden x aus xs { x * 2 } → xs.zuordnen((x) -> x.mul(...))', async () => {
+        const program = await parseSource(
+            'fn Doppel(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = für jeden x aus xs { x * 2 }\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('xs.zuordnen((x) -> x.mul(FinDslNumber.ganzzahl("2")))');
+    });
+
+    it('für jede stkl aus xs { ... } (Synonym "jede" funktioniert)', async () => {
+        const program = await parseSource(
+            'fn Plus1(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = für jede x aus xs { x + 1 }\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('xs.zuordnen((x) -> x.add(FinDslNumber.ganzzahl("1")))');
+    });
+
+    it('für jeden über Bereich (kombiniert mit L1)', async () => {
+        const program = await parseSource(
+            'fn Quadrate(): Liste<Ganzzahl> = für jeden x aus (1 bis 5) { x * x }\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('FinDslListe.bereich(FinDslNumber.ganzzahl("1"), FinDslNumber.ganzzahl("5"), false, null).zuordnen((x) -> x.mul(x))');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

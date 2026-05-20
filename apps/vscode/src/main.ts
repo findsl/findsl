@@ -168,6 +168,21 @@ function registerTestController(context: vscode.ExtensionContext): void {
         }, 250));
     };
 
+    // Issue #79: Beim Öffnen einer Datei SOFORT Test-Items + Gutter-
+    // „Play-Pfeile" zeigen — ohne diesen Handler erscheinen sie erst
+    // nach dem ersten `didChangeTextDocument` (User-Tippen oder
+    // Auto-Format). Symmetrisch zum `onDidChangeTextDocument` darunter.
+    // Auch bereits offene Dokumente werden initial verarbeitet (beim
+    // Extension-Start nach Reload).
+    context.subscriptions.push(
+        vscode.workspace.onDidOpenTextDocument((doc) => {
+            if (doc.languageId === 'findsl') scheduleRefresh(doc.uri);
+        }),
+    );
+    for (const doc of vscode.workspace.textDocuments) {
+        if (doc.languageId === 'findsl') scheduleRefresh(doc.uri);
+    }
+
     // Beim Tippen aktualisieren (Document-Symbols sehen auch ungespeicherte
     // Änderungen) — nicht erst beim Speichern.
     context.subscriptions.push(

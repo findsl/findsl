@@ -24,7 +24,7 @@ import { FindslTypeDefinitionProvider } from './findsl-type-definition.js';
 import { FindslCallHierarchyProvider } from './findsl-call-hierarchy.js';
 import { FindslSemanticTokenProvider } from './findsl-semantic-tokens.js';
 import { FindslInlayHintProvider } from './findsl-inlay-hints.js';
-import { FindslCodeLensProvider } from './findsl-codelens.js';
+import { FindslCodeLensProvider, registerCodeLensRefreshTrigger } from './findsl-codelens.js';
 import { FindslSignatureHelpProvider } from './findsl-signature-help.js';
 import { FindslDocumentLinkProvider } from './findsl-document-link.js';
 import { FindslFormatter } from './findsl-formatter.js';
@@ -80,7 +80,7 @@ export const FindslModule: Module<FindslServices, PartialLangiumServices & Finds
         CallHierarchyProvider: (services) => new FindslCallHierarchyProvider(services),
         SemanticTokenProvider: (services) => new FindslSemanticTokenProvider(services),
         InlayHintProvider: (services) => new FindslInlayHintProvider(services),
-        CodeLensProvider: () => new FindslCodeLensProvider(),
+        CodeLensProvider: (services) => new FindslCodeLensProvider(services),
         SignatureHelp: (services) => new FindslSignatureHelpProvider(services),
         DocumentLinkProvider: (services) => new FindslDocumentLinkProvider(services),
         Formatter: () => new FindslFormatter(),
@@ -119,5 +119,9 @@ export function createFindslServices(context: DefaultSharedModuleContext): {
     );
     shared.ServiceRegistry.register(Findsl);
     registerValidationChecks(Findsl);
+    // Issue #79: CodeLens-Refresh-Signal eager registrieren, NICHT erst
+    // beim Lazy-Constructor des Providers — sonst kommt der Listener
+    // zu spät für den allerersten Build-Pass beim Datei-Öffnen.
+    registerCodeLensRefreshTrigger(shared);
     return { shared, Findsl };
 }

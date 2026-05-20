@@ -7,14 +7,30 @@
  * Interpreter über genau diesen Block laufen lässt und das Ergebnis
  * als Notification meldet. Macht den fertigen Tree-Walker direkt im
  * Editor sichtbar — ohne CLI.
+ *
+ * **Initial-Race (Issue #79):** beim ersten Öffnen einer Datei fragt
+ * VS Code `textDocument/codeLens` an, bevor der Langium-DocumentBuilder
+ * den Parse abgeschlossen hat — `document.parseResult` wäre `undefined`
+ * und der Provider lieferte ohne weiteres Zutun eine leere Liste, die
+ * VS Code cached. Wir warten daher in `provideCodeLens` aktiv auf den
+ * `DocumentState.Validated`-State (über den DocumentBuilder), bevor wir
+ * die Lenses berechnen.
  */
 
 import {
+    DocumentState,
+    type DocumentBuilder,
     type LangiumDocument,
-    type MaybePromise,
 } from 'langium';
-import type { CodeLensProvider } from 'langium/lsp';
-import { type CodeLens, type CodeLensParams, Range } from 'vscode-languageserver';
+import type { CodeLensProvider, LangiumSharedServices } from 'langium/lsp';
+import {
+    CodeLensRefreshRequest,
+    type CancellationToken,
+    type CodeLens,
+    type CodeLensParams,
+    Range,
+} from 'vscode-languageserver';
+import type { FindslServices } from './findsl-module.js';
 import { isPruefeDecl, type Program } from './generated/ast.js';
 
 /**
@@ -31,11 +47,65 @@ export const RUN_PRUEFE_COMMAND = 'findsl.pruefe.run';
  */
 export const LENS_RUN_COMMAND = 'findsl.pruefe.runFromLens';
 
+/**
+ * Registriert den `workspace/codeLens/refresh`-Trigger eager beim
+ * Server-Start (Issue #79).
+ *
+ * **Warum nicht im Provider-Constructor:** Langium instantiiert die LSP-
+ * Provider **lazy** beim ersten Request. Bei Initial-Open-Szenarien
+ * würde der `onDocumentPhase`-Listener also erst NACH dem ersten Build-
+ * Pass registriert — zu spät für den allerersten Refresh. Indem wir den
+ * Listener direkt nach `createFindslServices` registrieren, garantieren
+ * wir, dass JEDER `Parsed`-Event ein Refresh-Signal an den Client schickt.
+ *
+ * **Warum `onDocumentPhase`, nicht `onBuildPhase`:** `onBuildPhase`
+ * triggert nicht bei gecancelten Builds (häufig beim Initial-Open);
+ * `onDocumentPhase` feuert pro Document zuverlässig.
+ *
+ * **Warum `Parsed`, nicht `Validated`:** der spätere State kann durch
+ * Cross-Modul-Resolution-Probleme blockiert sein; CodeLens braucht nur
+ * AST-`decls`, also reicht `Parsed`.
+ */
+export function registerCodeLensRefreshTrigger(shared: LangiumSharedServices): void {
+    const conn = shared.lsp.Connection;
+    if (!conn) return;          // Test-Pfad ohne LSP-Connection
+    shared.workspace.DocumentBuilder.onDocumentPhase(
+        DocumentState.Parsed,
+        async () => {
+            try {
+                await conn.sendRequest(CodeLensRefreshRequest.type);
+            } catch {
+                // Client unterstützt Refresh nicht oder Verbindung weg —
+                // tolerant. Der Client-Side-Provider in der VS-Code-
+                // Extension (apps/vscode/src/main.ts) ist der primäre Pfad.
+            }
+        },
+    );
+}
+
 export class FindslCodeLensProvider implements CodeLensProvider {
 
-    provideCodeLens(
-        document: LangiumDocument, _params: CodeLensParams,
-    ): MaybePromise<CodeLens[] | undefined> {
+    private readonly documentBuilder: DocumentBuilder;
+
+    constructor(services: FindslServices) {
+        this.documentBuilder = services.shared.workspace.DocumentBuilder;
+    }
+
+    async provideCodeLens(
+        document: LangiumDocument,
+        _params: CodeLensParams,
+        cancelToken?: CancellationToken,
+    ): Promise<CodeLens[] | undefined> {
+        // Issue #79: VS Code fragt CodeLens beim Datei-Öffnen sofort an —
+        // ohne dieses Wait wäre `parseResult` noch leer und die Antwort
+        // (= keine Lenses) würde clientseitig gecached. `Parsed` reicht,
+        // weil wir nur die AST-`decls` brauchen, nicht das volle
+        // Type-Check-Ergebnis. So bleibt der Wait auch in Test-Pfaden
+        // mit `validation: false` korrekt — diese Pfade durchlaufen
+        // `Parsed`, aber nie `Validated`.
+        await this.documentBuilder.waitUntil(
+            DocumentState.Parsed, document.uri, cancelToken,
+        );
         const program = document.parseResult?.value as Program | undefined;
         if (!program) return undefined;
 

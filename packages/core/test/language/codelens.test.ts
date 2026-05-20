@@ -76,6 +76,43 @@ prüfe "B" {
         const { lensesOf } = await setup({ m: 'konst K: Euro = 1 als Euro\n' });
         expect(await lensesOf('m')).toHaveLength(0);
     });
+
+    it('Initial-Race (#79): provideCodeLens VOR DocumentBuilder.build liefert vollständige Lenses', async () => {
+        // Spiegelt das VS-Code-Verhalten beim Datei-Öffnen: der Client
+        // schickt `textDocument/codeLens` praktisch sofort nach
+        // `didOpen` — also bevor (oder parallel zu) der Build-Pipeline
+        // den Parse abgeschlossen hat. Der Provider muss intern auf
+        // `DocumentState.Validated` warten und darf nicht stumm `[]`
+        // zurückgeben.
+        const services = createFindslServices(NodeFileSystem);
+        const src = `fn f(): Ganzzahl = 1
+prüfe "A" {
+    testfall "x" { f() == 1 }
+}
+prüfe "B" {
+    testfall "y" { f() == 1 }
+    testfall "z" { f() == 1 }
+}
+`;
+        const doc = services.Findsl.shared.workspace.LangiumDocumentFactory.fromString(
+            src, URI.parse('file:///race.findsl'),
+        );
+        services.Findsl.shared.workspace.LangiumDocuments.addDocument(doc);
+
+        // KEIN explizites `await DocumentBuilder.build([doc], …)` —
+        // wir stoßen den Build nur asynchron an und rufen sofort den
+        // Provider auf. Der Build läuft im Hintergrund weiter.
+        void services.Findsl.shared.workspace.DocumentBuilder.build([doc], { validation: false });
+
+        const lenses = await services.Findsl.lsp.CodeLensProvider!.provideCodeLens(doc, {
+            textDocument: { uri: doc.uri.toString() },
+        });
+
+        expect(lenses).toBeDefined();
+        expect(lenses).toHaveLength(2);
+        expect(lenses![0].command!.title).toBe('▶ 1 Testfall ausführen');
+        expect(lenses![1].command!.title).toBe('▶ 2 Testfälle ausführen');
+    });
 });
 
 describe('Kommando findsl.pruefe.run', () => {

@@ -28,6 +28,11 @@ import {
 import { collectAbbruchSites, type AbbruchSite } from '../language/findsl-abbruch-sites.js';
 import { commonBase, displayId, isInternalName } from '../language/import-path.js';
 import { parseQuelleRefs, linkifyQuelleProsa, type QuelleRef } from './quelle.js';
+import {
+    parseDocTags,
+    stripDocMarkers,
+    type ParamDoc as SharedParamDoc,
+} from '../language/doc-tags.js';
 
 export interface QuelleEntry {
     /** Roher `@Quelle`-Text ohne Anführungszeichen. */
@@ -43,10 +48,9 @@ export interface FieldDoc {
     readonly doc?: string;
 }
 
-export interface ParamDoc {
-    readonly name: string;
-    readonly desc: string;
-}
+/** Re-Export aus dem Shared-Modul, damit Konsumenten (`markdown.ts`,
+ *  `model.ts`) den Typ weiter aus `docgen/model.ts` importieren können. */
+export type ParamDoc = SharedParamDoc;
 
 export interface DeclDoc {
     readonly kind: 'konst' | 'fn' | 'datensatz' | 'aufzählung' | 'prüfe';
@@ -87,67 +91,6 @@ export interface ModuleDoc {
 
 export interface DocModel {
     readonly modules: ReadonlyArray<ModuleDoc>;
-}
-
-/** Entfernt die `--`-Doc-Marker und führende/abschließende Leerzeile. */
-function stripDocMarkers(raw: string | undefined): string {
-    if (!raw) return '';
-    let s = raw;
-    if (s.startsWith('--')) s = s.slice(2);
-    if (s.endsWith('--'))   s = s.slice(0, -2);
-    return s.replace(/^\s*\n/, '').replace(/\n\s*$/, '').trim();
-}
-
-/**
- * Trennt `@param <name> …` / `@rückgabe …` aus dem Doc-Markdown
- * heraus → strukturierte Tags + bereinigte Prosa. Fortsetzungszeilen
- * sind eingerückt (Ausrichtung); eine nicht-eingerückte oder leere
- * Zeile beendet einen Tag. Innerhalb von ``` … ```-Codeblöcken wird
- * NICHT geparst (Tags bleiben dort wörtlich in der Prosa).
- */
-function parseDocTags(doc: string): {
-    prose: string;
-    params: ParamDoc[];
-    returns?: string;
-} {
-    const proseLines: string[] = [];
-    const params: ParamDoc[] = [];
-    let returns: string | undefined;
-    let fence = false;
-    let mathBlock = false;
-    let active: { kind: 'param' | 'return'; name?: string; parts: string[] } | null = null;
-    const flush = (): void => {
-        if (!active) return;
-        const desc = active.parts.join(' ').replace(/\s+/g, ' ').trim();
-        if (active.kind === 'param' && active.name) {
-            params.push({ name: active.name, desc });
-        } else if (active.kind === 'return') {
-            returns = desc;
-        }
-        active = null;
-    };
-    for (const ln of doc.split('\n')) {
-        if (/^\s*```/.test(ln)) { flush(); fence = !fence; proseLines.push(ln); continue; }
-        if (fence) { proseLines.push(ln); continue; }
-        // Mehrzeilige `$$…$$`-Mathe wie Fences behandeln: Zeilen darin
-        // sind Prosa und dürfen `@param`/`@rückgabe` NICHT triggern
-        // (eine ungerade `$$`-Anzahl öffnet/schließt den Block).
-        const dd = (ln.match(/\$\$/g) ?? []).length;
-        if (mathBlock) { proseLines.push(ln); if (dd % 2 === 1) mathBlock = false; continue; }
-        if (dd % 2 === 1) { flush(); mathBlock = true; proseLines.push(ln); continue; }
-        const pm = ln.match(/^@param\s+(\S+)\s*(.*)$/u);
-        const rm = ln.match(/^@rückgabe\s*(.*)$/u);
-        if (pm) { flush(); active = { kind: 'param', name: pm[1], parts: pm[2] ? [pm[2]] : [] }; continue; }
-        if (rm) { flush(); active = { kind: 'return', parts: rm[1] ? [rm[1]] : [] }; continue; }
-        if (active) {
-            if (/^\s+\S/.test(ln)) { active.parts.push(ln.trim()); continue; }
-            flush();
-        }
-        proseLines.push(ln);
-    }
-    flush();
-    const prose = proseLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-    return { prose, params, returns };
 }
 
 /** Sammelt rekursiv alle `.findsl`-Dateien unter `root` (Datei → [Datei]). */

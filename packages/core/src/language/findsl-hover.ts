@@ -65,6 +65,7 @@ import {
     type TypeAtom,
 } from './generated/ast.js';
 import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
+import { parseDocTags, stripDocMarkers as stripMarkersShared } from './doc-tags.js';
 import * as path from 'node:path';
 import { BUILTIN_ENUM_DEFS, BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
 import {
@@ -552,8 +553,25 @@ function formatAusgabe(): string {
 }
 
 function formatKonst(decl: KonstDecl): string {
-    const sig = fence(`konst ${decl.name}: ${typeToString(decl.type)}`);
+    // Wert in die Code-Signatur einweben (Issue #65 B1) — Konstanten-
+    // Werte sind in einem Steuer-DSL primäres Interesse beim Hover
+    // (Tarifeckwert, Hebesatz, Grundfreibetrag …). Lange/mehrzeilige
+    // Werte (z. B. Datensatz-Konstruktoren) bekommen `…` als Ellipse.
+    const valueText = compactValueText(decl.value?.$cstNode?.text);
+    const head = `konst ${decl.name}: ${typeToString(decl.type)}`;
+    const sig = fence(valueText ? `${head} = ${valueText}` : head);
     return joinSections(sig, formatDocPrefix(decl.docPrefix));
+}
+
+/** Macht aus dem CST-Text eines Wertes eine einzeilige, gekürzte Form
+ *  für die Hover-Code-Zeile. Mehrzeilige Werte werden zur ersten Zeile
+ *  gekürzt; lange Werte (>60 Zeichen) werden mit `…` abgeschnitten. */
+function compactValueText(raw: string | undefined): string {
+    if (!raw) return '';
+    const trimmed = raw.replace(/\s+/g, ' ').trim();
+    if (!trimmed) return '';
+    const MAX = 60;
+    return trimmed.length > MAX ? trimmed.slice(0, MAX - 1) + '…' : trimmed;
 }
 
 function formatFunktion(decl: FunktionDecl): string {
@@ -583,7 +601,19 @@ function formatAufzaehlung(decl: AufzaehlungDecl): string {
 
 function formatField(field: Field): string {
     const def = field.default ? ' = …' : '';
-    return fence(`Feld ${field.name}: ${typeToString(field.type)}${def}`);
+    const sig = fence(`Feld ${field.name}: ${typeToString(field.type)}${def}`);
+    // Issue #65 B2: Beschreibung aus dem `@param <fieldName>`-Eintrag
+    // des umschließenden `datensatz`-Doc-Kommentars in die Hover-Karte
+    // ziehen, falls vorhanden.
+    const datensatz = field.$container as DatensatzDecl | undefined;
+    const docRaw = datensatz?.docPrefix?.doc;
+    if (!docRaw) return sig;
+    const { params } = parseDocTags(stripMarkersShared(docRaw));
+    const match = params.find((p) => p.name === field.name);
+    if (!match?.desc) return sig;
+    // Blockquote unter der Signatur — visuell klar getrennt, im Markdown
+    // sauber lesbar.
+    return joinSections(sig, `> ${match.desc}`);
 }
 
 function formatParam(param: Param): string {

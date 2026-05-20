@@ -101,14 +101,17 @@ export type IrExpr =
     | { readonly kind: 'listLit'; readonly elementJavaType: string; readonly items: ReadonlyArray<IrExpr> }
     /**
      * §-11.2-Listen-Methode ohne Argument (`.länge`/`.summe()`/`.leer`/
-     * `.größtes()`/`.kleinstes()`). `.leer` ist getter-like (FieldAccess
-     * im AST, kein Call), aber im Generat `xs.leer()` — die Runtime hat
-     * konsistent eine Methode.
+     * `.größtes()`/`.kleinstes()`/`.kopf`/`.rest`/`.zähle()`).
+     * Getter-like (FieldAccess ohne Call: `.leer`/`.kopf`/`.rest`) und
+     * call-form (`.summe()`/`.größtes()`/`.kleinstes()`/`.zähle()`)
+     * werden gleich behandelt — die Runtime hat konsistent eine Methode.
      */
     | {
         readonly kind: 'listMethod';
         readonly receiver: IrExpr;
-        readonly method: 'laenge' | 'summe' | 'leer' | 'groesstes' | 'kleinstes';
+        readonly method:
+            | 'laenge' | 'summe' | 'leer' | 'groesstes' | 'kleinstes'
+            | 'kopf' | 'rest' | 'zaehle';
       }
     /** `.zuordnen(lambda)` — Argument typsicher (kein optionales Feld). */
     | { readonly kind: 'listMap'; readonly receiver: IrExpr; readonly fn: IrExpr }
@@ -118,10 +121,22 @@ export type IrExpr =
      */
     | { readonly kind: 'listFilter'; readonly receiver: IrExpr; readonly fn: IrExpr }
     /**
+     * §-11.2 `.zähle(p)` mit Lambda-Prädikat → `Ganzzahl` (Anzahl
+     * Treffer). Runtime-Methode `zaehleMit` — Name vermeidet Kollision
+     * mit der parameterlosen `zaehle()`.
+     */
+    | { readonly kind: 'listCountWhere'; readonly receiver: IrExpr; readonly fn: IrExpr }
+    /**
      * §-11.2 `.enthält(x)` mit Wert-Argument → boolean. Argument wird
      * im Lowering ggf. geboxt; Vergleich liegt in der Runtime.
      */
     | { readonly kind: 'listContains'; readonly receiver: IrExpr; readonly value: IrExpr }
+    /**
+     * §-11.2 `.bei(i)` bzw. `[i]` — Element bei 0-basiertem Index.
+     * `[i]` wird im Lowering auf denselben Knoten gemappt; die beiden
+     * Syntax-Formen sind semantisch identisch.
+     */
+    | { readonly kind: 'listAt'; readonly receiver: IrExpr; readonly index: IrExpr }
     /** Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1). */
     | { readonly kind: 'lambda1'; readonly param: string; readonly body: IrExpr }
     /**

@@ -608,6 +608,66 @@ describe('Issue #44 — Listen-Methoden .leer/.enthält/.filtern/.größtes/.kle
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Lücke 9 (Rest): .kopf/.rest/.bei(i)/[i]/.zähle()/.zähle(p)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Listen-Methoden Rest (kopf/rest/bei/zähle)', () => {
+    it('.kopf → erstes Element', async () => {
+        const program = await parseSource(
+            'fn First(xs: Liste<Ganzzahl>): Ganzzahl = xs.kopf\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return Ganzzahl.von(xs.kopf());');
+    });
+
+    it('.rest → Liste ohne erstes Element', async () => {
+        const program = await parseSource(
+            'fn Tail(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.rest\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return xs.rest();');
+    });
+
+    it('.zähle() (parameterlos) → Anzahl insgesamt', async () => {
+        const program = await parseSource(
+            'fn N(xs: Liste<Ganzzahl>): Ganzzahl = xs.zähle()\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return Ganzzahl.von(xs.zaehle());');
+    });
+
+    it('.zähle(p) mit Prädikat → Anzahl Treffer', async () => {
+        const program = await parseSource(
+            'fn NPos(xs: Liste<Ganzzahl>): Ganzzahl = xs.zähle { x -> x > 0 }\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain(
+            'return Ganzzahl.von(xs.zaehleMit((x) -> x.compareValue(FinDslNumber.ganzzahl("0")) > 0));');
+    });
+
+    it('.bei(i) → Element bei Index i', async () => {
+        const program = await parseSource(
+            'fn At(xs: Liste<Ganzzahl>, i: Ganzzahl): Ganzzahl = xs.bei(i)\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return Ganzzahl.von(xs.bei(i));');
+    });
+
+    it('[i] (Index-Syntax) → identisch zu .bei(i)', async () => {
+        const program = await parseSource(
+            'fn At2(xs: Liste<Ganzzahl>, i: Ganzzahl): Ganzzahl = xs[i]\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return Ganzzahl.von(xs.bei(i));');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

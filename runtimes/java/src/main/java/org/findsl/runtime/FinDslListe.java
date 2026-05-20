@@ -207,6 +207,83 @@ public record FinDslListe<E>(List<E> elements) {
     }
 
     /**
+     * {@code .kopf} (SPEC § 11.2): erstes Element. Wirft bei leerer
+     * Liste (wie das Orakel).
+     *
+     * @return erstes Element.
+     * @throws FinDslRuntimeError bei leerer Liste.
+     */
+    public E kopf() {
+        if (elements.isEmpty()) {
+            throw new FinDslRuntimeError(
+                "Liste.kopf auf leerer Liste (SPEC § 11.2).");
+        }
+        return elements.get(0);
+    }
+
+    /**
+     * {@code .rest} (SPEC § 11.2): neue Liste ohne das erste Element.
+     * Wirft bei leerer Liste (wie das Orakel).
+     *
+     * @return Liste ohne erstes Element.
+     * @throws FinDslRuntimeError bei leerer Liste.
+     */
+    public FinDslListe<E> rest() {
+        if (elements.isEmpty()) {
+            throw new FinDslRuntimeError(
+                "Liste.rest auf leerer Liste (SPEC § 11.2).");
+        }
+        return new FinDslListe<>(new ArrayList<>(elements.subList(1, elements.size())));
+    }
+
+    /**
+     * {@code .bei(i)} bzw. {@code [i]} (SPEC § 11.2): Element bei
+     * 0-basiertem Index. Index wird als {@link FinDslNumber} übergeben
+     * (Spiegel des Interpreter-Verhaltens — Ganzzahl, exakt). Wirft
+     * bei Index out of range.
+     *
+     * @param i 0-basierter Index.
+     * @return Element bei Position {@code i}.
+     * @throws FinDslRuntimeError bei ungültigem Index.
+     */
+    public E bei(FinDslNumber i) {
+        int idx = Integer.parseInt(i.asText());
+        if (idx < 0 || idx >= elements.size()) {
+            throw new FinDslRuntimeError(
+                "Liste.bei: Index " + idx + " außerhalb [0, " + elements.size() + ").");
+        }
+        return elements.get(idx);
+    }
+
+    /**
+     * {@code .zähle()} (SPEC § 11.2): Anzahl aller Elemente. Funktional
+     * identisch zu {@link #laenge()}, aber als eigene Methode für die
+     * Symmetrie zur Predikat-Form {@link #zaehleMit}.
+     *
+     * @return Anzahl als {@link FinDslNumber} ({@code Ganzzahl}).
+     */
+    public FinDslNumber zaehle() {
+        return laenge();
+    }
+
+    /**
+     * {@code .zähle(p)} (SPEC § 11.2): Anzahl der Elemente, für die
+     * {@code p} {@code true} zurückgibt.
+     *
+     * @param p Prädikat-Lambda.
+     * @return Anzahl Treffer als {@link FinDslNumber} ({@code Ganzzahl}).
+     */
+    public FinDslNumber zaehleMit(FinDslLambda1<E, Boolean> p) {
+        long count = 0;
+        for (E e : elements) {
+            if (Boolean.TRUE.equals(p.apply(e))) {
+                count++;
+            }
+        }
+        return FinDslNumber.ganzzahl(String.valueOf(count));
+    }
+
+    /**
      * Castet ein Element zu {@link FinDslNumber} oder wirft (wie das
      * Orakel bei nicht-numerischer Liste).
      *

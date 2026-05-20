@@ -555,8 +555,13 @@ function lowerChainOps(
     let i = 0;
     while (i < chain.length) {
         const op = chain[i];
+        // (#44 L9-Rest) `[i]` (Index-Syntax) → semantisch identisch zu
+        // `.bei(i)`. Lower auf denselben Knoten.
         if (isIndex(op)) {
-            throw new Error('Listen-Index `[i]` ist Phase-3-Scope (est nutzt ihn nicht).');
+            const ix = (op as { index: Expr }).index;
+            cur = { kind: 'listAt', receiver: cur, index: lowerExpr(ix, reg) };
+            i += 1;
+            continue;
         }
         if (!isFieldAccess(op) || !op.name) {
             throw new Error('Ketten-Glied außerhalb des Scopes (Phase 3).');
@@ -580,20 +585,29 @@ function lowerChainOps(
             if (fname === 'abrunden' || fname === 'aufrunden') {
                 const target = governingMoneyTarget(op) ?? 'Ganzzahl';
                 cur = { kind: 'round', receiver: cur, mode: fname, target: target as ZielTyp };
-            } else if (fname === 'zuordnen' || fname === 'filtern') {
-                // Lambda-Param-Typ = Element-Typ des Empfängers
-                // (`Liste<E>`) → in die Sicht eintragen, damit `e.feld`
-                // im Lambda-Rumpf korrekt unboxt (z. B. `k.faktor()`).
-                const recvAtom = namedAtom(exprFinDslType(cur, reg));
-                const elemT = recvAtom?.name === 'Liste'
-                    ? recvAtom.typeArgs?.args?.[0] : undefined;
-                const lam = call.args[0]?.value;
-                if (isLambda(lam) && lam.params.length === 1) {
-                    reg.scopeTypes.set(lam.params[0].name, elemT);
+            } else if (fname === 'zuordnen' || fname === 'filtern' || fname === 'zähle') {
+                // .zähle() ohne Args → parameterloser Listen-Methoden-Pfad
+                // (kein Lambda-Scope nötig).
+                if (fname === 'zähle' && call.args.length === 0) {
+                    cur = { kind: 'listMethod', receiver: cur, method: 'zaehle' };
+                } else {
+                    // Lambda-Param-Typ = Element-Typ des Empfängers
+                    // (`Liste<E>`) → in die Sicht eintragen, damit `e.feld`
+                    // im Lambda-Rumpf korrekt unboxt (z. B. `k.faktor()`).
+                    const recvAtom = namedAtom(exprFinDslType(cur, reg));
+                    const elemT = recvAtom?.name === 'Liste'
+                        ? recvAtom.typeArgs?.args?.[0] : undefined;
+                    const lam = call.args[0]?.value;
+                    if (isLambda(lam) && lam.params.length === 1) {
+                        reg.scopeTypes.set(lam.params[0].name, elemT);
+                    }
+                    const lambdaArg = lowerLambdaArg(call.args, reg);
+                    cur = fname === 'zuordnen'
+                        ? { kind: 'listMap', receiver: cur, fn: lambdaArg }
+                        : fname === 'filtern'
+                        ? { kind: 'listFilter', receiver: cur, fn: lambdaArg }
+                        : { kind: 'listCountWhere', receiver: cur, fn: lambdaArg };
                 }
-                cur = fname === 'zuordnen'
-                    ? { kind: 'listMap', receiver: cur, fn: lowerLambdaArg(call.args, reg) }
-                    : { kind: 'listFilter', receiver: cur, fn: lowerLambdaArg(call.args, reg) };
             } else if (fname === 'summe' || fname === 'größtes' || fname === 'kleinstes') {
                 if (call.args.length !== 0) {
                     throw new Error(`\`.${fname}()\` erwartet keine Argumente.`);
@@ -610,17 +624,29 @@ function lowerChainOps(
                     receiver: cur,
                     value: lowerExpr(call.args[0].value, reg),
                 };
+            } else if (fname === 'bei') {
+                if (call.args.length !== 1) {
+                    throw new Error('`.bei(i)` erwartet genau ein Argument.');
+                }
+                cur = {
+                    kind: 'listAt',
+                    receiver: cur,
+                    index: lowerExpr(call.args[0].value, reg),
+                };
             } else {
                 throw new Error(`Listen-/Skalar-Methode "${fname}" ist Phase-3-Scope (est nutzt sie nicht).`);
             }
             i += chainStep;
         } else {
-            if (fname === 'länge') {
-                cur = { kind: 'listMethod', receiver: cur, method: 'laenge' };
-            } else if (fname === 'leer') {
-                // SPEC § 11.2: getter-like (kein Call-Klammern) →
-                // Runtime-Methode `leer()` (#44 L9).
-                cur = { kind: 'listMethod', receiver: cur, method: 'leer' };
+            // SPEC § 11.2: getter-like Listen-Methoden (kein
+            // Call-Klammern) — `.länge`/`.leer`/`.kopf`/`.rest`.
+            // Runtime hat konsistent Methoden mit `()`.
+            const getterLike: Record<string, 'laenge' | 'leer' | 'kopf' | 'rest'> = {
+                länge: 'laenge', leer: 'leer', kopf: 'kopf', rest: 'rest',
+            };
+            const getter = getterLike[fname];
+            if (getter !== undefined) {
+                cur = { kind: 'listMethod', receiver: cur, method: getter };
             } else {
                 // (C): Feld ist Sicht-Subtyp IS-A FinDslNumber → kein Unbox.
                 cur = { kind: 'field', receiver: cur, name: fname };

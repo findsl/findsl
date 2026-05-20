@@ -668,6 +668,26 @@ describe('Issue #44 — Listen-Methoden Rest (kopf/rest/bei/zähle)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Lücke 9 Abschluss: .zusammenfassen (Fold/Reduce, FinDslLambda2)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — .zusammenfassen(start, f) mit 2-stelligem Lambda', () => {
+    it('.zusammenfassen(0, { a, x -> a + x }) → Fold-Generat mit lambda2', async () => {
+        const program = await parseSource(
+            'fn Sum(xs: Liste<Ganzzahl>): Ganzzahl = xs.zusammenfassen(0, { a, x -> a + x })\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain(
+            'xs.zusammenfassen(FinDslNumber.ganzzahl("0"), (a, x) -> a.add(x))');
+    });
+
+    // Trailing-Lambda NACH Call-mit-Args (`zusammenfassen(0) { a, x -> … }`)
+    // ist eine SEPARATE Grammatik-Erweiterung über PR #50 hinaus — die
+    // aktuelle Grammatik erlaubt Trailing-Lambda nur unmittelbar nach
+    // FieldAccess. Folge-PR.
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

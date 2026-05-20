@@ -154,6 +154,10 @@ function emitExpr(e: IrExpr): string {
             return `${emitExpr(e.receiver)}.enthaelt(${emitExpr(e.value)})`;
         case 'listAt':
             return `${emitExpr(e.receiver)}.bei(${emitExpr(e.index)})`;
+        case 'listFold':
+            return `${emitExpr(e.receiver)}.zusammenfassen(${emitExpr(e.start)}, ${emitExpr(e.fn)})`;
+        case 'lambda2':
+            return `(${e.param1}, ${e.param2}) -> ${emitExpr(e.body)}`;
         case 'lambda1':
             return `(${e.param}) -> ${emitExpr(e.body)}`;
         case 'strInterp': {

@@ -633,6 +633,41 @@ function lowerChainOps(
                     receiver: cur,
                     index: lowerExpr(call.args[0].value, reg),
                 };
+            } else if (fname === 'zusammenfassen') {
+                // (#44 L9-Folge) SPEC § 11.2 Fold/Reduce —
+                // `.zusammenfassen(start, { a, x -> body })`. Element-
+                // Typ des Empfängers für die Lambda-Sicht (param2);
+                // param1 (Akku) bleibt ohne deklarierten FinDSL-Typ
+                // (Java-Lambda-Inferenz übernimmt) — die meisten
+                // realen Folds halten den Akku numerisch.
+                if (call.args.length !== 2) {
+                    throw new Error('`.zusammenfassen(start, fn)` erwartet genau zwei Argumente.');
+                }
+                const lam = call.args[1].value;
+                if (!isLambda(lam) || lam.params.length !== 2) {
+                    throw new Error(
+                        '`.zusammenfassen`-Reduktion muss ein 2-stelliges Lambda sein.');
+                }
+                if (!lam.result) throw new Error('Lambda ohne Ergebnis (Teil-Parse).');
+                if (lam.stmts.length > 0) {
+                    throw new Error(
+                        'Block-Lambda als `.zusammenfassen`-Argument ist Phase-3-Scope.');
+                }
+                const recvAtom = namedAtom(exprFinDslType(cur, reg));
+                const elemT = recvAtom?.name === 'Liste'
+                    ? recvAtom.typeArgs?.args?.[0] : undefined;
+                reg.scopeTypes.set(lam.params[1].name, elemT);
+                cur = {
+                    kind: 'listFold',
+                    receiver: cur,
+                    start: lowerExpr(call.args[0].value, reg),
+                    fn: {
+                        kind: 'lambda2',
+                        param1: lam.params[0].name,
+                        param2: lam.params[1].name,
+                        body: lowerExpr(lam.result, reg),
+                    },
+                };
             } else {
                 throw new Error(`Listen-/Skalar-Methode "${fname}" ist Phase-3-Scope (est nutzt sie nicht).`);
             }

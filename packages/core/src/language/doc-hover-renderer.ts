@@ -29,6 +29,7 @@
  */
 
 import { parseDocTags, stripDocMarkers } from './doc-tags.js';
+import { texToPlain } from './tex-to-plain.js';
 
 export interface QuelleAnnotation {
     readonly value: string;
@@ -86,27 +87,37 @@ export function renderDocForHover(input: RenderInput): string {
 /**
  * Bereitet die Prosa für die Hover-Karte auf:
  *
- * - Block-Math (`$$…$$`) bleibt als Fenced Code-Block (CommonMark-
- *   konform; LSP-Clients rendern es als Code, nicht als formatierte
- *   Formel — sicherer Lower-Bound).
- * - Inline-Math (`$…$`) wird zu einem Backtick-Code-Span.
+ * - Block-Math (`$$…$$`) → über `texToPlain` zu lesbarem Plain-Text
+ *   gewandelt + als Fenced Code-Block ausgegeben (LSP-Clients wie
+ *   VS Code rendern keinen KaTeX im Hover; der Klartext ist im Editor
+ *   sofort verständlich).
+ * - Inline-Math (`$…$`) → via `texToPlain` zu Plain-Text + als
+ *   Backtick-Code-Span. Beispiel: `$\frac{a}{b}$` → `` `(a)/(b)` ``.
  * - Mehrfache Leerzeilen werden auf Doppel-Leerzeile reduziert.
+ *
+ * Hintergrund: VS Code unterstützt **kein KaTeX-Rendering** in
+ * Hover-Karten. Roher TeX (`\frac{...}{...}`, `\cdot`, `\geq`) ist
+ * unleserlich, ein ```math-Block bleibt ebenfalls Roh-Text. Klartext
+ * via `texToPlain` (= derselbe Algorithmus wie der PDF-Inline-
+ * Fallback) ist die portable Lower-Bound-Lösung für alle Editoren.
  */
 function formatProse(prose: string): string {
     if (!prose) return '';
     let out = prose;
-    // Block-Math: `$$ ... $$` → ```math\n ... \n```
-    out = out.replace(/\$\$([\s\S]+?)\$\$/g, (_m, inner: string) =>
-        '```math\n' + inner.trim() + '\n```');
-    // Inline-Math: `$x + y$` → `` `x + y` ``. Vorsicht: nicht innerhalb
-    // bereits gefencteter Code-Blöcke ersetzen — die `$` darin sind
-    // erhalten. Pragmatischer Test: nur ersetzen, wenn der `$…$`-Bereich
-    // KEINEN Zeilenumbruch enthält (sonst meist Block-Math oder Latex-
-    // Konstrukt). Fenced Code-Blöcke werden vorerst nicht maskiert —
-    // im Korpus tritt Inline-Math fast nie innerhalb von ```-Fences auf.
-    out = out.replace(/\$([^\n$]+?)\$/g, (_m, inner: string) =>
-        '`' + inner.trim() + '`');
-    // Drei oder mehr Newlines → genau zwei.
+    // Block-Math: `$$ ... $$` → klartext-gerenderter ```findsl-Block.
+    // `findsl`-Sprache, damit das Syntax-Highlighting-Theme einen
+    // ruhigen Hintergrund gibt — der Inhalt selbst ist Plain-Text.
+    out = out.replace(/\$\$([\s\S]+?)\$\$/g, (_m, inner: string) => {
+        const plain = texToPlain(inner.trim());
+        return '```findsl\n' + plain + '\n```';
+    });
+    // Inline-Math: `$x + y$` → `` `x + y` `` (Klartext, kein TeX).
+    // Vorsicht: nicht innerhalb bereits gefencter Code-Blöcke ersetzen
+    // (sehr selten im Korpus; pragmatisch akzeptiert).
+    out = out.replace(/\$([^\n$]+?)\$/g, (_m, inner: string) => {
+        const plain = texToPlain(inner.trim());
+        return '`' + plain + '`';
+    });
     out = out.replace(/\n{3,}/g, '\n\n');
     return out.trim();
 }

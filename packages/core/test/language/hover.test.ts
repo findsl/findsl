@@ -549,25 +549,27 @@ datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
         expect(yIdx).toBeGreaterThan(xIdx);
     });
 
-    it('Mathematische Notation $x + y$ wird als Code-Span gerendert', async () => {
+    it('Inline-Math `$x \\cdot y$` wird via texToPlain zu lesbarem Klartext (Issue #65)', async () => {
         const src = `--
 Datei-Dokumentation.
 --
 
 --
-Berechnet die Tarifkurve nach $T(zve) = a \\cdot zve + b$.
+Berechnet die Tarifkurve nach $T(\\text{zve}) = a \\cdot \\text{zve} + b$.
 --
 fn T(zve: Euro): Euro = zve
 `;
         const h = await hoverAt(src, 'fn T');
         const md = content(h);
-        // Inline-Math soll als Backtick-Code-Span erscheinen — nicht
-        // mehr im rohen $…$-Format.
-        expect(md).toContain('`T(zve) = a \\cdot zve + b`');
-        expect(md).not.toMatch(/\$T\(zve\).*?\$/);
+        // Inline-Math soll als Backtick-Code-Span mit Klartext
+        // erscheinen — `\cdot` → `·`, `\text{...}` aufgelöst, **kein**
+        // rohes TeX mehr (VS Code rendert keinen KaTeX im Hover).
+        expect(md).toContain('`T(zve) = a · zve + b`');
+        expect(md).not.toContain('\\cdot');
+        expect(md).not.toMatch(/\$T\(.*\$/);
     });
 
-    it('Mathematische Block-Notation $$ … $$ wird zu Fenced Code-Block', async () => {
+    it('Block-Math `$$ \\frac{a}{b} $$` wird via texToPlain zu lesbarer Fenced-Code-Block (Issue #65)', async () => {
         const src = `--
 Datei-Dokumentation.
 --
@@ -576,15 +578,53 @@ Datei-Dokumentation.
 Tarifformel:
 
 $$
-T(zve) = a \\cdot zve + b
+y = \\frac{\\text{zvE} - \\text{GFB}}{10000}
 $$
 --
 fn T(zve: Euro): Euro = zve
 `;
         const h = await hoverAt(src, 'fn T');
         const md = content(h);
-        expect(md).toContain('```math');
-        expect(md).toContain('T(zve) = a \\cdot zve + b');
+        // Block-Math soll als Fenced ```findsl-Block mit Klartext
+        // erscheinen — `\frac{a}{b}` → `(a)/(b)`, kein rohes TeX.
+        expect(md).toContain('y = (zvE - GFB)/10000');
+        expect(md).not.toContain('\\frac');
+        expect(md).not.toContain('\\text');
+    });
+
+    it('User-Bug est.findsl: komplexe `\\frac{...}{...}` + `\\cases` aus EstGrundtarif (Issue #65)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Tariflicher Einkommensteuerbetrag nach dem Grundtarif.
+
+Mit den Hilfsgrößen $y = \\frac{\\text{zvE} - \\text{GFB}}{10000}$ (Zone 2)
+und $z = \\frac{\\text{zvE} - \\text{ZONE\\_2}}{10000}$ (Zone 3) lautet
+der Tarif zonenweise:
+
+$$
+\\text{ESt}(\\text{zvE}) =
+\\begin{cases}
+0 & \\text{zvE} \\le \\text{GFB} \\\\
+(a_2\\,y + b_2)\\,y & \\text{Zone 2}
+\\end{cases}
+$$
+--
+fn EstGrundtarif(zve: Euro): Euro = zve
+`;
+        const h = await hoverAt(src, 'fn EstGrundtarif');
+        const md = content(h);
+        // Inline-Hilfsgrößen lesbar
+        expect(md).toContain('`y = (zvE - GFB)/10000`');
+        expect(md).toContain('`z = (zvE - ZONE_2)/10000`');
+        // Block-Formel: \cases, \cdot, \le werden zu lesbaren Operatoren
+        expect(md).toContain('ESt(zvE)');
+        expect(md).toContain('zvE <= GFB');
+        expect(md).not.toContain('\\frac');
+        expect(md).not.toContain('\\cdot');
+        expect(md).not.toContain('\\le');
     });
 
     it('Funktion ohne @param-Tags zeigt nur Prosa (keine leere Parameter-Sektion)', async () => {

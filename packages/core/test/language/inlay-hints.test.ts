@@ -329,12 +329,17 @@ describe('Inlay-Hints: Symbol in +/- -Ausdruck (Typ-Propagierung)', () => {
         expect(types(hs).some((h) => h.position.line === 1 && h.label === '¢')).toBe(true);
     });
 
-    it('* / propagieren NICHT (wie Type-Checker): B * 2 ohne Symbol am 2', async () => {
+    it('* / rekurrieren in Operanden (Issue #65): B * 2 → "€" am B, KEIN Symbol am 2', async () => {
+        // Issue #65: Geld-Konstanten/Refs in `*`-Ketten sollen sichtbar
+        // sein (User-Bug: `(KFB + BEA) * k.faktor * k.auslandsfaktor`).
+        // Die Filterung geschieht über `moneySymbol(typeMap.get(expr))`:
+        // `B` ist Euro → €, `2` ist Ganzzahl → kein Symbol.
         const hs = await hints(
             'konst B: Euro = 233\nkonst R: EuroCent = B * 2\n',
         );
-        // nur ggf. Symbol an B selbst nicht (B ist Referenz); am `2` keiner.
-        expect(types(hs).some((h) => h.position.line === 1)).toBe(false);
+        const z1 = types(hs).filter((h) => h.position.line === 1);
+        expect(z1.length).toBe(1);
+        expect(z1[0].label).toBe('€');
     });
 });
 
@@ -546,5 +551,29 @@ describe('Inlay-Hints: Field-Zugriff aus Lambda-Param in HOF (Issue #65)', () =>
             + '    }\n',
         );
         expect(labels(types(hs))).toContain('€');
+    });
+
+    it('User-Bug: `(KFB + BEA) * k.faktor * k.auslandsfaktor` → "€" an KFB+BEA, "%" an auslandsfaktor', async () => {
+        // Exakter User-Bug aus est.findsl `KinderfreibetragGesamt`:
+        // bei einer komplexen Multiplikations-Kette innerhalb einer
+        // Lambda müssen alle Geld-/Prozent-Sub-Ausdrücke sichtbar sein.
+        const hs = await hints(
+            'konst KINDERFREIBETRAG: Euro = 3.000\n'
+            + 'konst BEA_FREIBETRAG:  Euro = 1.464\n'
+            + 'konst ZWOELF: Ganzzahl = 12\n'
+            + 'datensatz Kind(faktor: Ganzzahl, berücksichtigteMonate: Ganzzahl, auslandsfaktor: Prozent)\n'
+            + 'fn Summe(kinder: Liste<Kind>): Euro =\n'
+            + '    kinder.zuordnen( { k ->\n'
+            + '        (KINDERFREIBETRAG + BEA_FREIBETRAG)\n'
+            + '            * k.faktor\n'
+            + '            * (k.berücksichtigteMonate / ZWOELF)\n'
+            + '            * k.auslandsfaktor\n'
+            + '    } ).summe()\n',
+        );
+        const labelList = labels(types(hs));
+        // Mindestens ein € (für die Geld-Konstanten oder die Paren-Klammer)
+        // und mindestens ein % (für k.auslandsfaktor).
+        expect(labelList).toContain('€');
+        expect(labelList).toContain('%');
     });
 });

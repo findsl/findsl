@@ -271,8 +271,15 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
         if (isBinaryOp(expr)) {
             const op = expr.op;
             if (op === '+' || op === '-'
+                || op === '*' || op === '/'
                 || op === '==' || op === '!=' || op === '<'
                 || op === '<=' || op === '>' || op === '>=') {
+                // Issue #65 Folge: auch `*` und `/` rekurrieren in beide
+                // Operanden — sonst bleiben Geld-/Prozent-Konstanten in
+                // Multiplikations-Ketten (z. B. `(KFB + BEA) * k.faktor`)
+                // unsichtbar. `emitLeaf` filtert via `typeMap.get(expr)`,
+                // sodass nur Operanden mit Geld-/Prozent-Tag tatsächlich
+                // einen Hint erhalten.
                 this.emitMoney(expr.left, acceptor);
                 this.emitMoney(expr.right, acceptor);
                 return;
@@ -353,12 +360,6 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
 }
 
 /**
- * Einheiten-Symbol für einen (ggf. nullable) Geld-/Prozent-Typ:
- * `Euro`/`EuroCent` → `€`, `Cent` → `¢`, `Prozent` → `%`; sonst
- * (Zahl, Nicht-Einheit) `undefined`. Doppelhints an `19%`-Literalen
- * werden in `emitLeaf` verhindert (Suffix-Skip).
- */
-/**
  * Einheiten-Symbol aus dem Typ-AST-Namen (für Stellen, an denen es
  * nur eine Typ-Annotation gibt, nicht ein typisierter Ausdruck — z. B.
  * `Field`/`Param` ohne Default).
@@ -370,6 +371,12 @@ function unitNameSymbol(typeName: string | undefined): string | undefined {
     return undefined;
 }
 
+/**
+ * Einheiten-Symbol für einen (ggf. nullable) Geld-/Prozent-Typ:
+ * `Euro`/`EuroCent` → `€`, `Cent` → `¢`, `Prozent` → `%`; sonst
+ * (Zahl, Nicht-Einheit) `undefined`. Doppelhints an `19%`-Literalen
+ * werden in `emitLeaf` verhindert (Suffix-Skip).
+ */
 function unitSymbol(t: Type | undefined): string | undefined {
     let cur = t;
     while (cur && cur.kind === 'nullable') cur = cur.inner;

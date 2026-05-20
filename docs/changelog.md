@@ -2,7 +2,27 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
-*Letzte Aktualisierung: 2026-05-18 — **§ 11-Stdlib auf Empfänger-
+*Letzte Aktualisierung: 2026-05-20 — **Test-Abdeckungs-Korpus
+`examples/simple/` Foundation (Issue #43, PR 1).** Drei thematische
+Cluster (`simple-typen`, `simple-ausdruecke`, `simple-funktionen`)
+mit 1:1-Begleit-`prüfe`-Tests decken die codegen-tauglichen SPEC-
+Konstrukte (§ 2.7 numerische Literale, § 3 numerische Typen +
+Aufzählung + Datensatz, § 4.2/4.3/4.4 Arithmetik/Vergleich/`und`-`nicht`,
+§ 4.10 `wähle`-Guards, § 4.11 Funktionsaufruf, § 4.13–4.15 Feld/Datensatz/
+Liste, § 4.17 Block, § 4.19 `abbruch`, § 6.1 `konst`, § 6.2 alle
+`fn`-Formen, § 7.1 `@Quelle`, § 8.3 `verwende` Cross-Modul, § 10
+`prüfe`/`testfall`/`erwartet abbruch`). Vitest-Integrationstest
+(`packages/core/test/integration/simple-corpus.test.ts`) iteriert
+dynamisch über `simple-*.findsl`, prüft Parse/Validation, Cross-Modul-
+Topologie und Codegen-Determinismus. Beim Aufbau wurden 13 Codegen-
+Lücken/-Bugs sichtbar (`Range`, `nichts`, `oder`, Lambda, `wenn`,
+`!!`, `als` in Ketten, `.enthält`, Text-`konst`, Text-Vergleich,
+String-Interpolation, Default-Param-Expansion, Cross-Modul-Enum-Werte
+in Tests) — gesammelt in [Issue #44](https://github.com/findsl/findsl/issues/44);
+PR 2 erweitert den Korpus auf SPEC-Vollständigkeit, sobald #44
+geschlossen ist. Gradle-`check` und `npm test` bleiben grün.*
+
+*2026-05-18 — **§ 11-Stdlib auf Empfänger-
 Methoden umgestellt (Grundsatzentscheidung § 8c, kontextgetrieben).**
 Freie Rundungsfunktionen `abrundenEuro/aufrundenEuro/abrundenCent/
 aufrundenCent/abrunden/aufrunden` ersetzt durch Methoden `.abrunden()`/

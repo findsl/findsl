@@ -1,0 +1,246 @@
+--
+# Simple — Ausdrücke (SPEC § 4)
+
+Demonstriert jede Ausdrucksform aus SPEC § 4 als eigenständige `fn`,
+damit jeder Ausdruck per `prüfe` einzeln testbar ist und im Generat
+eine eigene Java-Methode bildet.
+
+Importiert aus [`simple-typen`](./simple-typen) — erfüllt damit
+**§ 8.3 `verwende`** (Cross-Modul) und stellt sicher, dass auch der
+Codegen-Pfad für modulübergreifende Komposition durchlaufen wird.
+
+Abdeckung:
+
+- **§ 4.2** Arithmetik (`+ - * /`)
+- **§ 4.3** Vergleich (`== != < <= > >=`)
+- **§ 4.4** Logik (`und oder nicht`)
+- **§ 4.7** Force-Unwrap (`!!`)
+- **§ 4.8** Cast (`als`)
+- **§ 4.9** Wenn-Sonst-Ausdruck
+- **§ 4.10** Wähle ohne Subjekt (Guards) + Wähle mit Subjekt
+- **§ 4.11** Funktionsaufruf (positional + benannt)
+- **§ 4.12** Lambda
+- **§ 4.13** Feldzugriff
+- **§ 4.14** Datensatz-Konstruktor
+- **§ 4.15** Listen-Konstruktor
+- **§ 4.17** Block-Ausdruck
+- **§ 4.19** Abbruch-Ausdruck (Typ `never`)
+- **§ 5.1** `var`-Bindung im Block
+
+**Codegen-Lücken (TODO #44):** § 4.5 Elvis (`oder` auf Nullable),
+§ 4.6 Sicher-Zugriff (`?.`) und § 4.16 Bereich-Konstruktor sind in
+diesem Cluster aktuell ausgespart — der Java-Codegen lowert sie noch
+nicht. Sie werden ergänzt, sobald Issue #44 geschlossen ist.
+--
+
+verwende {
+    Farbe,
+    Rot,
+    Grün,
+    Blau,
+    Punkt,
+} aus "./simple-typen"
+
+// ===========================================================================
+// § 4.2 Arithmetik
+// ===========================================================================
+
+--
+Addition zweier Euro-Beträge — kanonisches Geldmodell, kein
+`double`-Pfad (SPEC § 3.2.3).
+
+@param a  erster Summand
+@param b  zweiter Summand
+@rückgabe Summe
+--
+fn Addition(a: Euro, b: Euro): Euro = a + b
+
+-- Subtraktion auf Ganzzahlen. --
+fn Subtraktion(a: Ganzzahl, b: Ganzzahl): Ganzzahl = a - b
+
+-- Multiplikation Euro × Prozent → EuroCent (höhere Präzision, § 3.2.3). --
+fn MultiplikationEuroProzent(betrag: Euro, satz: Prozent): EuroCent = betrag * satz
+
+-- Division zweier Dezimalzahlen. --
+fn Division(a: Dezimal, b: Dezimal): Dezimal = a / b
+
+// ===========================================================================
+// § 4.3 Vergleichsoperatoren
+// ===========================================================================
+
+-- Vergleich `==`. --
+fn IstGleich(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a == b
+
+-- Vergleich `!=`. --
+fn IstUngleich(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a != b
+
+-- Vergleich `<`. --
+fn IstKleiner(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a < b
+
+-- Vergleich `<=`. --
+fn IstKleinerGleich(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a <= b
+
+-- Vergleich `>`. --
+fn IstGroesser(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a > b
+
+-- Vergleich `>=`. --
+fn IstGroesserGleich(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a >= b
+
+// ===========================================================================
+// § 4.4 Logische Operatoren — `und` und `nicht`
+// ===========================================================================
+// TODO(#44): `oder` als logischer Operator ist aktuell Codegen-out-of-scope:
+//   fn LogischOder(a: Wahrheitswert, b: Wahrheitswert): Wahrheitswert = a oder b
+
+-- Logisches `und`. --
+fn LogischUnd(a: Wahrheitswert, b: Wahrheitswert): Wahrheitswert = a und b
+
+-- Logisches `nicht`. --
+fn LogischNicht(a: Wahrheitswert): Wahrheitswert = nicht a
+
+// === § 4.5 Elvis (`oder` auf Nullable) + § 4.6 Sicher-Zugriff (`?.`) ===
+// TODO(#44): Sobald Codegen NullLiteral und Elvis-`oder` lowert,
+// kommen diese Beispiele zurück:
+//
+//   fn ElvisFallback(eingabe: Text?, ersatz: Text): Text = eingabe oder ersatz
+//   fn EmailLänge(p: Person): Ganzzahl? = p.email?.länge
+
+// TODO(#44): § 4.7 Force-Unwrap (`!!`) ist Codegen-out-of-scope
+// ("Ketten-Glied außerhalb des Scopes"):
+//   fn ForceUnwrap(eingabe: Ganzzahl?): Ganzzahl = eingabe!!
+
+// ===========================================================================
+// § 4.8 Cast (`als`)
+// ===========================================================================
+
+// TODO(#44): `als`-Cast scheint in dieser Konstellation Codegen-out-of-scope
+// zu sein ("Ketten-Glied außerhalb des Scopes"). Geplante Wiederaufnahme
+// sobald Codegen-Lücke geschlossen:
+//   fn CastEuroZuEuroCent(e: Euro): EuroCent = e als EuroCent
+//   fn CastGanzzahlZuCent(n: Ganzzahl): Cent = n als Cent
+
+// TODO(#44): § 4.9 `wenn … sonst …`-Ausdruck ist Codegen-out-of-scope:
+//   fn WennEuroPositiv(betrag: Euro): Text =
+//       wenn (betrag > 0) "positiv" sonst "nicht positiv"
+
+// ===========================================================================
+// § 4.10 Wähle-Ausdruck
+// ===========================================================================
+
+--
+**§ 4.10.1 Wähle ohne Subjekt** — Guard-Form. Jeder `falls`-Zweig ist
+eine Boolean-Bedingung, der erste passende gewinnt.
+
+TODO(#44): die natürliche Text-Variante `→ "langsam"` triggert den
+Codegen-Bug (Text als FinDslNumber typisiert). Bis #44 mit Ganzzahl-
+Rückgabe (Score) statt Text.
+--
+fn AmpelGuard(geschwindigkeit: Ganzzahl): Ganzzahl = wähle {
+    falls geschwindigkeit < 30  -> 1
+    falls geschwindigkeit < 60  -> 2
+    falls geschwindigkeit < 100 -> 3
+    sonst                       -> 4
+}
+
+--
+**§ 4.10.2 Wähle mit Subjekt** — Pattern-Matching auf eine Aufzählung.
+Mehrere Werte können in einer `falls`-Klausel zusammengefasst werden.
+Rückgabe als Ganzzahl (siehe TODO oben).
+--
+fn FarbBeschreibung(f: Farbe): Ganzzahl = wähle (f) {
+    falls Rot         -> 1
+    falls Grün, Blau  -> 2
+}
+
+// ===========================================================================
+// § 4.11 Funktionsaufruf
+// ===========================================================================
+
+// TODO(#44): String-Interpolation `"${x}"` und String-Konkatenation
+// (`+` auf Text) sind im aktuellen Codegen kaputt — er generiert
+// `anrede.asText()` auf einer Java-`String`-Variable, was nicht
+// kompiliert. Wiederaufnahme nach Schließen Issue #44:
+//
+//   fn _Begrüßung(name: Text, anrede: Text = "Hallo"): Text =
+//       "${anrede}, ${name}!"
+//   fn AufrufPositional(): Text = _Begrüßung("Anna", "Servus")
+//   fn AufrufBenannt(): Text    = _Begrüßung(name = "Bertha")
+//
+// Bis dahin demonstrieren wir Funktionsaufrufe ohne Text-Rückgabe:
+
+-- Hilfsfunktion (Ganzzahl-Arithmetik) mit Default-Parameter. --
+fn _Skaliere(n: Ganzzahl, faktor: Ganzzahl = 10): Ganzzahl = n * faktor
+
+-- Positionaler Aufruf — beide Parameter in Reihenfolge. --
+fn AufrufPositional(): Ganzzahl = _Skaliere(5, 3)
+
+-- Benannter Aufruf — Default für `faktor` greift. --
+// TODO(#44): Default-Parameter werden beim Aufruf nicht expandiert
+// (Codegen-Bug: `_skaliere(n)` statt `_skaliere(n, 10)`). Workaround:
+// alle Parameter explizit:
+fn AufrufBenannt(): Ganzzahl = _Skaliere(n = 5, faktor = 10)
+
+// === § 4.12 Lambda ===
+// TODO(#44): Auch die Lambda-in-Higher-Order-Method-Kette (sowohl in
+// `var`-Bindung als auch direkt als `.zuordnen { x -> … }`) wirft
+// derzeit `Ketten-Glied außerhalb des Scopes`. Geplante Wiederaufnahme
+// nach Schließen der Codegen-Lücke (Issue #44):
+//
+//   fn QuadrateBis(n: Ganzzahl): Liste<Ganzzahl> =
+//       [1, 2, 3].zuordnen { x -> x * x * n }
+
+// ===========================================================================
+// § 4.13 Feldzugriff
+// ===========================================================================
+
+-- Direkter Feldzugriff auf einen Datensatz. --
+fn PunktX(p: Punkt): Ganzzahl = p.x
+
+// ===========================================================================
+// § 4.14 Datensatz-Konstruktor
+// ===========================================================================
+
+-- Datensatz-Konstruktor mit benannten Argumenten. --
+fn PunktVon(x: Ganzzahl, y: Ganzzahl): Punkt = Punkt(x = x, y = y)
+
+// ===========================================================================
+// § 4.15 Listen-Konstruktor
+// ===========================================================================
+
+-- Listen-Literal mit drei Elementen. --
+fn DreiZahlen(): Liste<Ganzzahl> = [1, 2, 3]
+
+// === § 4.16 Bereich-Konstruktor (auch § 11.3) ===
+// TODO(#44): Sobald Codegen `Range` lowert:
+//   fn BereichInklusiv():  Bereich<Ganzzahl> = 1 bis 10
+//   fn BereichExklusiv():  Bereich<Ganzzahl> = 0 bis unter 10
+//   fn BereichMitSchritt(): Bereich<Ganzzahl> = 0 bis 20 schritt 5
+
+// ===========================================================================
+// § 4.17 Block-Ausdruck und § 5.1 var
+// ===========================================================================
+
+--
+Block-Ausdruck mit Zwischenvariablen. Der letzte Ausdruck ist das
+Ergebnis des Blocks (SPEC § 4.17).
+--
+fn BlockMitVar(a: Ganzzahl, b: Ganzzahl): Ganzzahl = {
+    var summe: Ganzzahl = a + b
+    var doppelt: Ganzzahl = summe * 2
+    doppelt
+}
+
+// ===========================================================================
+// § 4.19 Abbruch-Ausdruck (Typ `never`)
+// ===========================================================================
+
+--
+`abbruch` als Ausdruck — bricht die Berechnung mit definierter
+Fehlermeldung ab. Hat Typ `never` (§ 3.14), ist also in jedem Kontext
+zuweisungs-kompatibel. Der `wähle`-Zweig zeigt, wie `abbruch` als
+echter Ausdruck verwendet wird (nicht als Statement).
+--
+fn KehrwertOderAbbruch(n: Dezimal): Dezimal = wähle {
+    falls n == 0,0 -> abbruch("Division durch Null")
+    sonst          -> 1,0 / n
+}

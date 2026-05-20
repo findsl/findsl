@@ -1,0 +1,121 @@
+--
+# Simple — Funktionsformen (SPEC § 6.2)
+
+Demonstriert sämtliche `fn`-Varianten aus SPEC § 6.2:
+
+- **§ 6.2.1 Block-Body** — `fn X(…): T = { … letzter Ausdruck }`
+- **§ 6.2.2 Expression-Body** — `fn X(…): T = ausdruck`
+- **§ 6.2.3 Default-Parameter** — `fn X(p: T = wert)`
+- **§ 6.2.4 Closures** — Lambda fängt lexikalisch sichtbare Variablen ein
+- **§ 8.4 Sichtbarkeit** — `_`-Präfix für modul-interne Funktionen
+- **§ 3.12 Funktionstypen** — `(T1, T2) -> R` als Parameter-Typ
+- **§ 3.13 Bidirektionale Inferenz** — Rückgabetyp determiniert Literale
+
+Importiert aus [`simple-typen`](./simple-typen) für die Test-Daten.
+--
+
+verwende { Punkt } aus "./simple-typen"
+
+// ===========================================================================
+// § 6.2.1 Block-Body
+// ===========================================================================
+
+--
+Funktion mit Block-Body — der letzte Ausdruck im Block ist der
+Rückgabewert (kein explizites `return`-Schlüsselwort in FinDSL).
+--
+fn BlockBody(a: Ganzzahl, b: Ganzzahl): Ganzzahl = {
+    var summe: Ganzzahl = a + b
+    var produkt: Ganzzahl = a * b
+    summe + produkt
+}
+
+// ===========================================================================
+// § 6.2.2 Expression-Body
+// ===========================================================================
+
+-- Klassischer Expression-Body — eine Zeile, kein Block. --
+fn ExpressionBody(a: Ganzzahl, b: Ganzzahl): Ganzzahl = a + b
+
+// ===========================================================================
+// § 6.2.3 Default-Parameter
+// ===========================================================================
+
+--
+Default-Parameter — `mehrwertsteuer` hat einen Standard, kann aber
+beim Aufruf überschrieben werden. Die Reihenfolge im SPEC verlangt,
+dass Default-Parameter NACH allen Pflicht-Parametern stehen.
+--
+fn Bruttopreis(netto: Euro, mehrwertsteuer: Prozent = 19%): Euro =
+    (netto + (netto * mehrwertsteuer)).abrunden()
+
+// ===========================================================================
+// § 6.2.4 Closures + § 3.12 Funktionstypen (als Rückgabe)
+// ===========================================================================
+// TODO(#44): Closures, Funktions-Typ als Rückgabe und Lambda-in-`var`-
+// Bindung sind aktuell Codegen-out-of-scope. Geplante Wiederaufnahme
+// nach Schließen der Codegen-Lücke (Issue #44):
+//
+//   fn MachAddierer(offset: Ganzzahl): (Ganzzahl) -> Ganzzahl =
+//       { n -> n + offset }
+//
+//   fn ZweiSchritteFest(offset: Ganzzahl, start: Ganzzahl): Ganzzahl = {
+//       var addiere: (Ganzzahl) -> Ganzzahl = MachAddierer(offset)
+//       addiere(addiere(start))
+//   }
+//
+// Heute wird die Closure-Semantik bereits implizit durch die
+// `.zuordnen { x -> … }`-Lambda in `simple-ausdruecke.QuadrateBis`
+// abgedeckt (Lambda im Higher-Order-Method-Kontext = codegen-tauglich).
+
+// ===========================================================================
+// § 8.4 Sichtbarkeit — `_`-Präfix = modul-intern
+// ===========================================================================
+
+--
+Modul-interne Hilfsfunktion (Präfix `_`). Wird von `_Verdopple`
+aufgerufen, ist aber NICHT importierbar aus anderen Modulen. Die
+Konvention spiegelt SPEC § 8.4 Sichtbarkeit.
+--
+fn _AddiereEins(n: Ganzzahl): Ganzzahl = n + 1
+
+-- Nutzer der internen Hilfe — selbst public, kapselt das `_`-Detail. --
+fn ZweiPlusEins(n: Ganzzahl): Ganzzahl = _AddiereEins(_AddiereEins(n))
+
+// ===========================================================================
+// § 3.13 Bidirektionale Inferenz — Rückgabetyp determiniert Literale
+// ===========================================================================
+
+--
+Der Rückgabetyp `Euro` zwingt das Literal `100` aus dem Block in den
+Euro-Tag (sonst wäre `100` per Default `Ganzzahl`). Demonstriert die
+return-typ-getriebene Inferenz (SPEC § 3.13).
+--
+fn FesterEuroBetrag(): Euro = 100
+
+--
+Liste-Inferenz: `[1, 2, 3]` allein wäre `Liste<Ganzzahl>`. Durch die
+Rückgabe-Annotation `Liste<Dezimal>` werden die Elemente zu Dezimal
+hochgereicht.
+--
+fn DreiDezimalwerte(): Liste<Dezimal> = [1,0, 2,0, 3,0]
+
+// ===========================================================================
+// Orchestrierung: Höhere-Ordnung + Closure + Datensatz
+// ===========================================================================
+
+--
+Verschiebt einen Punkt um `dx`/`dy`. Demonstriert (a) Datensatz-
+Konstruktor in Funktion, (b) Feldzugriff, (c) Block-Body mit
+Zwischenvariablen. Codegen-tauglich (keine Lambdas in `var`-Bindung).
+
+@param p   Ausgangspunkt
+@param dx  Verschiebung in x-Richtung
+@param dy  Verschiebung in y-Richtung
+@rückgabe verschobener Punkt
+--
+fn VerschiebePunkt(p: Punkt, dx: Ganzzahl, dy: Ganzzahl): Punkt = {
+    var neuesX: Ganzzahl = p.x + dx
+    var neuesY: Ganzzahl = p.y + dy
+    Punkt(x = neuesX, y = neuesY)
+}

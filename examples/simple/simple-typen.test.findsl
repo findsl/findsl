@@ -1,0 +1,75 @@
+--
+# Akzeptanztests — Simple-Typen
+
+`prüfe`-Blöcke zu `simple-typen.findsl`. Verifiziert, dass die in der
+Foundation deklarierten Konstanten, Datensätze und Aufzählungen
+syntaktisch akzeptiert werden und die erwarteten Werte tragen.
+--
+
+verwende {
+    BEISPIEL_GANZZAHL,
+    BEISPIEL_DEZIMAL,
+    BEISPIEL_EURO,
+    BEISPIEL_EUROCENT,
+    BEISPIEL_CENT,
+    BEISPIEL_PROZENT,
+    Rot,
+    Grün,
+    Blau,
+    Aktiv,
+    Punkt,
+    Person,
+} aus "./simple-typen"
+
+prüfe "§ 2.7 Literale — Konstanten-Identität" {
+    testfall "Ganzzahl-Konstante mit Tausenderpunkten" {
+        BEISPIEL_GANZZAHL == 1.000
+    }
+    testfall "Dezimal-Konstante mit Komma" {
+        BEISPIEL_DEZIMAL == 3,14
+    }
+    testfall "Euro-Konstante" {
+        BEISPIEL_EURO == 100
+    }
+    testfall "EuroCent-Konstante (2 Nachkommastellen)" {
+        BEISPIEL_EUROCENT == 12,34
+    }
+    testfall "Cent-Konstante (Cast nötig: 50 ohne Kontext ist Ganzzahl)" {
+        BEISPIEL_CENT == (50 als Cent)
+    }
+    testfall "Prozent-Konstante" {
+        BEISPIEL_PROZENT == 19%
+    }
+}
+
+prüfe "§ 3.7 Aufzählung — Wert-Identität" {
+    testfall "Farbe-Werte sind paarweise verschieden" {
+        Rot != Grün und Grün != Blau und Rot != Blau
+    }
+    testfall "Aufzählung Status — Aktiv ist gleich sich selbst" {
+        Aktiv == Aktiv
+    }
+}
+
+prüfe "§ 3.8 Datensatz — Konstruktor und Feldzugriff" {
+    testfall "Punkt mit positiven Koordinaten" {
+        var p: Punkt = Punkt(x = 3, y = 4)
+        p.x == 3 und p.y == 4
+    }
+    testfall "Person mit Default-Alter (18)" {
+        var p: Person = Person(name = "Anna", email = "anna@example.de")
+        // TODO(#44): Text-Vergleich `p.name == "Anna"` ist codegen-kaputt
+        // (`String.equalsValue` existiert nicht). Wir testen nur das Default-Alter.
+        p.alter == 18
+    }
+    testfall "Person mit explizitem Alter" {
+        var p: Person = Person(
+            name  = "Bertha",
+            alter = 42,
+            email = "bertha@example.de",
+        )
+        p.alter == 42
+    }
+}
+
+// § 4.15 Listen-Literal als `konst`: ausgespart, siehe TODO(#44).

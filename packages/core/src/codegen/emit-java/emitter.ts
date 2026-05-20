@@ -181,6 +181,13 @@ function emitExpr(e: IrExpr): string {
             const step = e.step !== undefined ? emitExpr(e.step) : 'null';
             return `FinDslListe.bereich(${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
         }
+        case 'listEnumRange': {
+            // (#44 Aufzählungs-Bereich) Java-Enum-`ordinal()` als
+            // Reihenfolge; `Enum.class` muss explizit übergeben werden
+            // (Type-Erasure → kein Class-Lookup zur Laufzeit).
+            const step = e.step !== undefined ? emitExpr(e.step) : 'null';
+            return `FinDslListe.enumBereich(${e.enumClassName}.class, ${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+        }
         case 'listMethod':
             return `${emitExpr(e.receiver)}.${e.method}()`;
         case 'listMap':

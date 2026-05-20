@@ -553,6 +553,23 @@ describe('Inlay-Hints: Field-Zugriff aus Lambda-Param in HOF (Issue #65)', () =>
         expect(labels(types(hs))).toContain('€');
     });
 
+    it('User-Bug gewst.findsl: `(messzahl * (a - b)) als EuroCent` zeigt Hints an Operanden (Issue #65)', async () => {
+        // `als T`-Cast soll die Sub-Ausdrücke nicht ausblenden — nur das
+        // Cast-Ziel `als EuroCent` selbst ist textuell sichtbar.
+        const hs = await hints(
+            'fn Steuermessbetrag(\n'
+            + '    abgerundeterGewerbeertrag: EuroCent,\n'
+            + '    freibetrag:                EuroCent,\n'
+            + '    messzahl:                  Prozent,\n'
+            + '): EuroCent = (messzahl * (abgerundeterGewerbeertrag - freibetrag)) als EuroCent\n',
+        );
+        const labelList = labels(types(hs));
+        // messzahl → 1× `%` (Prozent-Referenz)
+        expect(labelList.filter((l) => l === '%').length).toBeGreaterThanOrEqual(1);
+        // abgerundeterGewerbeertrag + freibetrag → mindestens 2× `€`
+        expect(labelList.filter((l) => l === '€').length).toBeGreaterThanOrEqual(2);
+    });
+
     it('User-Bug est.findsl: `wähle`-arm mit `(ZONE_X_SATZ * zve - ZONE_X_ABZUG).abrunden()` (Issue #65)', async () => {
         // Inneres Sub-Ausdrücke der ParenChain müssen Geld-/Prozent-
         // Symbole tragen — vor dem Fix war ParenChain ein „Leaf" und

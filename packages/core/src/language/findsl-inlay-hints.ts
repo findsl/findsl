@@ -300,7 +300,17 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
             for (const arm of expr.arms) this.emitMoney(arm.result, acceptor);
             return;
         }
-        if (isCast(expr)) return;                          // `als`: bewusst aus
+        if (isCast(expr)) {
+            // `als T`-Cast: der Ziel-Typ steht textuell rechts vom `als`
+            // und braucht kein zusätzliches Leaf-Hint. Aber die inneren
+            // Sub-Ausdrücke des Cast-Werts (z. B. `messzahl * (a - b)`
+            // in `(messzahl * (a - b)) als EuroCent`) müssen ihre Einheit
+            // trotzdem zeigen — sonst sind Geld-/Prozent-Operanden in
+            // Cast-Hüllen unsichtbar (Issue #65 User-Bug
+            // `Steuermessbetrag11`).
+            this.emitMoney(expr.value, acceptor);
+            return;
+        }
         // `ParenChain` (`(a*b).abrunden()`): in den inneren `receiver`
         // rekurrieren, damit auch Geld-/Prozent-Sub-Ausdrücke in der
         // Klammer Symbole bekommen (Issue #65 User-Bug:

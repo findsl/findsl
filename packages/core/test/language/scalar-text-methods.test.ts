@@ -21,11 +21,11 @@ import {
     TypeEnv,
     buildContext,
     infer,
-    checkAgainstAnnotation,
     resolveTypeAnnotation,
     typeCheckProgram,
     typeToString,
 } from '../../src/language/findsl-types.js';
+import { checkAgainstAnnotation } from '../../src/language/findsl-type-check.js';
 import { isKonstDecl, type Expr } from '../../src/language/generated/ast.js';
 
 /** Typfehler eines vollständigen Snippets. */

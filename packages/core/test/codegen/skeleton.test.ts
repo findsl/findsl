@@ -470,6 +470,69 @@ describe('Issue #44 — konst-Emit für nicht-numerische Typen', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Lücken 11/12: Text-Interpolation und Text-Vergleich
+// ---------------------------------------------------------------------------
+
+describe('Issue #44 — Text-Vergleich (L12) emittiert Objects.equals statt .equalsValue', () => {
+    it('Vergleich Text == "literal" → Objects.equals(...)', async () => {
+        const program = await parseSource(
+            'fn Match(s: Text): Wahrheitswert = s == "ok"\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return java.util.Objects.equals(s, "ok");');
+        expect(impl).not.toContain('.equalsValue("ok")');
+    });
+
+    it('Vergleich Text != "literal" → !Objects.equals(...)', async () => {
+        const program = await parseSource(
+            'fn NotMatch(s: Text): Wahrheitswert = s != "x"\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return !java.util.Objects.equals(s, "x");');
+    });
+
+    it('Vergleich numerisch (Regression): bleibt .equalsValue / .compareValue', async () => {
+        const program = await parseSource('fn EqZahl(a: Ganzzahl, b: Ganzzahl): Wahrheitswert = a == b\n');
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('a.equalsValue(b)');
+    });
+});
+
+describe('Issue #44 — Text-Interpolation (L11) ohne .asText() auf Text-Slots', () => {
+    it('Interpolation eines Text-Parameters wird DIREKT eingesetzt (kein .asText())', async () => {
+        const program = await parseSource(
+            'fn Hello(name: Text): Text = "Hallo, ${name}!"\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return "Hallo, " + name + "!";');
+        expect(impl).not.toContain('name.asText()');
+    });
+
+    it('Interpolation eines Ganzzahl-Slots (Regression): nutzt weiterhin .asText()', async () => {
+        const program = await parseSource(
+            'fn Beschr(n: Ganzzahl): Text = "Wert: ${n}"\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // n ist FinDslNumber → braucht .asText() für String-Konkat
+        expect(impl).toContain('n.asText()');
+    });
+
+    it('gemischte Interpolation Text + Ganzzahl: nur Ganzzahl bekommt .asText()', async () => {
+        const program = await parseSource(
+            'fn Mixed(name: Text, n: Ganzzahl): Text = "${name}=${n}"\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('"" + name + "=" + n.asText() + ""');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

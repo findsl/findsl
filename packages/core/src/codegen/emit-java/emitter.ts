@@ -103,6 +103,15 @@ function emitExpr(e: IrExpr): string {
         case 'cmp': {
             const l = emitExpr(e.left), r = emitExpr(e.right);
             const op: string = e.op;
+            // (#44 Lücke 12) Text-Vergleich → `Objects.equals` /
+            // `!Objects.equals` (primitiver `String` hat kein
+            // `.equalsValue`). Ordnungsvergleiche auf Text werden im
+            // Lowering schon abgefangen — `isText` impliziert `==`/`!=`.
+            if (e.isText) {
+                return op === '=='
+                    ? `java.util.Objects.equals(${l}, ${r})`
+                    : `!java.util.Objects.equals(${l}, ${r})`;
+            }
             switch (op) {
                 case '==': return `${l}.equalsValue(${r})`;
                 case '!=': return `!${l}.equalsValue(${r})`;
@@ -143,7 +152,14 @@ function emitExpr(e: IrExpr): string {
             const terms: string[] = [];
             for (let k = 0; k < e.slots.length; k++) {
                 terms.push(javaString(e.parts[k]));
-                terms.push(`${emitExpr(e.slots[k])}.asText()`);
+                // (#44 Lücke 11) Text-Slots → direkt anhängen
+                // (primitiver Java-`String` hat kein `.asText()`).
+                // Numerische Slots (Default): `.asText()` für die
+                // bit-genaue Zahl→Text-Konversion über die Runtime.
+                const isText = e.slotIsText?.[k] ?? false;
+                terms.push(isText
+                    ? emitExpr(e.slots[k])
+                    : `${emitExpr(e.slots[k])}.asText()`);
             }
             terms.push(javaString(e.parts[e.parts.length - 1]));
             return terms.join(' + ');

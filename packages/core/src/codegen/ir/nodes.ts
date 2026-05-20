@@ -66,8 +66,19 @@ export type IrExpr =
     | { readonly kind: 'enumCmp'; readonly op: '==' | '!='; readonly left: IrExpr; readonly right: IrExpr }
     /** Arithmetik → `left.add/sub/mul(right)`. */
     | { readonly kind: 'arith'; readonly op: '+' | '-' | '*'; readonly left: IrExpr; readonly right: IrExpr }
-    /** Vergleich → boolean (`equalsValue`/`compareValue`). */
-    | { readonly kind: 'cmp'; readonly op: '==' | '!=' | '<' | '<=' | '>' | '>='; readonly left: IrExpr; readonly right: IrExpr }
+    /**
+     * Vergleich → boolean. Für numerische Operanden:
+     * `equalsValue`/`compareValue`. Für Text-Operanden (`isText=true`,
+     * #44 Lücke 12): nur `==`/`!=` zulässig → `Objects.equals` /
+     * `!Objects.equals` (primitiver Java-`String` hat kein `.equalsValue()`).
+     */
+    | {
+        readonly kind: 'cmp';
+        readonly op: '==' | '!=' | '<' | '<=' | '>' | '>=';
+        readonly left: IrExpr;
+        readonly right: IrExpr;
+        readonly isText?: boolean;
+      }
     /** Logisches `und` → `&&`. */
     | { readonly kind: 'and'; readonly left: IrExpr; readonly right: IrExpr }
     /** Wahrheitswert-Literal `wahr`/`falsch` → Java `true`/`false`. */
@@ -94,8 +105,19 @@ export type IrExpr =
     | { readonly kind: 'listMap'; readonly receiver: IrExpr; readonly fn: IrExpr }
     /** Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1). */
     | { readonly kind: 'lambda1'; readonly param: string; readonly body: IrExpr }
-    /** String-Literal mit Interpolation → Java-String-Konkatenation. */
-    | { readonly kind: 'strInterp'; readonly parts: ReadonlyArray<string>; readonly slots: ReadonlyArray<IrExpr> }
+    /**
+     * String-Literal mit Interpolation → Java-String-Konkatenation.
+     * `slotIsText[i] === true` (#44 Lücke 11) markiert Slots, deren
+     * Java-Typ bereits `String` ist → direkt anhängen (kein `.asText()`,
+     * `String` hat die Methode nicht). Numerische Slots bekommen
+     * `.asText()` wie zuvor.
+     */
+    | {
+        readonly kind: 'strInterp';
+        readonly parts: ReadonlyArray<string>;
+        readonly slots: ReadonlyArray<IrExpr>;
+        readonly slotIsText?: ReadonlyArray<boolean>;
+      }
     /** `wähle` als Ausdruck — wird vom Emitter zu if/return gelowert. */
     | { readonly kind: 'waehle'; readonly subject?: IrExpr; readonly arms: ReadonlyArray<IrArm> };
 

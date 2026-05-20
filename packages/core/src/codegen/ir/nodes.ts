@@ -157,6 +157,15 @@ export type IrDecl =
         readonly kind: 'konst';
         readonly name: string;
         readonly expr: IrExpr;
+        /**
+         * Deklarierter Java-Typ (API-Schicht) — für numerische `konst`
+         * ist das der Sicht-Wrapper (`Euro`/`Cent`/…), für nicht-
+         * numerische der echte API-Typ (`String`/`boolean`/`FinDslListe<…>`).
+         * Vor #44/L10 wurde im Emitter für nicht-numerische `konst`
+         * fälschlich auf `FinDslNumber` zurückgefallen (Generat hat nicht
+         * kompiliert: `String cannot be converted to FinDslNumber`).
+         */
+        readonly javaType: string;
         /** Numerisch → sprechender Wrapper-Typ (`Euro` …), sonst undefined. */
         readonly wrapper?: string;
         readonly info: IrDoc;

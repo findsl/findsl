@@ -433,6 +433,43 @@ fn StandardPreis(): Euro = Bruttopreis(100)
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Lücke 10: nicht-numerische Top-Level-`konst` (Text/Bool/Liste)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — konst-Emit für nicht-numerische Typen', () => {
+    it('konst: Text → public static final String (nicht FinDslNumber)', async () => {
+        const program = await parseSource('konst WERT: Text = "fest"\n');
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { interfaceCode: iface } = emitJavaModuleFiles(ir);
+        expect(iface).toContain('public static final String WERT = "fest";');
+        expect(iface).not.toContain('FinDslNumber WERT');
+    });
+
+    it('konst: Wahrheitswert → public static final boolean (nicht FinDslNumber)', async () => {
+        const program = await parseSource('konst AKTIV: Wahrheitswert = wahr\n');
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { interfaceCode: iface } = emitJavaModuleFiles(ir);
+        expect(iface).toContain('public static final boolean AKTIV = true;');
+        expect(iface).not.toContain('FinDslNumber AKTIV');
+    });
+
+    it('konst: Liste<Ganzzahl> → public static final FinDslListe<FinDslNumber>', async () => {
+        const program = await parseSource('konst ZAHLEN: Liste<Ganzzahl> = [1, 2, 3]\n');
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { interfaceCode: iface } = emitJavaModuleFiles(ir);
+        expect(iface).toMatch(/public static final FinDslListe<FinDslNumber> ZAHLEN =/);
+        expect(iface).not.toMatch(/public static final FinDslNumber ZAHLEN/);
+    });
+
+    it('konst: numerisch → Wrapper-getypt + geboxt (Regression — Verhalten unverändert)', async () => {
+        const program = await parseSource('konst SATZ: Prozent = 15%\n');
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { interfaceCode: iface } = emitJavaModuleFiles(ir);
+        expect(iface).toContain(
+            'public static final Prozent SATZ = Prozent.von(FinDslNumber.prozent("0.15"));');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

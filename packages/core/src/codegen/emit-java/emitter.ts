@@ -57,7 +57,123 @@ function javadoc(info: IrDoc, indent: string): string[] {
     return [`${indent}/**`, ...body.map((l) => indent + l), `${indent} */`];
 }
 
-/** Ausdruck → Java-Ausdrucks-String (seiteneffektfrei, P2). */
+/**
+ * (#44 Text-`+`) Arithmetik: Text-Operand → Java-String-Konkat (Klammern
+ * für Präzedenz). Numerisch → Runtime-Method (`add`/`sub`/`mul`).
+ */
+function emitArith(e: Extract<IrExpr, { kind: 'arith' }>): string {
+    if (e.isText) {
+        return `(${emitExpr(e.left)}) + (${emitExpr(e.right)})`;
+    }
+    const m = e.op === '+' ? 'add' : e.op === '-' ? 'sub' : 'mul';
+    return `${emitExpr(e.left)}.${m}(${emitExpr(e.right)})`;
+}
+
+/**
+ * Vergleich: (#44 Lücke 12) Text-Vergleich → `Objects.equals` (primitiver
+ * `String` hat kein `.equalsValue`). Ordnungsvergleiche auf Text werden
+ * im Lowering bereits abgefangen — `isText` impliziert `==`/`!=`.
+ * Numerische Vergleiche delegieren an `.equalsValue`/`.compareValue`.
+ */
+function emitCmp(e: Extract<IrExpr, { kind: 'cmp' }>): string {
+    const l = emitExpr(e.left), r = emitExpr(e.right);
+    const op: string = e.op;
+    if (e.isText) {
+        return op === '=='
+            ? `java.util.Objects.equals(${l}, ${r})`
+            : `!java.util.Objects.equals(${l}, ${r})`;
+    }
+    switch (op) {
+        case '==': return `${l}.equalsValue(${r})`;
+        case '!=': return `!${l}.equalsValue(${r})`;
+        case '<':  return `${l}.compareValue(${r}) < 0`;
+        case '<=': return `${l}.compareValue(${r}) <= 0`;
+        case '>':  return `${l}.compareValue(${r}) > 0`;
+        case '>=': return `${l}.compareValue(${r}) >= 0`;
+        default:
+            throw new Error(`Emit: unbekannter Vergleichsoperator "${op}".`);
+    }
+}
+
+/**
+ * Listen-Literale + Bereich-Konstruktoren (`a bis b [schritt s]`,
+ * Enum-Bereich `Tag.Mo bis Tag.Fr`). Bei fehlendem Schritt-Argument
+ * wird `null` an die Runtime gereicht (substituiert Schritt 1).
+ */
+function emitListExpr(
+    e: Extract<IrExpr, { kind: 'listLit' | 'listRange' | 'listEnumRange' }>,
+): string {
+    if (e.kind === 'listLit') {
+        return e.items.length === 0
+            ? `FinDslListe.<${e.elementJavaType}>empty()`
+            : `FinDslListe.of(java.util.List.of(${e.items.map(emitExpr).join(', ')}))`;
+    }
+    const step = e.step !== undefined ? emitExpr(e.step) : 'null';
+    if (e.kind === 'listRange') {
+        return `FinDslListe.bereich(${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+    }
+    // listEnumRange: Java-Enum-`ordinal()` als Reihenfolge; `Enum.class`
+    // muss explizit übergeben werden (Type-Erasure → kein Class-Lookup
+    // zur Laufzeit).
+    return `FinDslListe.enumBereich(${e.enumClassName}.class, ${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+}
+
+/**
+ * (#44 Block-Lambda) Mit `lets` → Block-Form:
+ * `(p) -> { final T name = expr; …; return body; }`.
+ * Ohne `lets` → kompakte Ausdrucks-Form: `(p) -> body`.
+ */
+function emitLambda1(e: Extract<IrExpr, { kind: 'lambda1' }>): string {
+    if (e.lets !== undefined && e.lets.length > 0) {
+        const decls = e.lets
+            .map((l) => `final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`)
+            .join(' ');
+        return `(${e.param}) -> { ${decls} return ${emitExpr(e.body)}; }`;
+    }
+    return `(${e.param}) -> ${emitExpr(e.body)}`;
+}
+
+/**
+ * (#44 Lücke 11) String-Interpolation `"…${slot}…"` → Java-String-Konkat.
+ * Text-Slots werden direkt angehängt (primitiver Java-`String` hat kein
+ * `.asText()`); numerische Slots laufen über `.asText()` für die bit-
+ * genaue Zahl→Text-Konversion via Runtime.
+ */
+function emitStrInterp(e: Extract<IrExpr, { kind: 'strInterp' }>): string {
+    const terms: string[] = [];
+    for (let k = 0; k < e.slots.length; k++) {
+        terms.push(javaString(e.parts[k]));
+        const isText = e.slotIsText?.[k] ?? false;
+        terms.push(isText
+            ? emitExpr(e.slots[k])
+            : `${emitExpr(e.slots[k])}.asText()`);
+    }
+    terms.push(javaString(e.parts[e.parts.length - 1]));
+    return terms.join(' + ');
+}
+
+/**
+ * (#44 Nullable) Nullable-Operatoren: Elvis (`oder` auf Nullable),
+ * Force-Unwrap (`!!` → `Objects.requireNonNull`) und Safe-FieldAccess
+ * (`?.feld`). Doppel-Evaluation des Receivers in Elvis/Safe-Access ist
+ * in FinDSL P2 (seiteneffektfrei) unkritisch.
+ */
+function emitNullable(
+    e: Extract<IrExpr, { kind: 'elvis' | 'forceUnwrap' | 'safeFieldAccess' }>,
+): string {
+    if (e.kind === 'elvis') {
+        const l = emitExpr(e.left);
+        return `(${l} != null) ? ${l} : ${emitExpr(e.right)}`;
+    }
+    if (e.kind === 'forceUnwrap') {
+        return `java.util.Objects.requireNonNull(${emitExpr(e.value)}, ${javaString(e.hint)})`;
+    }
+    // safeFieldAccess
+    const r = emitExpr(e.receiver);
+    return `(${r} != null) ? ${r}.${e.name}() : null`;
+}
+
+/** Ausdruck → Java-Ausdrucks-String (seiteneffektfrei, P2). Dispatch-Switch. */
 function emitExpr(e: IrExpr): string {
     switch (e.kind) {
         case 'numLit':
@@ -94,45 +210,13 @@ function emitExpr(e: IrExpr): string {
             const l = emitExpr(e.left), r = emitExpr(e.right);
             return e.op === '==' ? `${l} == ${r}` : `${l} != ${r}`;
         }
-        case 'arith': {
-            // (#44 Text-`+`) Text-Operand → Java-String-Konkat. Klammern
-            // garantieren korrekte Präzedenz auch bei gemischten Ausdrücken.
-            if (e.isText) {
-                return `(${emitExpr(e.left)}) + (${emitExpr(e.right)})`;
-            }
-            const m = e.op === '+' ? 'add' : e.op === '-' ? 'sub' : 'mul';
-            return `${emitExpr(e.left)}.${m}(${emitExpr(e.right)})`;
-        }
-        case 'div':
-            return `${emitExpr(e.left)}.div(${emitExpr(e.right)})`;
-        case 'cmp': {
-            const l = emitExpr(e.left), r = emitExpr(e.right);
-            const op: string = e.op;
-            // (#44 Lücke 12) Text-Vergleich → `Objects.equals` /
-            // `!Objects.equals` (primitiver `String` hat kein
-            // `.equalsValue`). Ordnungsvergleiche auf Text werden im
-            // Lowering schon abgefangen — `isText` impliziert `==`/`!=`.
-            if (e.isText) {
-                return op === '=='
-                    ? `java.util.Objects.equals(${l}, ${r})`
-                    : `!java.util.Objects.equals(${l}, ${r})`;
-            }
-            switch (op) {
-                case '==': return `${l}.equalsValue(${r})`;
-                case '!=': return `!${l}.equalsValue(${r})`;
-                case '<':  return `${l}.compareValue(${r}) < 0`;
-                case '<=': return `${l}.compareValue(${r}) <= 0`;
-                case '>':  return `${l}.compareValue(${r}) > 0`;
-                case '>=': return `${l}.compareValue(${r}) >= 0`;
-                default:
-                    throw new Error(`Emit: unbekannter Vergleichsoperator "${op}".`);
-            }
-        }
-        case 'and':
-            return `(${emitExpr(e.left)}) && (${emitExpr(e.right)})`;
+        case 'arith':           return emitArith(e);
+        case 'div':             return `${emitExpr(e.left)}.div(${emitExpr(e.right)})`;
+        case 'cmp':             return emitCmp(e);
+        case 'and':             return `(${emitExpr(e.left)}) && (${emitExpr(e.right)})`;
         case 'or':
             // (#44 L3a) Boolean-Disjunktion. Elvis (`oder` auf Nullable)
-            // ist ein anderer Knoten (`elvis`, Folge-PR).
+            // ist ein anderer Knoten (`elvis`).
             return `(${emitExpr(e.left)}) || (${emitExpr(e.right)})`;
         case 'nullLit':
             // (#44 L2) `nichts` → `null`. Nullable-Typen = Java-Reference-Type.
@@ -140,102 +224,34 @@ function emitExpr(e: IrExpr): string {
         case 'nullCheck':
             // (#44 L2) `x ist nichts` / `x ist nicht nichts`.
             return `${emitExpr(e.value)} ${e.negated ? '!=' : '=='} null`;
-        case 'elvis': {
-            // (#44 L3b) `(left != null) ? left : right`. `left` wird
-            // doppelt evaluiert — in FinDSL P2 (seiteneffektfrei)
-            // unkritisch; eine Helper-Variable wäre eine Optimierung,
-            // verlöre aber die Lesbarkeit des Generats.
-            const l = emitExpr(e.left);
-            return `(${l} != null) ? ${l} : ${emitExpr(e.right)}`;
-        }
-        case 'forceUnwrap':
-            // (#44 L8) `!!` → throws NullPointerException mit Hint.
-            return `java.util.Objects.requireNonNull(${emitExpr(e.value)}, ${javaString(e.hint)})`;
-        case 'safeFieldAccess': {
-            // (#44 `?.`) `(recv != null) ? recv.feld() : null` — analog Elvis,
-            // doppelte Evaluation in FinDSL P2 unkritisch.
-            const r = emitExpr(e.receiver);
-            return `(${r} != null) ? ${r}.${e.name}() : null`;
-        }
-        case 'bool':
-            return e.value ? 'true' : 'false';
-        case 'neg':
-            return `${emitExpr(e.value)}.neg()`;
-        case 'not':
-            return `!(${emitExpr(e.value)})`;
-        case 'round':
-            return `${emitExpr(e.receiver)}.${e.mode}(FinDslNumber.Type.${e.target})`;
-        case 'cast':
-            return `${emitExpr(e.value)}.cast(FinDslNumber.Type.${e.target})`;
+        case 'elvis':           return emitNullable(e);
+        case 'forceUnwrap':     return emitNullable(e);
+        case 'safeFieldAccess': return emitNullable(e);
+        case 'bool':            return e.value ? 'true' : 'false';
+        case 'neg':             return `${emitExpr(e.value)}.neg()`;
+        case 'not':             return `!(${emitExpr(e.value)})`;
+        case 'round':           return `${emitExpr(e.receiver)}.${e.mode}(FinDslNumber.Type.${e.target})`;
+        case 'cast':            return `${emitExpr(e.value)}.cast(FinDslNumber.Type.${e.target})`;
         case 'moneyAnno':
             return `${emitExpr(e.expr)}.withMoneyAnnotation(`
                 + `FinDslNumber.Type.${e.target}, ${javaString(e.what)})`;
-        case 'listLit':
-            return e.items.length === 0
-                ? `FinDslListe.<${e.elementJavaType}>empty()`
-                : `FinDslListe.of(java.util.List.of(${e.items.map(emitExpr).join(', ')}))`;
-        case 'listRange': {
-            // (#44 L1) Schritt-Argument ist `null` wenn nicht gesetzt
-            // — die Runtime substituiert dann Schritt 1 (siehe
-            // FinDslListe.bereich).
-            const step = e.step !== undefined ? emitExpr(e.step) : 'null';
-            return `FinDslListe.bereich(${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
-        }
-        case 'listEnumRange': {
-            // (#44 Aufzählungs-Bereich) Java-Enum-`ordinal()` als
-            // Reihenfolge; `Enum.class` muss explizit übergeben werden
-            // (Type-Erasure → kein Class-Lookup zur Laufzeit).
-            const step = e.step !== undefined ? emitExpr(e.step) : 'null';
-            return `FinDslListe.enumBereich(${e.enumClassName}.class, ${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
-        }
-        case 'listMethod':
-            return `${emitExpr(e.receiver)}.${e.method}()`;
-        case 'listMap':
-            return `${emitExpr(e.receiver)}.zuordnen(${emitExpr(e.fn)})`;
-        case 'listFilter':
-            return `${emitExpr(e.receiver)}.filtern(${emitExpr(e.fn)})`;
-        case 'listCountWhere':
-            return `${emitExpr(e.receiver)}.zaehleMit(${emitExpr(e.fn)})`;
-        case 'listContains':
-            return `${emitExpr(e.receiver)}.enthaelt(${emitExpr(e.value)})`;
-        case 'listAt':
-            return `${emitExpr(e.receiver)}.bei(${emitExpr(e.index)})`;
-        case 'listFold':
-            return `${emitExpr(e.receiver)}.zusammenfassen(${emitExpr(e.start)}, ${emitExpr(e.fn)})`;
-        case 'lambda2':
-            return `(${e.param1}, ${e.param2}) -> ${emitExpr(e.body)}`;
+        case 'listLit':         return emitListExpr(e);
+        case 'listRange':       return emitListExpr(e);
+        case 'listEnumRange':   return emitListExpr(e);
+        case 'listMethod':      return `${emitExpr(e.receiver)}.${e.method}()`;
+        case 'listMap':         return `${emitExpr(e.receiver)}.zuordnen(${emitExpr(e.fn)})`;
+        case 'listFilter':      return `${emitExpr(e.receiver)}.filtern(${emitExpr(e.fn)})`;
+        case 'listCountWhere':  return `${emitExpr(e.receiver)}.zaehleMit(${emitExpr(e.fn)})`;
+        case 'listContains':    return `${emitExpr(e.receiver)}.enthaelt(${emitExpr(e.value)})`;
+        case 'listAt':          return `${emitExpr(e.receiver)}.bei(${emitExpr(e.index)})`;
+        case 'listFold':        return `${emitExpr(e.receiver)}.zusammenfassen(${emitExpr(e.start)}, ${emitExpr(e.fn)})`;
+        case 'lambda2':         return `(${e.param1}, ${e.param2}) -> ${emitExpr(e.body)}`;
         case 'lambdaCall':
             // (#44 L5) Aufruf eines first-class Lambda-Werts:
             // `FinDslLambda1.apply(arg)` (kein Java-Method-Call).
             return `${emitExpr(e.fn)}.apply(${e.args.map(emitExpr).join(', ')})`;
-        case 'lambda1': {
-            // (#44 Block-Lambda) Mit `lets` → Block-Form:
-            // `(p) -> { final T name = expr; …; return body; }`.
-            // Ohne `lets` → kompakte Ausdrucks-Form: `(p) -> body`.
-            if (e.lets !== undefined && e.lets.length > 0) {
-                const decls = e.lets
-                    .map((l) => `final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`)
-                    .join(' ');
-                return `(${e.param}) -> { ${decls} return ${emitExpr(e.body)}; }`;
-            }
-            return `(${e.param}) -> ${emitExpr(e.body)}`;
-        }
-        case 'strInterp': {
-            const terms: string[] = [];
-            for (let k = 0; k < e.slots.length; k++) {
-                terms.push(javaString(e.parts[k]));
-                // (#44 Lücke 11) Text-Slots → direkt anhängen
-                // (primitiver Java-`String` hat kein `.asText()`).
-                // Numerische Slots (Default): `.asText()` für die
-                // bit-genaue Zahl→Text-Konversion über die Runtime.
-                const isText = e.slotIsText?.[k] ?? false;
-                terms.push(isText
-                    ? emitExpr(e.slots[k])
-                    : `${emitExpr(e.slots[k])}.asText()`);
-            }
-            terms.push(javaString(e.parts[e.parts.length - 1]));
-            return terms.join(' + ');
-        }
+        case 'lambda1':         return emitLambda1(e);
+        case 'strInterp':       return emitStrInterp(e);
         case 'abort':
             throw new Error('abbruch nur in Ergebnis-Position (emitResult), nicht als Sub-Ausdruck.');
         case 'waehle':

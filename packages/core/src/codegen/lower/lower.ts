@@ -263,6 +263,10 @@ interface CrossFnInfo {
     readonly paramTypes: ReadonlyArray<Type | undefined>;
     /** Callee-Rückgabetyp (für Unbox numerischen Cross-Ergebnisses). */
     readonly returnType: Type | undefined;
+    /** Parameter-Namen — für benannte Argument-Resolution (#44). */
+    readonly paramNames: ReadonlyArray<string>;
+    /** Default-Expressions je Parameter (oder `undefined`) — #44. */
+    readonly paramDefaults: ReadonlyArray<Expr | undefined>;
 }
 interface Registry {
     readonly enumValues: ReadonlyMap<string, EnumValueInfo>;
@@ -281,7 +285,23 @@ interface Registry {
      * interne `_`-fn haben `FinDslNumber`-Parameter (kein Box, IS-A).
      */
     readonly localFns: ReadonlyMap<string,
-        { internal: boolean; paramTypes: ReadonlyArray<Type | undefined> }>;
+        {
+            internal: boolean;
+            paramTypes: ReadonlyArray<Type | undefined>;
+            /**
+             * Parameter-Namen — für die Auflösung benannter Argumente
+             * (`f(x = 5)`) gegen Positionen + Default-Substitution.
+             */
+            paramNames: ReadonlyArray<string>;
+            /**
+             * Default-Expressions je Parameter (oder `undefined`, wenn
+             * der Parameter pflicht ist). Spiegelt Interpreter
+             * `evaluateCall` — fehlt ein Argument, wird der Default
+             * eingesetzt. Vor #44 fehlte das, der Codegen rief
+             * `_f(n)` statt `_f(n, default)` und der Java-Compile brach.
+             */
+            paramDefaults: ReadonlyArray<Expr | undefined>;
+        }>;
     /**
      * Per-`fn` veränderliche Sicht: lokaler Name (Param/`var`) → FinDSL-
      * Typ — für die Typauflösung von Record-Feldzugriffen (Lese-Unbox).
@@ -309,8 +329,12 @@ function buildRegistry(
     const crossFns = new Map<string, CrossFnInfo>();
     const crossKonst = new Map<string, { ownerClass: string; memberName: string; numeric: boolean }>();
     const localKonst = new Map<string, boolean>();
-    const localFns = new Map<string,
-        { internal: boolean; paramTypes: ReadonlyArray<Type | undefined> }>();
+    const localFns = new Map<string, {
+        internal: boolean;
+        paramTypes: ReadonlyArray<Type | undefined>;
+        paramNames: ReadonlyArray<string>;
+        paramDefaults: ReadonlyArray<Expr | undefined>;
+    }>();
 
     // Lokale Decls (ownerClass=undefined → in Java unqualifiziert/nested).
     for (const d of program.decls as ReadonlyArray<TopDecl>) {
@@ -324,6 +348,8 @@ function buildRegistry(
             localFns.set(d.name, {
                 internal: d.name.startsWith('_'),
                 paramTypes: d.params.map((p) => p.type),
+                paramNames: d.params.map((p) => p.name),
+                paramDefaults: d.params.map((p) => p.default),
             });
         }
     }
@@ -360,6 +386,8 @@ function buildRegistry(
                     fieldName, methodName: b.sourceName,
                     paramTypes: fd.params.map((p) => p.type),
                     returnType: fd.returnType,
+                    paramNames: fd.params.map((p) => p.name),
+                    paramDefaults: fd.params.map((p) => p.default),
                 });
             } else if (konstNumeric.has(b.sourceName)) {
                 // `konst`-Alias ist korrekt: emittiert `Owner.<sourceName>`.
@@ -605,13 +633,12 @@ function lowerCallChain(
             // Cross-Aufruf → Interface-Methode (Sicht-Signatur):
             // numerische Argumente auf den Sicht-Param boxen. Das
             // Ergebnis ist Sicht-Subtyp IS-A FinDslNumber → KEIN Unbox.
-            const args = call.args.map((a, idx) => {
-                const e = lowerExpr(a.value, reg);
-                const pt = cf.paramTypes[idx];
-                return isNumericType(pt)
-                    ? { kind: 'box', wrapper: namedAtom(pt)!.name, expr: e } as IrExpr
-                    : e;
-            });
+            // (#44) Benannte Args + Default-Substitution wie für lokale
+            // Aufrufe — Spiegel `evaluateCall` im Interpreter.
+            const args = resolveFnCallArgs(
+                cf.paramNames, cf.paramTypes, cf.paramDefaults,
+                call.args, reg, /*internal*/ false,
+            );
             head = {
                 kind: 'crossCall', fieldName: cf.fieldName, methodName: cf.methodName, args,
             };
@@ -619,14 +646,16 @@ function lowerCallChain(
             // Lokaler Aufruf: EINE Methode. Öffentliche `fn` haben
             // Sicht-getypte Parameter → numerische Argumente boxen;
             // interne `_`-fn haben FinDslNumber-Parameter (kein Box).
+            // (#44) Benannte Args + Default-Substitution Spiegel
+            // `evaluateCall` im Interpreter — vorher fehlten Defaults,
+            // der Codegen rief `_f(n)` statt `_f(n, default)`.
             const lf = reg.localFns.get(name);
-            const args = call.args.map((a, idx) => {
-                const e = lowerExpr(a.value, reg);
-                const pt = lf?.paramTypes[idx];
-                return (lf !== undefined && !lf.internal && isNumericType(pt))
-                    ? { kind: 'box', wrapper: namedAtom(pt)!.name, expr: e } as IrExpr
-                    : e;
-            });
+            const args = (lf !== undefined)
+                ? resolveFnCallArgs(
+                    lf.paramNames, lf.paramTypes, lf.paramDefaults,
+                    call.args, reg, lf.internal,
+                )
+                : call.args.map((a) => lowerExpr(a.value, reg));
             head = { kind: 'call', name, args };
         }
         return cc.chain.length > 1
@@ -634,6 +663,47 @@ function lowerCallChain(
             : head;
     }
     return lowerChainOps(resolveBareName(name, reg), cc.chain, reg);
+}
+
+/**
+ * Resolve-Pfad für `fn`-Aufrufe (lokal + cross) — Spiegel
+ * `evaluateCall` im Interpreter (`packages/core/src/interpret/
+ * interpreter.ts`): pro Parameter in Deklarationsreihenfolge —
+ * benanntes Arg ▸ positionales Arg ▸ Default ▸ Pflichtfehler.
+ *
+ * Numerische Sicht-Parameter (öffentliche `fn`) werden geboxt
+ * (Wrapper.von(FinDslNumber-Ausdruck)). Interne `_`-fn (kein Box)
+ * arbeiten direkt auf `FinDslNumber` — wird über `internal=true`
+ * gesteuert. Defaults werden mit demselben Box-Schema durchlaufen.
+ */
+function resolveFnCallArgs(
+    paramNames: ReadonlyArray<string>,
+    paramTypes: ReadonlyArray<Type | undefined>,
+    paramDefaults: ReadonlyArray<Expr | undefined>,
+    callArgs: ReadonlyArray<{ name?: string; value: Expr }>,
+    reg: Registry,
+    internal: boolean,
+): ReadonlyArray<IrExpr> {
+    const named = new Map<string, Expr>();
+    const positional: Expr[] = [];
+    for (const a of callArgs) {
+        if (a.name) named.set(a.name, a.value);
+        else positional.push(a.value);
+    }
+    let posIdx = 0;
+    return paramNames.map((pname, idx) => {
+        const pt = paramTypes[idx];
+        const box = (e: IrExpr): IrExpr =>
+            (!internal && isNumericType(pt))
+                ? { kind: 'box', wrapper: namedAtom(pt)!.name, expr: e }
+                : e;
+        const byName = named.get(pname);
+        if (byName) return box(lowerExpr(byName, reg));
+        if (posIdx < positional.length) return box(lowerExpr(positional[posIdx++], reg));
+        const def = paramDefaults[idx];
+        if (def) return box(lowerExpr(def, reg));
+        throw new Error(`Pflichtparameter "${pname}" fehlt beim Aufruf.`);
+    });
 }
 
 /**

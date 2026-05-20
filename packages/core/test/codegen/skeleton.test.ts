@@ -388,3 +388,46 @@ describe('Zielsprachen-Validierung', () => {
         expect(istUnterstuetzteSprache('go')).toBe(false);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #44 / PR-1 — Codegen-Hotfixes
+// ---------------------------------------------------------------------------
+
+describe('Issue #44 — Default-Parameter-Expansion bei lokalem Aufruf', () => {
+    const DEFAULT_PARAMS_SRC = `--
+# Default-Param-Beispiel
+--
+
+fn _Skaliere(n: Ganzzahl, faktor: Ganzzahl = 10): Ganzzahl = n * faktor
+
+fn AufrufOhneDefault(): Ganzzahl = _Skaliere(5, 3)
+
+fn AufrufMitDefault(): Ganzzahl = _Skaliere(n = 5)
+`;
+
+    it('lokaler Aufruf ohne Default-Argument expandiert den Default aus der FunktionDecl', async () => {
+        const program = await parseSource(DEFAULT_PARAMS_SRC);
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // Mit Default: muss BEIDE Argumente liefern, nicht nur n
+        expect(impl).toMatch(/aufrufMitDefault\(\)\s*\{[^}]*_skaliere\(\s*FinDslNumber\.ganzzahl\("5"\)\s*,\s*FinDslNumber\.ganzzahl\("10"\)\s*\)/s);
+        // Ohne Default (alle Args explizit): unverändert
+        expect(impl).toMatch(/aufrufOhneDefault\(\)\s*\{[^}]*_skaliere\(\s*FinDslNumber\.ganzzahl\("5"\)\s*,\s*FinDslNumber\.ganzzahl\("3"\)\s*\)/s);
+    });
+
+    it('Default-Argument wird auch bei sichtbarer (nicht-internen) Funktion expandiert + geboxt', async () => {
+        const SRC = `fn Bruttopreis(netto: Euro, mwst: Prozent = 19%): Euro = (netto + (netto * mwst)).abrunden()
+
+fn StandardPreis(): Euro = Bruttopreis(100)
+`;
+        const program = await parseSource(SRC);
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // Öffentliche fn → Argumente sind Sicht-getypt geboxt (Euro/Prozent)
+        // Default 19% muss als Prozent.von(FinDslNumber.prozent("0.19")) eingesetzt sein
+        expect(impl).toContain(
+            'bruttopreis(Euro.von(FinDslNumber.ganzzahl("100")), '
+            + 'Prozent.von(FinDslNumber.prozent("0.19")))',
+        );
+    });
+});

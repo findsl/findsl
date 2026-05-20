@@ -301,9 +301,19 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
             return;
         }
         if (isCast(expr)) return;                          // `als`: bewusst aus
-        // `ParenChain` (`(a*b).abrunden()`) ist wie `CallChain` ein
-        // Leaf: ein Geld-Symbol am Ergebnis (Typ aus dem Type-Checker).
-        if (isNumberLiteral(expr) || isCallChain(expr) || isParenChain(expr)) {
+        // `ParenChain` (`(a*b).abrunden()`): in den inneren `receiver`
+        // rekurrieren, damit auch Geld-/Prozent-Sub-Ausdrücke in der
+        // Klammer Symbole bekommen (Issue #65 User-Bug:
+        // `(ZONE_4_SATZ * zve - ZONE_4_ABZUG).abrunden()`). Wenn die
+        // ParenChain Postfix-Operationen trägt (`.abrunden()`/`.zuordnen`),
+        // bekommt das Endergebnis zusätzlich ein Leaf-Hint nach `)` —
+        // ohne Postfix wäre der zweite Hint ein Doppler zu den inneren.
+        if (isParenChain(expr)) {
+            this.emitMoney(expr.receiver, acceptor);
+            if (expr.chain && expr.chain.length > 0) emitLeaf();
+            return;
+        }
+        if (isNumberLiteral(expr) || isCallChain(expr)) {
             emitLeaf();
         }
     }

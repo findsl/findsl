@@ -553,6 +553,29 @@ describe('Inlay-Hints: Field-Zugriff aus Lambda-Param in HOF (Issue #65)', () =>
         expect(labels(types(hs))).toContain('€');
     });
 
+    it('User-Bug est.findsl: `wähle`-arm mit `(ZONE_X_SATZ * zve - ZONE_X_ABZUG).abrunden()` (Issue #65)', async () => {
+        // Inneres Sub-Ausdrücke der ParenChain müssen Geld-/Prozent-
+        // Symbole tragen — vor dem Fix war ParenChain ein „Leaf" und
+        // lieferte nur einen Hint am Ende.
+        const hs = await hints(
+            'konst ZONE_4_OBERGRENZE: Euro    = 277.825\n'
+            + 'konst ZONE_4_SATZ:       Prozent = 42%\n'
+            + 'konst ZONE_4_ABZUG:      Euro    = 17.602\n'
+            + 'konst ZONE_5_SATZ:       Prozent = 45%\n'
+            + 'konst ZONE_5_ABZUG:      Euro    = 19.553\n'
+            + 'fn Tarif(zve: Euro): Euro = wähle {\n'
+            + '    falls zve < ZONE_4_OBERGRENZE + 1 -> (ZONE_4_SATZ * zve - ZONE_4_ABZUG).abrunden()\n'
+            + '    sonst                             -> (ZONE_5_SATZ * zve - ZONE_5_ABZUG).abrunden()\n'
+            + '}\n',
+        );
+        // ZONE_4_SATZ + ZONE_5_SATZ → 2× `%` (Prozent, Nicht-Literal-Wert)
+        const prozent = types(hs).filter((h) => h.label === '%');
+        expect(prozent.length).toBeGreaterThanOrEqual(2);
+        // zve + ZONE_4_ABZUG + ZONE_5_ABZUG (mindestens) → mehrere `€`
+        const euro = types(hs).filter((h) => h.label === '€');
+        expect(euro.length).toBeGreaterThanOrEqual(3);
+    });
+
     it('User-Bug: `(KFB + BEA) * k.faktor * k.auslandsfaktor` → "€" an KFB+BEA, "%" an auslandsfaktor', async () => {
         // Exakter User-Bug aus est.findsl `KinderfreibetragGesamt`:
         // bei einer komplexen Multiplikations-Kette innerhalb einer

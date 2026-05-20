@@ -101,6 +101,25 @@ export type IrExpr =
     /** `nichts`-Literal → Java `null`. (#44 L2) */
     | { readonly kind: 'nullLit' }
     /**
+     * Elvis-`oder` auf Nullable-Operand → ternär
+     * `(left != null) ? left : right` (#44 L3b). Lowering entscheidet
+     * Boolean-`or` vs. Elvis anhand des Typs des linken Operanden.
+     */
+    | { readonly kind: 'elvis'; readonly left: IrExpr; readonly right: IrExpr }
+    /**
+     * `!!` Force-Unwrap → `Objects.requireNonNull(value, "!! …")`
+     * (#44 L8). Wirft `NullPointerException` mit Quell-Hint bei `null`.
+     */
+    | { readonly kind: 'forceUnwrap'; readonly value: IrExpr; readonly hint: string }
+    /**
+     * `?.` Sicher-Zugriff → ternär
+     * `(recv != null) ? recv.feld() : null` (#44 ?.). Receiver wird
+     * im Generat doppelt evaluiert — in FinDSL P2 (seiteneffektfrei)
+     * unkritisch; Optimierung via lokaler Variable wäre möglich,
+     * aber der Generat-Code bleibt für jetzt KISS.
+     */
+    | { readonly kind: 'safeFieldAccess'; readonly receiver: IrExpr; readonly name: string }
+    /**
      * `x ist nichts` / `x ist nicht nichts` → `x == null` / `x != null`.
      * (#44 L2 — NullCheck-AST-Knoten, getrennt vom Force-Unwrap `!!`.)
      */

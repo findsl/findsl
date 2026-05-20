@@ -140,6 +140,23 @@ function emitExpr(e: IrExpr): string {
         case 'nullCheck':
             // (#44 L2) `x ist nichts` / `x ist nicht nichts`.
             return `${emitExpr(e.value)} ${e.negated ? '!=' : '=='} null`;
+        case 'elvis': {
+            // (#44 L3b) `(left != null) ? left : right`. `left` wird
+            // doppelt evaluiert — in FinDSL P2 (seiteneffektfrei)
+            // unkritisch; eine Helper-Variable wäre eine Optimierung,
+            // verlöre aber die Lesbarkeit des Generats.
+            const l = emitExpr(e.left);
+            return `(${l} != null) ? ${l} : ${emitExpr(e.right)}`;
+        }
+        case 'forceUnwrap':
+            // (#44 L8) `!!` → throws NullPointerException mit Hint.
+            return `java.util.Objects.requireNonNull(${emitExpr(e.value)}, ${javaString(e.hint)})`;
+        case 'safeFieldAccess': {
+            // (#44 `?.`) `(recv != null) ? recv.feld() : null` — analog Elvis,
+            // doppelte Evaluation in FinDSL P2 unkritisch.
+            const r = emitExpr(e.receiver);
+            return `(${r} != null) ? ${r}.${e.name}() : null`;
+        }
         case 'bool':
             return e.value ? 'true' : 'false';
         case 'neg':

@@ -30,6 +30,16 @@
 
 import { parseDocTags, stripDocMarkers } from './doc-tags.js';
 import { texToPlain } from './tex-to-plain.js';
+import { ensureMathJax, texToSvg } from '../docgen/math.js';
+
+/** Cached MathJax-Init-Promise. Pro Prozess einmalig — bei jedem
+ *  `renderDocForHover`-Aufruf wird das gleiche Promise awaited (no-op
+ *  nach dem ersten Aufruf). */
+let mathJaxInit: Promise<void> | null = null;
+function readyMathJax(): Promise<void> {
+    if (!mathJaxInit) mathJaxInit = ensureMathJax();
+    return mathJaxInit;
+}
 
 export interface QuelleAnnotation {
     readonly value: string;
@@ -49,15 +59,29 @@ export interface RenderInput {
 /**
  * Rendert die Hover-Karten-Sektionen unter der Code-Signatur.
  * Liefert leeren String, wenn weder Doc noch Quellen vorhanden sind.
+ *
+ * Asynchron, weil MathJax (für `$…$`/`$$…$$`-SVG-Rendering) einmalig
+ * initialisiert werden muss. Nachfolgende Aufrufe sind ohne Latenz
+ * (Cache via `readyMathJax`).
  */
-export function renderDocForHover(input: RenderInput): string {
+export async function renderDocForHover(input: RenderInput): Promise<string> {
     const { docRaw, paramOrder, quellen } = input;
     const stripped = stripDocMarkers(docRaw);
     const sections: string[] = [];
 
+    // MathJax frühzeitig initialisieren — falls die Prosa Formeln
+    // enthält, brauchen wir den synchronen SVG-Renderer. Bei Fehlschlag
+    // fällt `formatProse` automatisch auf `texToPlain` zurück.
+    let mathReady = true;
+    try {
+        await readyMathJax();
+    } catch {
+        mathReady = false;
+    }
+
     if (stripped) {
         const tags = parseDocTags(stripped);
-        const prose = formatProse(tags.prose);
+        const prose = formatProse(tags.prose, mathReady);
         if (prose) sections.push(prose);
 
         // Parameter-Sektion: Reihenfolge folgt `paramOrder`, falls vorhanden;
@@ -85,41 +109,62 @@ export function renderDocForHover(input: RenderInput): string {
 }
 
 /**
- * Bereitet die Prosa für die Hover-Karte auf:
+ * Bereitet die Prosa für die Hover-Karte auf.
  *
- * - Block-Math (`$$…$$`) → über `texToPlain` zu lesbarem Plain-Text
- *   gewandelt + als Fenced Code-Block ausgegeben (LSP-Clients wie
- *   VS Code rendern keinen KaTeX im Hover; der Klartext ist im Editor
- *   sofort verständlich).
- * - Inline-Math (`$…$`) → via `texToPlain` zu Plain-Text + als
- *   Backtick-Code-Span. Beispiel: `$\frac{a}{b}$` → `` `(a)/(b)` ``.
- * - Mehrfache Leerzeilen werden auf Doppel-Leerzeile reduziert.
+ * Math-Notation wird über MathJax zu SVG gerendert und als
+ * `data:image/svg+xml;utf8,…`-Markdown-Bild eingebettet — VS Code zeigt
+ * das im Hover als echte mathematische Formel (Brüche, Subscripts,
+ * Operatoren), nicht als rohen TeX-Code.
  *
- * Hintergrund: VS Code unterstützt **kein KaTeX-Rendering** in
- * Hover-Karten. Roher TeX (`\frac{...}{...}`, `\cdot`, `\geq`) ist
- * unleserlich, ein ```math-Block bleibt ebenfalls Roh-Text. Klartext
- * via `texToPlain` (= derselbe Algorithmus wie der PDF-Inline-
- * Fallback) ist die portable Lower-Bound-Lösung für alle Editoren.
+ * - Block-Math (`$$…$$`) → eigenständiges Bild auf eigener Zeile.
+ * - Inline-Math (`$…$`) → Inline-Bild im Fließtext.
+ *
+ * Fallback auf `texToPlain` (Klartext im Code-Span/Code-Block), wenn
+ * MathJax nicht initialisiert ist oder der Render-Pfad eine Exception
+ * wirft (z. B. ungültiges TeX, kaputte Math-Lib).
  */
-function formatProse(prose: string): string {
+function formatProse(prose: string, mathReady: boolean): string {
     if (!prose) return '';
     let out = prose;
-    // Block-Math: `$$ ... $$` → klartext-gerenderter ```findsl-Block.
-    // `findsl`-Sprache, damit das Syntax-Highlighting-Theme einen
-    // ruhigen Hintergrund gibt — der Inhalt selbst ist Plain-Text.
-    out = out.replace(/\$\$([\s\S]+?)\$\$/g, (_m, inner: string) => {
-        const plain = texToPlain(inner.trim());
-        return '```findsl\n' + plain + '\n```';
-    });
-    // Inline-Math: `$x + y$` → `` `x + y` `` (Klartext, kein TeX).
-    // Vorsicht: nicht innerhalb bereits gefencter Code-Blöcke ersetzen
-    // (sehr selten im Korpus; pragmatisch akzeptiert).
-    out = out.replace(/\$([^\n$]+?)\$/g, (_m, inner: string) => {
-        const plain = texToPlain(inner.trim());
-        return '`' + plain + '`';
-    });
+    // Block-Math: `$$ ... $$` → SVG-Bild als Block.
+    out = out.replace(/\$\$([\s\S]+?)\$\$/g, (_m, inner: string) =>
+        renderMath(inner.trim(), /* display */ true, mathReady));
+    // Inline-Math: `$x + y$` → SVG-Bild inline.
+    out = out.replace(/\$([^\n$]+?)\$/g, (_m, inner: string) =>
+        renderMath(inner.trim(), /* display */ false, mathReady));
     out = out.replace(/\n{3,}/g, '\n\n');
     return out.trim();
+}
+
+/** TeX → Markdown-Bild (SVG-data-URL) oder Klartext-Fallback. */
+function renderMath(tex: string, display: boolean, mathReady: boolean): string {
+    if (mathReady) {
+        try {
+            const { svg } = texToSvg(tex, display);
+            // SVG ohne XML-Deklaration und ohne `<?xml`-Header (MathJax
+            // liefert reines `<svg …>…</svg>`) → direkt URL-kodieren.
+            // `#`/`%`/`<` etc. müssen escaped sein; `encodeURIComponent`
+            // ist die sicherste Variante für `data:image/svg+xml;utf8,…`.
+            const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+            const alt = altText(tex);
+            // Display-Math: leere Zeile davor/danach, sodass Markdown das
+            // Bild als Block rendert statt inline. Inline-Math: kein
+            // Umbruch, fließt im Satz.
+            return display ? `\n\n![${alt}](${dataUrl})\n\n` : `![${alt}](${dataUrl})`;
+        } catch {
+            // Fall-through → Klartext
+        }
+    }
+    // Fallback: lesbarer Klartext (cases-Pretty-Print, Unicode-Operatoren).
+    const plain = texToPlain(tex);
+    return display ? '\n\n```findsl\n' + plain + '\n```\n\n' : '`' + plain + '`';
+}
+
+/** Markdown-Alt-Text für das SVG-Bild — Klartext-Variante der Formel,
+ *  damit Screen-Reader und Fall-zu-Markdown-Renderer (ohne Bild-Support)
+ *  die Formel als lesbaren Text bekommen. */
+function altText(tex: string): string {
+    return texToPlain(tex).replace(/[\n\r]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
 /** Escape Markdown-Sonderzeichen in einer einzeiligen Beschreibung (für

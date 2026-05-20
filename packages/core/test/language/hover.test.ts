@@ -549,7 +549,7 @@ datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
         expect(yIdx).toBeGreaterThan(xIdx);
     });
 
-    it('Inline-Math `$x \\cdot y$` wird via texToPlain zu lesbarem Klartext (Issue #65)', async () => {
+    it('Inline-Math `$x \\cdot y$` wird als SVG-Bild gerendert + Klartext-alt (Issue #65)', async () => {
         const src = `--
 Datei-Dokumentation.
 --
@@ -561,15 +561,14 @@ fn T(zve: Euro): Euro = zve
 `;
         const h = await hoverAt(src, 'fn T');
         const md = content(h);
-        // Inline-Math soll als Backtick-Code-Span mit Klartext
-        // erscheinen — `\cdot` → `·`, `\text{...}` aufgelöst, **kein**
-        // rohes TeX mehr (VS Code rendert keinen KaTeX im Hover).
-        expect(md).toContain('`T(zve) = a · zve + b`');
+        // SVG-Bild mit data-URL; alt-Text ist Klartext-Variante.
+        expect(md).toContain('![T(zve) = a · zve + b](data:image/svg+xml');
+        // Kein rohes TeX im Output.
         expect(md).not.toContain('\\cdot');
         expect(md).not.toMatch(/\$T\(.*\$/);
     });
 
-    it('Block-Math `$$ \\frac{a}{b} $$` wird via texToPlain zu lesbarer Fenced-Code-Block (Issue #65)', async () => {
+    it('Block-Math `$$ \\frac{a}{b} $$` wird als SVG-Bild gerendert + Klartext-alt (Issue #65)', async () => {
         const src = `--
 Datei-Dokumentation.
 --
@@ -585,14 +584,13 @@ fn T(zve: Euro): Euro = zve
 `;
         const h = await hoverAt(src, 'fn T');
         const md = content(h);
-        // Block-Math soll als Fenced ```findsl-Block mit Klartext
-        // erscheinen — `\frac{a}{b}` → `(a)/(b)`, kein rohes TeX.
-        expect(md).toContain('y = (zvE - GFB)/10000');
+        // Block-Math als SVG-Bild (alt = Klartext-Variante).
+        expect(md).toContain('![y = (zvE - GFB)/10000](data:image/svg+xml');
         expect(md).not.toContain('\\frac');
         expect(md).not.toContain('\\text');
     });
 
-    it('cases-Umgebung wird mehrzeilig + spalten-padded „Wert wenn Bedingung" gerendert (Issue #65)', async () => {
+    it('Block-Math mit cases-Umgebung wird als SVG-Bild gerendert (Issue #65)', async () => {
         const src = `--
 Datei-Dokumentation.
 --
@@ -611,20 +609,14 @@ fn T(x: Euro): Euro = x
 `;
         const h = await hoverAt(src, 'fn T');
         const md = content(h);
-        // Jede cases-Zeile auf eigener Linie mit „wenn"-Trenner.
-        expect(md).toMatch(/0\s+wenn x <= 0/);
-        expect(md).toMatch(/\(a \+ b\)\(c \+ d\)\s+wenn x > 0/);
-        // Spalten-Padding: der kürzere Wert `0` muss mit Spaces gepaddet
-        // sein, sodass beide „wenn" untereinander stehen.
-        const zeile0 = md.split('\n').find((l) => /^\s*0\s+wenn/.test(l));
-        const zeile1 = md.split('\n').find((l) => /\(a \+ b\)/.test(l));
-        expect(zeile0).toBeDefined();
-        expect(zeile1).toBeDefined();
-        // Position des „wenn" in beiden Zeilen identisch
-        expect(zeile0!.indexOf('wenn')).toBe(zeile1!.indexOf('wenn'));
+        // cases-Block wird als SVG-Bild gerendert; alt-Text enthält
+        // die texToPlain-Variante (zur Barrierefreiheit + Fallback).
+        expect(md).toContain('data:image/svg+xml');
+        expect(md).toMatch(/!\[.*wenn x <= 0.*\]/);
+        expect(md).toMatch(/!\[.*wenn x > 0.*\]/);
     });
 
-    it('User-Bug est.findsl: komplexe `\\frac{...}{...}` + `\\cases` aus EstGrundtarif (Issue #65)', async () => {
+    it('User-Bug est.findsl: komplexe Formeln werden alle als SVG-Bild gerendert (Issue #65)', async () => {
         const src = `--
 Datei-Dokumentation.
 --
@@ -648,15 +640,15 @@ fn EstGrundtarif(zve: Euro): Euro = zve
 `;
         const h = await hoverAt(src, 'fn EstGrundtarif');
         const md = content(h);
-        // Inline-Hilfsgrößen lesbar
-        expect(md).toContain('`y = (zvE - GFB)/10000`');
-        expect(md).toContain('`z = (zvE - ZONE_2)/10000`');
-        // Block-Formel: \cases, \cdot, \le werden zu lesbaren Operatoren
-        expect(md).toContain('ESt(zvE)');
-        expect(md).toContain('zvE <= GFB');
+        // Inline-Hilfsgrößen als SVG-Bilder (alt = Klartext)
+        expect(md).toContain('![y = (zvE - GFB)/10000](data:image/svg+xml');
+        expect(md).toContain('![z = (zvE - ZONE_2)/10000](data:image/svg+xml');
+        // Block-Formel als SVG-Bild (alt enthält cases-Plain-Text)
+        expect(md).toMatch(/!\[.*ESt\(zvE\).*wenn zvE <= GFB.*\]\(data:image\/svg\+xml/);
+        // Kein rohes TeX im Output
         expect(md).not.toContain('\\frac');
         expect(md).not.toContain('\\cdot');
-        expect(md).not.toContain('\\le');
+        expect(md).not.toContain('\\begin{cases}');
     });
 
     it('Funktion ohne @param-Tags zeigt nur Prosa (keine leere Parameter-Sektion)', async () => {

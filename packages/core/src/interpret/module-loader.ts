@@ -18,7 +18,7 @@
 import * as path from 'node:path';
 
 import { type Program } from '../language/generated/ast.js';
-import { resolveImportPath } from '../language/import-path.js';
+import { isWithinRoot, resolveImportPath } from '../language/import-path.js';
 import { InterpretError } from './values.js';
 
 export interface LoadedModule {
@@ -28,6 +28,25 @@ export interface LoadedModule {
 }
 
 export type ParseFile = (filePath: string) => Promise<Program>;
+
+/**
+ * Optionen für `loadModuleGraph`. Aktuell rein sicherheitsrelevant
+ * (Issue #73 — Path-Traversal-Schutz).
+ */
+export interface LoadOptions {
+    /**
+     * Absolutes Projekt-Basis-Verzeichnis. Ist es gesetzt, lehnt der
+     * Loader jeden `verwende … aus "…"`-Pfad ab, dessen aufgelöstes
+     * Ziel außerhalb dieses Verzeichnisses liegt — verhindert
+     * bösartige `../../../etc/passwd.findsl`-Eskapaden. Der Entry-Pfad
+     * selbst wird ebenfalls geprüft.
+     *
+     * Default: kein Check (rückwärtskompatibel; Tests/In-Memory-
+     * Setups können ohne Boundary arbeiten). Produktion (CLI) MUSS
+     * `process.cwd()` oder ein anderes konkretes Verzeichnis setzen.
+     */
+    readonly allowedRoot?: string;
+}
 
 /**
  * Liefert die relativen Import-Pfad-Strings eines Programms (ohne
@@ -57,8 +76,20 @@ export function listImportSources(program: Program): string[] {
 export async function loadModuleGraph(
     entryFilePath: string,
     parse: ParseFile,
+    options: LoadOptions = {},
 ): Promise<LoadedModule[]> {
     const absEntry = path.normalize(path.resolve(entryFilePath));
+    const allowedRoot = options.allowedRoot
+        ? path.normalize(path.resolve(options.allowedRoot))
+        : undefined;
+
+    if (allowedRoot && !isWithinRoot(absEntry, allowedRoot)) {
+        throw new InterpretError(
+            `Einstiegsdatei "${absEntry}" liegt außerhalb des erlaubten `
+            + `Projektverzeichnisses "${allowedRoot}".`,
+        );
+    }
+
     const entryProgram = await parse(absEntry);
 
     const order: LoadedModule[] = [];
@@ -76,6 +107,13 @@ export async function loadModuleGraph(
 
         for (const rawSource of listImportSources(program)) {
             const depPath = resolveImportPath(filePath, rawSource);
+            if (allowedRoot && !isWithinRoot(depPath, allowedRoot)) {
+                throw new InterpretError(
+                    `Import "${rawSource}" liegt außerhalb des erlaubten `
+                    + `Projektverzeichnisses "${allowedRoot}" `
+                    + `(aufgelöst zu "${depPath}").`,
+                );
+            }
             let depEntry = cache.get(depPath);
             if (!depEntry) {
                 let depProgram: Program;

@@ -101,7 +101,15 @@ export async function renderDocForHover(input: RenderInput): Promise<string> {
     }
 
     if (quellen && quellen.length > 0) {
-        const lines = quellen.map((q) => `*Quelle:* ${q.value}`).join('\n\n');
+        // Defense-in-Depth (Issue #73): `q.value` ist freier Text aus
+        // einem `@Quelle("…")`-Annotation und enthält oft Markdown-
+        // Sonderzeichen (`*`, `_`, `[`, `]`, Backticks). VS Code blockt
+        // mit `isTrusted: false` ohnehin Skripte und `javascript:`-URLs,
+        // aber wir escapen vorsorglich, damit der gerenderte Text dem
+        // Original entspricht (kein versehentlicher Image-/Link-Inject).
+        const lines = quellen
+            .map((q) => `*Quelle:* ${escapeMarkdownInline(q.value)}`)
+            .join('\n\n');
         sections.push(lines);
     }
 
@@ -186,9 +194,37 @@ function themeAwareSvg(svg: string): string {
 
 /** Markdown-Alt-Text für das SVG-Bild — Klartext-Variante der Formel,
  *  damit Screen-Reader und Fall-zu-Markdown-Renderer (ohne Bild-Support)
- *  die Formel als lesbaren Text bekommen. */
+ *  die Formel als lesbaren Text bekommen.
+ *
+ *  Defense-in-Depth (Issue #73): `texToPlain` lässt `]` und `(` durch.
+ *  TeX wie `\text{foo](http://example.com)}` würde sonst Alt-Text
+ *  `foo](http://example.com)` produzieren, was im Kontext
+ *  `![<alt>](data:…)` zu `![foo](http://example.com)](data:…)` mutiert
+ *  — VS Code rendert dann ggf. das externe Bild statt des SVG.
+ *  `]`-Escape verhindert das. */
 function altText(tex: string): string {
-    return texToPlain(tex).replace(/[\n\r]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    return texToPlain(tex)
+        .replace(/[\n\r]+/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/\]/g, '\\]')
+        .trim();
+}
+
+/** Escape nur die Markdown-Sonderzeichen, die im **Inline**-Kontext
+ *  aktiv sind. Block-Marker (`#`, `-`, `+`, `.`, `{`, `}`) werden nur
+ *  am Zeilenanfang interpretiert und bleiben im Inline-Text harmlos —
+ *  sie ungeschont durchlassen, damit legitimer Text (z. B. `§ 32a Abs.
+ *  1 EStG`) lesbar bleibt.
+ *
+ *  Genutzt für @Quelle-Werte im Hover (Issue #73 LOW 6). Reine
+ *  kosmetische Härtung — VS Code blockt mit `isTrusted: false` ohnehin
+ *  Skripte und `javascript:`-Links, aber der gerenderte Text soll dem
+ *  Original entsprechen, nicht zufällig Bilder/Links/Formatierung
+ *  triggern.
+ *
+ *  Escaped: `\` `` ` `` `*` `_` `[` `]` `(` `)` `!` `<` `>` `~` `|`. */
+function escapeMarkdownInline(s: string): string {
+    return s.replace(/([\\`*_\[\]()!<>~|])/g, '\\$1');
 }
 
 /** Escape Markdown-Sonderzeichen in einer einzeiligen Beschreibung (für

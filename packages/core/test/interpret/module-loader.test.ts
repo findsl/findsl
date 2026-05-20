@@ -157,3 +157,73 @@ describe('loadModuleGraph', () => {
         await expect(loadModuleGraph(ghost, buildParser())).rejects.toThrow();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Path-Traversal-Schutz (Issue #73): `allowedRoot` lehnt Imports außerhalb
+// des erlaubten Projektverzeichnisses ab. Ohne `allowedRoot` bleibt das
+// historische Verhalten erhalten (s. Tests oben).
+// ---------------------------------------------------------------------------
+
+describe('loadModuleGraph allowedRoot', () => {
+    it('Import innerhalb des Roots ist zulässig', async () => {
+        const dir = await fs.mkdtemp(path.join(tmpDir, 'within-'));
+        const d = path.basename(dir);
+        await write(path.join(d, 'a.findsl'), 'konst X: Dezimal = 1\n');
+        const b = await write(
+            path.join(d, 'b.findsl'),
+            'verwende {X} aus "./a"\nkonst Y: Dezimal = 2\n',
+        );
+        const order = await loadModuleGraph(b, buildParser(), {
+            allowedRoot: dir,
+        });
+        expect(order.map(base)).toEqual(['a.findsl', 'b.findsl']);
+    });
+
+    it('Import außerhalb des Roots wird mit InterpretError abgelehnt', async () => {
+        // Aufbau: zwei Geschwister-Verzeichnisse `inside` und `outside`
+        // unter `tmpDir`. Root = `inside/`. Eine bösartige Datei in
+        // `inside/` versucht über `../outside/secret` herauszubrechen.
+        const inside = await fs.mkdtemp(path.join(tmpDir, 'inside-'));
+        const outsideDir = await fs.mkdtemp(path.join(tmpDir, 'outside-'));
+        await fs.writeFile(
+            path.join(outsideDir, 'secret.findsl'),
+            'konst S: Dezimal = 1\n',
+        );
+        const evilName = path.basename(outsideDir);
+        const evil = path.join(inside, 'evil.findsl');
+        await fs.writeFile(
+            evil,
+            `verwende {S} aus "../${evilName}/secret"\nkonst E: Dezimal = 2\n`,
+        );
+        await expect(
+            loadModuleGraph(evil, buildParser(), { allowedRoot: inside }),
+        ).rejects.toThrow(InterpretError);
+        await expect(
+            loadModuleGraph(evil, buildParser(), { allowedRoot: inside }),
+        ).rejects.toThrow(/außerhalb des erlaubten Projektverzeichnisses/);
+    });
+
+    it('Entry außerhalb des Roots wird abgelehnt', async () => {
+        const root = await fs.mkdtemp(path.join(tmpDir, 'root-'));
+        const elsewhere = await fs.mkdtemp(path.join(tmpDir, 'elsewhere-'));
+        const entry = path.join(elsewhere, 'foo.findsl');
+        await fs.writeFile(entry, 'konst K: Dezimal = 1\n');
+        await expect(
+            loadModuleGraph(entry, buildParser(), { allowedRoot: root }),
+        ).rejects.toThrow(/Einstiegsdatei .* liegt außerhalb/);
+    });
+
+    it('Ohne allowedRoot bleibt Verhalten unverändert (kein Check)', async () => {
+        // Regressionsschutz: die existierende Cross-Dir-Test-Suite (oben)
+        // ruft ohne Optionen auf — hier exemplarisch dasselbe Muster.
+        const dir = await fs.mkdtemp(path.join(tmpDir, 'nocheck-'));
+        const d = path.basename(dir);
+        await write(path.join(d, 'sub', 'a.findsl'), 'konst X: Dezimal = 1\n');
+        const entry = await write(
+            path.join(d, 'b.findsl'),
+            'verwende {X} aus "./sub/a"\nkonst Y: Dezimal = 2\n',
+        );
+        const order = await loadModuleGraph(entry, buildParser());
+        expect(order.map(base)).toEqual(['a.findsl', 'b.findsl']);
+    });
+});

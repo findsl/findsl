@@ -27,6 +27,6 @@
     "langium-cli": "4.2.1",
     "postject": "1.0.0-alpha.6",
     "typescript": "5.9.3",
-    "vitest": "2.1.9"
+    "vitest": "4.1.7"
   }
 }

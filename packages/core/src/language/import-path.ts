@@ -28,6 +28,23 @@ export function resolveImportPath(importingFileAbs: string, rawSource: string): 
     return path.normalize(path.resolve(baseDir, `${rawSource}.findsl`));
 }
 
+/**
+ * Sicherheitsprüfung (Issue #73): liegt `absPath` innerhalb von
+ * `allowedRoot`? Verhindert, dass eine `verwende … aus "../../../etc/…"`-
+ * Direktive Dateien außerhalb des erlaubten Projekt-Basis-Verzeichnisses
+ * öffnet (Path-Traversal). `allowedRoot` zählt selbst als „innerhalb".
+ *
+ * Beide Pfade müssen absolut/normalisiert sein (kein Symlink-Resolving —
+ * der Loader normalisiert ohnehin via `path.normalize`/`path.resolve`).
+ */
+export function isWithinRoot(absPath: string, allowedRoot: string): boolean {
+    const root = path.normalize(allowedRoot);
+    const target = path.normalize(absPath);
+    if (target === root) return true;
+    const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+    return target.startsWith(prefix);
+}
+
 /** True, wenn der Dateipfad eine Akzeptanztest-Datei ist (`*.test.findsl`). */
 export function isTestFile(absPath: string): boolean {
     return /\.test\.findsl$/.test(absPath);

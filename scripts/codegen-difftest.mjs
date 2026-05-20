@@ -63,8 +63,17 @@ if (!existsSync(join(runtimeDir, isWin ? 'gradlew.bat' : 'gradlew'))) {
 // Volles Gate: Codegen → Compile → generiertes prüfe→JUnit (bit-genau)
 // + JavaParser-Struktur-Invarianten + Hand-Runtime-JUnit. Eine Wahrheit.
 console.log('▶  findsl-runtime: ./gradlew check (Codegen-Gate, Issue #7)…');
-const r = spawnSync(gradlew, ['check', '--console=plain'], {
-    cwd: runtimeDir, stdio: 'inherit', shell: isWin, timeout: TEN_MIN,
+// Defense-in-Depth (Issue #73): `shell: true` würde auf Windows die
+// Argumente durch `cmd.exe` interpretieren — Shell-Metacharacters
+// könnten dann bei künftigen variablen Args expandieren. Wir starten
+// `gradlew.bat` stattdessen explizit über `cmd /c` und lassen `shell:
+// false`. Aktuelle Args sind alle hardcoded; das ist reine Vorsorge
+// gegen spätere Erweiterungen.
+const [bin, baseArgs] = isWin
+    ? ['cmd.exe', ['/c', 'gradlew.bat']]
+    : [gradlew, []];
+const r = spawnSync(bin, [...baseArgs, 'check', '--console=plain'], {
+    cwd: runtimeDir, stdio: 'inherit', shell: false, timeout: TEN_MIN,
 });
 if (r.signal === 'SIGTERM') {
     console.error('✗ codegen:difftest abgebrochen — Zeitlimit (Gradle, 10 min).');

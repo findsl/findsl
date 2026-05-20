@@ -245,7 +245,12 @@ async function crossModuleDiagnostics(
 
     let modules;
     try {
-        modules = await loadModuleGraph(entryAbs, parse);
+        // Path-Traversal-Schutz (Issue #73): `verwende … aus "…"` darf
+        // nur Dateien im Verzeichnisbaum der Einstiegsdatei laden — kein
+        // `../../../etc/passwd.findsl`-Eskapaden.
+        modules = await loadModuleGraph(entryAbs, parse, {
+            allowedRoot: path.dirname(entryAbs),
+        });
     } catch (err) {
         return [{
             line: 1, col: 1, severity: 'error',
@@ -355,7 +360,10 @@ Beispiele:
 
             let report;
             try {
-                const modules = await loadModuleGraph(fullPath, parseFile);
+                // Path-Traversal-Schutz (Issue #73): siehe `crossModuleDiagnostics`.
+                const modules = await loadModuleGraph(fullPath, parseFile, {
+                    allowedRoot: path.dirname(fullPath),
+                });
                 report = runPruefe(modules);
             } catch (err) {
                 if ((err as Error).message !== 'parse-error') {

@@ -188,7 +188,17 @@ export async function ensureMathJax(): Promise<void> {
     const { AllPackages } = await import('mathjax-full/js/input/tex/AllPackages.js');
     const adaptor = liteAdaptor();
     RegisterHTMLHandler(adaptor);
-    const tex = new TeX({ packages: AllPackages });
+    // Defense-in-Depth (Issue #73): `AllPackages` enthält `html`
+    // (`\href{url}{…}`, `\htmlStyle{…}{…}`), `action` (Toggle/Tooltip
+    // mit URL-/Skript-Hooks) und `require` (Laufzeit-Paketnachladen).
+    // Diese haben in deutschen Steuer-Doku-Kommentaren keine legitime
+    // Verwendung; sie wegzulassen schützt gegen künftige Switches zu
+    // Inline-SVG-Rendering im Editor-Hover, wo `\href{javascript:…}`
+    // sonst durchschlüge.
+    const SAFE_PACKAGES = AllPackages.filter(
+        (p: string) => !['html', 'action', 'require'].includes(p),
+    );
+    const tex = new TeX({ packages: SAFE_PACKAGES });
     const svg = new SVG({ fontCache: 'none' });
     mjAdaptor = adaptor as unknown as MathjaxAdaptor;
     mjDoc = mathjax.document('', { InputJax: tex, OutputJax: svg }) as unknown as MathjaxConverter;

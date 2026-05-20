@@ -13,6 +13,12 @@ verwende {
     BEISPIEL_EUROCENT,
     BEISPIEL_CENT,
     BEISPIEL_PROZENT,
+    BEISPIEL_WAHR,
+    BEISPIEL_TEXT,
+    BEISPIEL_LISTE,
+    BEISPIEL_BEREICH,
+    BEISPIEL_BEREICH_EXKLUSIV,
+    BEISPIEL_BEREICH_SCHRITT,
     Rot,
     Grün,
     Blau,
@@ -40,6 +46,12 @@ prüfe "§ 2.7 Literale — Konstanten-Identität" {
     testfall "Prozent-Konstante" {
         BEISPIEL_PROZENT == 19%
     }
+    testfall "Wahrheitswert-Konstante" {
+        BEISPIEL_WAHR
+    }
+    testfall "Text-Konstante" {
+        BEISPIEL_TEXT == "Hallo, FinDSL!"
+    }
 }
 
 prüfe "§ 3.7 Aufzählung — Wert-Identität" {
@@ -56,20 +68,37 @@ prüfe "§ 3.8 Datensatz — Konstruktor und Feldzugriff" {
         var p: Punkt = Punkt(x = 3, y = 4)
         p.x == 3 und p.y == 4
     }
-    testfall "Person mit Default-Alter (18)" {
-        var p: Person = Person(name = "Anna", email = "anna@example.de")
-        // TODO(#44): Text-Vergleich `p.name == "Anna"` ist codegen-kaputt
-        // (`String.equalsValue` existiert nicht). Wir testen nur das Default-Alter.
-        p.alter == 18
+    testfall "Person mit Default-Alter (18) + Default-email (nichts)" {
+        var p: Person = Person(name = "Anna")
+        p.name == "Anna" und p.alter == 18 und p.email ist nichts
     }
-    testfall "Person mit explizitem Alter" {
+    testfall "Person mit explizitem Alter und E-Mail" {
         var p: Person = Person(
             name  = "Bertha",
             alter = 42,
             email = "bertha@example.de",
         )
-        p.alter == 42
+        p.name == "Bertha" und p.alter == 42
     }
 }
 
-// § 4.15 Listen-Literal als `konst`: ausgespart, siehe TODO(#44).
+prüfe "§ 4.15 Listen-Literal" {
+    testfall "BEISPIEL_LISTE hat 3 Elemente" {
+        BEISPIEL_LISTE.länge == 3
+    }
+    testfall "BEISPIEL_LISTE enthält 2" {
+        BEISPIEL_LISTE.enthält(2)
+    }
+}
+
+prüfe "§ 4.16 Bereich-Literale" {
+    testfall "1 bis 10 hat 10 Elemente" {
+        BEISPIEL_BEREICH.länge == 10
+    }
+    testfall "0 bis unter 10 hat 10 Elemente (exklusiv)" {
+        BEISPIEL_BEREICH_EXKLUSIV.länge == 10
+    }
+    testfall "0 bis 20 schritt 5 hat 5 Elemente" {
+        BEISPIEL_BEREICH_SCHRITT.länge == 5
+    }
+}

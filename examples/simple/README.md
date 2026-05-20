@@ -21,28 +21,24 @@ und `simple-funktionen` importieren beide aus `simple-typen`; jede
 deckt jeden zugesagten Konstrukt-Cluster mit mindestens einem
 Behavior-Test ab.
 
-## Codegen-Lücken (Issue #44)
+## SPEC-Vollabdeckung erreicht (Issue #44 geschlossen)
 
-Folgende SPEC-Konstrukte sind aktuell **bewusst** nicht im Korpus, weil
-der Java-Codegen sie noch nicht (vollständig) unterstützt — sie würden
-den Gradle-`check`-Sweep brechen. Markiert mit `TODO(#44)` an der
-jeweiligen Stelle:
+Mit dem Abschluss von [Issue #44](https://github.com/findsl/findsl/issues/44)
+(alle 14 Codegen-Lücken + Folge-Lücken gefixt, 17 PRs) deckt der Korpus
+jetzt **die volle SPEC § 2–§ 11-Breite** ab. Reaktiviert:
 
+- `nichts`-Literal + Nullable-Defaults (`feld: T? = nichts`)
+- Boolean-`oder`, Elvis-`oder` auf Nullable
+- `?.` Sicher-Zugriff, `!!` Force-Unwrap
+- `als`-Cast, `wenn`-Ausdruck
+- Lambda im Higher-Order-Method-Kontext (`.zuordnen { x -> … }`)
+- Lambda als var-Wert + Funktions-Typ als Rückgabe (`MachAddierer`)
 - `Range`-Literale (`1 bis 10`, `0 bis unter 10`, `0 bis 20 schritt 5`)
-- `NullLiteral` (`nichts`) — auch als Default-Wert (`feld: T? = nichts`)
-- `oder` (alle Verwendungen — Boolean-Logik, Elvis-Operator)
-- Lambda (auch in Higher-Order-Method-Kontext)
-- `wenn`-Ausdruck (§ 4.9)
-- `!!` Force-Unwrap, `?.` Sicher-Zugriff
-- `als`-Cast (in manchen Kontexten)
-- `.enthält()` und andere Listen-Methoden außer `.länge`/`.zuordnen`/`.summe`
-- Text-`konst` (z. B. `konst X: Text = "…"` — Codegen-Bug: Text wird als FinDslNumber typisiert)
-- String-Interpolation `"${x}"` auf Text-Variablen
-- Default-Parameter beim Aufruf (nicht expandiert)
-- Cross-Modul-Aufzählungs-Werte in generierten JUnit-Tests
-
-Sobald [Issue #44](https://github.com/findsl/findsl/issues/44) geschlossen
-ist, kommen diese Konstrukte zurück in den Korpus (PR-Reihe Phase 2).
+- Text-`konst` + String-Interpolation + Text-Vergleich + Text-`+`-Konkat
+- Default-Parameter beim Aufruf (`Bruttopreis(100)` ohne MwSt)
+- Cross-Modul-Aufzählungs-Werte in Tests (`FarbBeschreibung(Rot)`)
+- Alle 12 § 11.2-Listen-Methoden (`.enthält`, `.filtern`, `.zusammenfassen`, …)
+- `für jeden`-Schleife, Aufzählungs-Bereich (`I bis VI`)
 
 ## Workflow
 

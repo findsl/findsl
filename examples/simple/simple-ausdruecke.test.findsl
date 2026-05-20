@@ -19,16 +19,30 @@ verwende {
     IstGroesser,
     IstGroesserGleich,
     LogischUnd,
+    LogischOder,
     LogischNicht,
+    ElvisFallback,
+    EmailVonPerson,
+    ForceUnwrap,
+    CastEuroZuEuroCent,
+    CastGanzzahlZuCent,
+    WennEuroPositiv,
     AmpelGuard,
+    FarbBeschreibung,
     AufrufPositional,
     AufrufBenannt,
+    Quadriere,
     PunktX,
     PunktVon,
     DreiZahlen,
+    BereichInklusiv,
+    BereichExklusiv,
+    BereichMitSchritt,
     BlockMitVar,
     KehrwertOderAbbruch,
 } aus "./simple-ausdruecke"
+
+verwende { Person, Rot, Grün, Blau } aus "./simple-typen"
 
 prüfe "§ 4.2 Arithmetik" {
     testfall "Addition 1 € + 2 € = 3 €" {
@@ -58,51 +72,78 @@ prüfe "§ 4.3 Vergleichsoperatoren" {
 prüfe "§ 4.4 Logische Operatoren" {
     testfall "und: wahr und wahr = wahr" { LogischUnd(wahr, wahr) }
     testfall "und: wahr und falsch = falsch" { nicht LogischUnd(wahr, falsch) }
+    testfall "oder (Bool): wahr oder falsch = wahr" { LogischOder(wahr, falsch) }
     testfall "nicht: nicht falsch = wahr" { LogischNicht(falsch) }
 }
 
-// § 4.5 Elvis und § 4.6 Sicher-Zugriff: ausgespart bis Codegen-Lücken
-// geschlossen sind (Issue #44 — NullLiteral + Elvis-`oder` out-of-scope).
-
-// § 4.7 Force-Unwrap (`!!`): ausgespart, siehe TODO(#44) in simple-ausdruecke.findsl.
-
-// § 4.8 Cast `als`: ausgespart, siehe TODO(#44) in simple-ausdruecke.findsl.
-
-// § 4.9 `wenn`-Ausdruck: ausgespart, siehe TODO(#44) in simple-ausdruecke.findsl.
-
-prüfe "§ 4.10.1 Wähle (Guards, ohne Subjekt)" {
-    testfall "20 km/h → Score 1 (langsam)" { AmpelGuard(20)  == 1 }
-    testfall "45 km/h → Score 2 (normal)"  { AmpelGuard(45)  == 2 }
-    testfall "80 km/h → Score 3 (schnell)" { AmpelGuard(80)  == 3 }
-    testfall "200 km/h → Score 4 (rasant)" { AmpelGuard(200) == 4 }
+prüfe "§ 4.5 Elvis (`oder` auf Nullable)" {
+    testfall "vorhanden → linker Wert" {
+        ElvisFallback("Anna", "Ersatz") == "Anna"
+    }
+    testfall "nichts → rechter Wert" {
+        ElvisFallback(nichts, "Ersatz") == "Ersatz"
+    }
 }
 
-// TODO(#44): § 4.10.2 `wähle (subjekt)` mit Cross-Modul-Enum-Werten
-// (Rot/Grün/Blau aus simple-typen) wird im Test-Codegen kaputt
-// generiert — `Blau` ist ohne `SimpleTypen.`-Präfix im generierten
-// Test-Code unbekannt. Test-Aussparung bis Codegen-Lücke geschlossen:
-//
-//   testfall "Subjekt: Rot → 1 (warm)"  { FarbBeschreibung(Rot)  == 1 }
-//   testfall "Subjekt: Grün → 2 (kühl)" { FarbBeschreibung(Grün) == 2 }
-//   testfall "Subjekt: Blau → 2 (kühl)" { FarbBeschreibung(Blau) == 2 }
+prüfe "§ 4.6 Sicher-Zugriff (`?.`)" {
+    testfall "Person nichts → email ist nichts" {
+        EmailVonPerson(Person(name = "Anna")) ist nichts
+    }
+}
+
+prüfe "§ 4.7 Force-Unwrap (`!!`)" {
+    testfall "vorhandener Wert wird ausgepackt" {
+        ForceUnwrap(42) == 42
+    }
+}
+
+prüfe "§ 4.8 Cast (`als`)" {
+    testfall "Euro → EuroCent: 100 € als EuroCent = 100,00" {
+        CastEuroZuEuroCent(100) == 100,00
+    }
+    testfall "Ganzzahl → Cent: 250 als Cent" {
+        CastGanzzahlZuCent(250) == (250 als Cent)
+    }
+}
+
+prüfe "§ 4.9 Wenn-Sonst" {
+    testfall "positiv → \"positiv\"" { WennEuroPositiv(10) == "positiv" }
+    testfall "0 → \"nicht positiv\"" { WennEuroPositiv(0) == "nicht positiv" }
+}
+
+prüfe "§ 4.10 Wähle" {
+    testfall "Guard: 20 km/h → langsam" { AmpelGuard(20) == "langsam" }
+    testfall "Guard: 45 km/h → normal"  { AmpelGuard(45) == "normal" }
+    testfall "Guard: 80 km/h → schnell" { AmpelGuard(80) == "schnell" }
+    testfall "Guard: 200 km/h → rasant" { AmpelGuard(200) == "rasant" }
+    testfall "Subjekt: Rot → warm" { FarbBeschreibung(Rot) == "warm" }
+    testfall "Subjekt: Grün → kühl (Mehrfach-Pattern)" { FarbBeschreibung(Grün) == "kühl" }
+    testfall "Subjekt: Blau → kühl (Mehrfach-Pattern)" { FarbBeschreibung(Blau) == "kühl" }
+}
 
 prüfe "§ 4.11 Funktionsaufruf" {
-    testfall "positional: 5 × 3 = 15" { AufrufPositional() == 15 }
-    testfall "benannt mit Default: 5 × 10 = 50" { AufrufBenannt() == 50 }
+    testfall "positional" { AufrufPositional() == "Servus, Anna!" }
+    testfall "benannt mit Default" { AufrufBenannt() == "Hallo, Bertha!" }
 }
 
-// § 4.12 Lambda: vollständig ausgespart, siehe TODO(#44).
+prüfe "§ 4.12 Lambda (Higher-Order-Method-Kontext)" {
+    testfall "Quadriere([1,2,3]) = [1, 4, 9]" {
+        var qs: Liste<Ganzzahl> = Quadriere([1, 2, 3])
+        qs.länge == 3 und qs.kopf == 1
+    }
+}
 
 prüfe "§ 4.13 + 4.14 Feldzugriff & Datensatz-Konstruktor" {
     testfall "Feldzugriff x" { PunktX(PunktVon(3, 4)) == 3 }
     testfall "Konstruierter Punkt hat erwartetes y" { PunktVon(3, 4).y == 4 }
 }
 
-prüfe "§ 4.15 Listen-Konstruktor" {
+prüfe "§ 4.15 + 4.16 Listen-/Bereich-Konstruktor" {
     testfall "Liste [1,2,3] hat Länge 3" { DreiZahlen().länge == 3 }
+    testfall "1 bis 10 hat 10 Elemente" { BereichInklusiv().länge == 10 }
+    testfall "0 bis unter 10 hat 10 Elemente" { BereichExklusiv().länge == 10 }
+    testfall "0 bis 20 schritt 5 hat 5 Elemente" { BereichMitSchritt().länge == 5 }
 }
-// § 4.16 Bereich-Konstruktor: ausgespart bis Codegen-Lücken
-// geschlossen sind (Issue #44 — `Range` out-of-scope).
 
 prüfe "§ 4.17 Block-Ausdruck mit var" {
     testfall "(2+3) × 2 = 10" { BlockMitVar(2, 3) == 10 }

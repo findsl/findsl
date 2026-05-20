@@ -39,7 +39,12 @@ class GeneratedStructureTest {
     /** Erlaubte Skalar-/Container-Typen an öffentlichen Grenzen. */
     private static final Set<String> SPEAKING = Set.of(
             "Euro", "EuroCent", "Cent", "Prozent", "Ganzzahl", "Dezimal",
-            "FinDslNumber", "FinDslListe", "Tarifart", "Steuerklasse",
+            "FinDslNumber", "FinDslListe",
+            // First-class Lambda-Typen (#44 L5): `var f: (T) -> R` lowert zu
+            // FinDslLambda1<T, R>; 2-arg Lambdas (Fold-Argument) zu
+            // FinDslLambda2<A, B, R>. Beide sind erlaubte API-Typen.
+            "FinDslLambda1", "FinDslLambda2",
+            "Tarifart", "Steuerklasse",
             "boolean", "String", "void");
     /** In öffentlichen Signaturen verbotene rohe Java-Numerik. */
     private static final Set<String> FORBIDDEN = Set.of(

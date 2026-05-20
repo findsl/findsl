@@ -127,7 +127,9 @@ function javaType(t: Type | undefined, reg: Registry): string {
     }
     const a = namedAtom(t);
     if (a === undefined) return 'FinDslNumber';            // Teil-Parse: konservativ
-    if (a.name === 'Liste') {
+    if (a.name === 'Liste' || a.name === 'Bereich') {
+        // `Bereich<T>` wird im Lowering eager nach `FinDslListe<T>`
+        // materialisiert (#44 L1); Typ-Annotation analog mappen.
         const elem = a.typeArgs?.args?.[0];
         return `FinDslListe<${javaType(elem, reg)}>`;
     }
@@ -138,10 +140,11 @@ function javaType(t: Type | undefined, reg: Registry): string {
     return owner !== undefined ? `${owner}.${a.name}` : a.name;
 }
 
-/** `true` ⇔ skalarer numerischer FinDSL-Typ (kein `Liste<…>`). */
+/** `true` ⇔ skalarer numerischer FinDSL-Typ (kein `Liste<…>`/`Bereich<…>`). */
 function isNumericType(t: Type | undefined): boolean {
     const a = namedAtom(t);
-    return a !== undefined && a.name !== 'Liste' && NUMERIC_NAMES.has(a.name);
+    return a !== undefined && a.name !== 'Liste' && a.name !== 'Bereich'
+        && NUMERIC_NAMES.has(a.name);
 }
 
 /**
@@ -162,7 +165,7 @@ function apiJavaType(t: Type | undefined, reg: Registry): string {
     }
     const a = namedAtom(t);
     if (a === undefined) return 'FinDslNumber';
-    if (a.name === 'Liste') {
+    if (a.name === 'Liste' || a.name === 'Bereich') {
         const elem = a.typeArgs?.args?.[0];
         return `FinDslListe<${javaType(elem, reg)}>`;
     }

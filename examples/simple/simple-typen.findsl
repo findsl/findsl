@@ -11,11 +11,9 @@ Diese Datei deckt gezielt ab:
 
 - **§ 2.7 Literale** — Ganzzahl (mit `.`-Tausenderpunkten), Dezimal
   (Komma-Dezimaltrenner), Geld (Euro/EuroCent/Cent), Prozent, Boolean,
-  Text (einzeilig + Triple-Quoted). Das Null-Literal `nichts` (§ 2.7.7)
-  und `Bereich`-Literale (§ 4.16) sind aktuell aus dem Korpus
-  ausgespart — der Java-Codegen unterstützt sie noch nicht (siehe
-  Issue #44). Sie werden ergänzt, sobald die Codegen-Lücken geschlossen
-  sind.
+  Text (einzeilig + Triple-Quoted), `nichts` (Null-Literal, § 2.7.7).
+- **§ 4.16 `Bereich`** — inklusiv (`bis`), exklusiv (`bis unter`) und
+  mit Schrittweite (`schritt`).
 - **§ 3 Typsystem** — alle eingebauten Skalar-/Container-Typen je 1×
   als `konst`, plus eigene Aufzählungen und Datensätze.
 - **§ 3.7 Aufzählung** + **§ 3.8 Datensatz** (inkl. Default-Parameter).
@@ -76,20 +74,17 @@ datensatz Punkt(
 --
 Personen-Datensatz mit nullable Feld und Default-Wert für das Alter.
 Demonstriert (a) Default-Parameter auf Feld-Ebene, (b) Nullable `T?`
-und (c) Mischung verschiedener Skalartypen in einer Struktur.
-
-TODO(#44): Sobald der Codegen `nichts` als Default-Wert unterstützt,
-wird `email: Text?` wieder einen `= nichts`-Default bekommen — heute
-muss der Aufrufer es explizit setzen.
+mit `nichts`-Default und (c) Mischung verschiedener Skalartypen in
+einer Struktur.
 
 @param name     Anzeigename
 @param alter    Alter in Jahren, Standard 18 (Volljährigkeit)
-@param email    optionale E-Mail-Adresse
+@param email    optionale E-Mail-Adresse (`nichts` wenn unbekannt)
 --
 datensatz Person(
     name:  Text,
     alter: Ganzzahl = 18,
-    email: Text?,
+    email: Text?    = nichts,
 )
 
 // ===========================================================================
@@ -120,16 +115,45 @@ konst BEISPIEL_CENT: Cent = 50
 @Quelle("examples/simple, Prozent-Demo")
 konst BEISPIEL_PROZENT: Prozent = 19%
 
-// TODO(#44): Folgende `konst`-Definitionen werden vom aktuellen Codegen
-// **falsch** als `FinDslNumber` typisiert (Bug — alle nicht-numerischen
-// Top-Level-Konstanten triggern es). Zudem `Range`-Literale sind
-// `out-of-scope (Phase 3)`. Wiederaufnahme nach Schließen Issue #44:
-//
-//   konst BEISPIEL_WAHR:           Wahrheitswert    = wahr
-//   konst BEISPIEL_TEXT:           Text             = "Hallo, FinDSL!"
-//   konst BEISPIEL_BESCHEID:       Text             = """…Triple-Quoted…"""
-//   konst BEISPIEL_LISTE:          Liste<Ganzzahl>  = [1, 2, 3]
-//   konst BEISPIEL_LEERE_LISTE:    Liste<Euro>      = []<Euro>
-//   konst BEISPIEL_BEREICH:        Bereich<Ganzzahl> = 1 bis 10
-//   konst BEISPIEL_BEREICH_EXKL:   Bereich<Ganzzahl> = 0 bis unter 10
+-- Boolean-Literal (§ 2.7.5). --
+@Quelle("examples/simple, Wahrheitswert-Demo")
+konst BEISPIEL_WAHR: Wahrheitswert = wahr
+
+-- Einzeiliges Text-Literal (§ 2.7.6). --
+@Quelle("examples/simple, Text-Demo")
+konst BEISPIEL_TEXT: Text = "Hallo, FinDSL!"
+
+--
+Mehrzeiliges Text-Literal (Triple-Quoted, § 2.7.6) — bewahrt
+Zeilenumbrüche und führende Whitespaces unverändert. Wird typischerweise
+für mehrzeilige Bescheide oder Belegtexte verwendet.
+--
+@Quelle("examples/simple, Triple-Quoted-Text-Demo")
+konst BEISPIEL_BESCHEID: Text = """
+Sehr geehrte:r Steuerpflichtige:r,
+
+dieser Beleg dient nur Demonstrationszwecken.
+
+Mit freundlichen Grüßen
+"""
+
+-- Liste-Literal: drei Ganzzahlen (§ 4.15). --
+@Quelle("examples/simple, Liste-Demo")
+konst BEISPIEL_LISTE: Liste<Ganzzahl> = [1, 2, 3]
+
+-- Leere typisierte Liste (Annotation der Elementsorte nötig, § 4.15). --
+@Quelle("examples/simple, Leere-Liste-Demo")
+konst BEISPIEL_LEERE_LISTE: Liste<Euro> = []<Euro>
+
+-- Bereich-Literal mit `bis` (inklusiv, § 4.16). --
+@Quelle("examples/simple, Bereich-Inklusiv-Demo")
+konst BEISPIEL_BEREICH: Bereich<Ganzzahl> = 1 bis 10
+
+-- Bereich-Literal mit `bis unter` (exklusiv, § 4.16). --
+@Quelle("examples/simple, Bereich-Exklusiv-Demo")
+konst BEISPIEL_BEREICH_EXKLUSIV: Bereich<Ganzzahl> = 0 bis unter 10
+
+-- Bereich-Literal mit `schritt` (§ 4.16). --
+@Quelle("examples/simple, Bereich-Schritt-Demo")
+konst BEISPIEL_BEREICH_SCHRITT: Bereich<Ganzzahl> = 0 bis 20 schritt 5
 //   konst BEISPIEL_BEREICH_SCHRITT: Bereich<Ganzzahl> = 0 bis 20 schritt 5

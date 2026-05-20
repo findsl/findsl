@@ -52,21 +52,24 @@ fn Bruttopreis(netto: Euro, mehrwertsteuer: Prozent = 19%): Euro =
 // ===========================================================================
 // § 6.2.4 Closures + § 3.12 Funktionstypen (als Rückgabe)
 // ===========================================================================
-// TODO(#44): Closures, Funktions-Typ als Rückgabe und Lambda-in-`var`-
-// Bindung sind aktuell Codegen-out-of-scope. Geplante Wiederaufnahme
-// nach Schließen der Codegen-Lücke (Issue #44):
-//
-//   fn MachAddierer(offset: Ganzzahl): (Ganzzahl) -> Ganzzahl =
-//       { n -> n + offset }
-//
-//   fn ZweiSchritteFest(offset: Ganzzahl, start: Ganzzahl): Ganzzahl = {
-//       var addiere: (Ganzzahl) -> Ganzzahl = MachAddierer(offset)
-//       addiere(addiere(start))
-//   }
-//
-// Heute wird die Closure-Semantik bereits implizit durch die
-// `.zuordnen { x -> … }`-Lambda in `simple-ausdruecke.QuadrateBis`
-// abgedeckt (Lambda im Higher-Order-Method-Kontext = codegen-tauglich).
+
+--
+Closure-Demo — die zurückgegebene Lambda fängt die äußere Variable
+`offset` lexikalisch ein. Beim späteren Aufruf liefert sie noch immer
+den gefangenen Wert. Demonstriert (a) Funktions-Typ als **Rückgabe**
+(§ 3.12), (b) Closures (§ 6.2.4), (c) Lambda-Literal `{ n -> … }`.
+--
+fn MachAddierer(offset: Ganzzahl): (Ganzzahl) -> Ganzzahl = { n -> n + offset }
+
+--
+Zweimalige Anwendung einer Closure auf einen Wert — demonstriert,
+dass eine in `var` gebundene Funktion mehrfach aufgerufen werden kann
+und der Closure-Zustand persistent ist.
+--
+fn ZweiSchritteFest(offset: Ganzzahl, start: Ganzzahl): Ganzzahl = {
+    var addiere: (Ganzzahl) -> Ganzzahl = MachAddierer(offset)
+    addiere(addiere(start))
+}
 
 // ===========================================================================
 // § 8.4 Sichtbarkeit — `_`-Präfix = modul-intern

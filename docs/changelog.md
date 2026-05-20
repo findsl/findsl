@@ -2,6 +2,27 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-20 — **`examples/simple/`-Korpus auf
+SPEC-Vollabdeckung reaktiviert (Issue #43, nach Abschluss Issue #44).**
+Nach dem Schließen aller 14 Codegen-Lücken aus Issue #44 (17 PRs:
+L1-L15 ausser implicitly-fixed L7+L13, plus Folge-Lücken Text-`+`,
+`für jeden`, Block-Lambda, Aufzählungs-Bereich) wurden alle
+TODO(#44)-Marker im simple-Korpus aufgelöst — der Korpus zeigt jetzt
+die komplette SPEC § 2-§ 11-Breite (76 prüfe-Items grün via
+Interpreter, 8 Java-Module + 3 JUnit-Testklassen bit-genau generiert,
+Gradle `check` grün). Reaktiviert: `nichts`/Nullable-Defaults,
+Boolean-/Elvis-`oder`, `?.`/`!!`, `als`-Cast, `wenn`, Lambda in HOF +
+als var-Wert + Funktions-Typ als Rückgabe, `Range`-Literale, Text-
+`konst`/Interpolation/Vergleich/Konkat, Default-Parameter,
+Cross-Modul-Enum-Werte in Tests, alle 12 §-11.2-Listen-Methoden,
+`für jeden`-Schleife, Aufzählungs-Bereich. Nebenbei: `Bereich<T>`-
+Typ-Annotation auf `FinDslListe<T>` gemappt (`apiJavaType`/
+`javaType`); `FinDslLambda1`/`FinDslLambda2` zur Runtime-Import-
+Whitelist im Emitter; `GeneratedStructureTest.SPEAKING`-Set um
+`FinDslLambda1`/`FinDslLambda2` erweitert.*
+
+
+
 *Letzte Aktualisierung: 2026-05-20 — **Test-Abdeckungs-Korpus
 `examples/simple/` Foundation (Issue #43, PR 1).** Drei thematische
 Cluster (`simple-typen`, `simple-ausdruecke`, `simple-funktionen`)

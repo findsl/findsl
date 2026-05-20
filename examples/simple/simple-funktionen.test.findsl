@@ -9,6 +9,8 @@ verwende {
     BlockBody,
     ExpressionBody,
     Bruttopreis,
+    MachAddierer,
+    ZweiSchritteFest,
     ZweiPlusEins,
     FesterEuroBetrag,
     DreiDezimalwerte,
@@ -29,19 +31,24 @@ prüfe "§ 6.2.2 Expression-Body" {
     }
 }
 
-prüfe "§ 6.2.3 Default-Parameter (Codegen ruft Defaults nicht auf, TODO(#44))" {
-    // Workaround: alle Parameter explizit setzen, dann grünt der Codegen.
-    testfall "Bruttopreis(100, 19%): regulär → 119 €" {
-        Bruttopreis(100, 19%) == 119
+prüfe "§ 6.2.3 Default-Parameter" {
+    testfall "Bruttopreis(100): Default 19% → 119 €" {
+        Bruttopreis(100) == 119
     }
     testfall "Bruttopreis(100, 7%): MwSt überschrieben → 107 €" {
         Bruttopreis(100, 7%) == 107
     }
 }
 
-// § 6.2.4 Closures + § 3.12 Funktionstyp-Rückgabe: vollständig
-// ausgespart, siehe TODO(#44) in simple-funktionen.findsl. Wird nach
-// Schließen der Codegen-Lücke ergänzt.
+prüfe "§ 6.2.4 Closures (Funktionstyp als Rückgabe)" {
+    testfall "MachAddierer(5) ergibt eine Closure, die +5 rechnet" {
+        var plus5: (Ganzzahl) -> Ganzzahl = MachAddierer(5)
+        plus5(10) == 15
+    }
+    testfall "ZweiSchritteFest(7, 0) = 14" {
+        ZweiSchritteFest(7, 0) == 14
+    }
+}
 
 prüfe "§ 8.4 Sichtbarkeit (`_`-Präfix)" {
     testfall "ZweiPlusEins(10) ruft intern _AddiereEins zweimal auf" {

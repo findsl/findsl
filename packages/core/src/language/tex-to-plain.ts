@@ -128,7 +128,22 @@ function walkTex(s: string): string {
                 const g2 = readArg(s, g1.end);
                 r += `C(${walkTex(g1.body)},${walkTex(g2.body)})`;
                 i = g2.end;
-            } else if (name === 'begin' || name === 'end') {
+            } else if (name === 'begin') {
+                // Umgebungs-Name lesen: `\begin{cases}` etc.
+                const j = skipSpaces(s, i);
+                if (s[j] !== '{') { i = j; continue; }
+                const envGroup = readGroup(s, j);
+                const envName = envGroup.body.trim();
+                i = envGroup.end;
+                // Bis `\end{<envName>}` lesen.
+                const endMarker = `\\end{${envName}}`;
+                const endIdx = s.indexOf(endMarker, i);
+                const body = endIdx >= 0 ? s.slice(i, endIdx) : s.slice(i);
+                i = endIdx >= 0 ? endIdx + endMarker.length : s.length;
+                r += renderEnvironment(envName, body);
+            } else if (name === 'end') {
+                // Standalone `\end{…}` (sollte schon vom `\begin`-Handler
+                // verkonsumiert worden sein) — defensiv überspringen.
                 const j = skipSpaces(s, i);
                 i = s[j] === '{' ? readGroup(s, j).end : j;
             } else if (name in CMD_MAP) {
@@ -163,6 +178,109 @@ function walkTex(s: string): string {
 }
 
 /**
+ * Rendert eine LaTeX-Umgebung (`\begin{...}…\end{...}`) als
+ * mehrzeiligen, ausgerichteten Klartext. Aktuell unterstützt:
+ *
+ *   - `cases` / `dcases`: jede Zeile ist „Wert wenn Bedingung".
+ *     Werte werden zur Spalten-Ausrichtung gepaddet.
+ *   - `matrix` / `pmatrix` / `bmatrix` / `vmatrix` / `Vmatrix`:
+ *     Zeilen + Spalten mit Padding; Bracket-Variante via Präfix/Suffix.
+ *   - `array`: wie matrix (Spaltenformat wird ignoriert).
+ *   - `aligned` / `align` / `gather` / `gathered`: einfacher
+ *     Zeilen-pro-`\\`-Split ohne Spalten-Padding.
+ *
+ * Andere Umgebungen: Body wird via `walkTex` rekursiv gerendert
+ * (Fallback — Inhalt sichtbar, ohne spezielles Layout).
+ */
+function renderEnvironment(envName: string, body: string): string {
+    const rows = splitRows(body);
+    if (rows.length === 0) return '';
+
+    const STRUCTURED = new Set([
+        'cases', 'dcases', 'rcases',
+        'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix',
+        'smallmatrix', 'array',
+    ]);
+    const SIMPLE_BREAKS = new Set([
+        'aligned', 'align', 'align*', 'alignat', 'gather', 'gathered',
+        'multline', 'split', 'eqnarray',
+    ]);
+
+    if (!STRUCTURED.has(envName) && !SIMPLE_BREAKS.has(envName)) {
+        // Unbekannte Umgebung — Inhalt einfach rendern (Fallback).
+        return walkTex(body);
+    }
+
+    // Pro Zeile: in Spalten via `&` splitten und jede Zelle rekursiv
+    // rendern.
+    const matrix: string[][] = rows.map((row) =>
+        row.split('&').map((cell) => walkTex(cell).trim()),
+    );
+
+    if (SIMPLE_BREAKS.has(envName)) {
+        // Einfache Zeilen ohne Spalten-Padding (Spalten werden verkettet).
+        return '\n' + matrix.map((cells) => cells.join(' ')).join('\n') + '\n';
+    }
+
+    // `cases`: zwei Spalten — Wert + Bedingung — mit `wenn`-Trenner.
+    if (envName === 'cases' || envName === 'dcases' || envName === 'rcases') {
+        return '\n' + renderCases(matrix) + '\n';
+    }
+
+    // Matrix-Varianten: Spalten-breite-padded, optional in Klammern.
+    const widths: number[] = [];
+    for (const row of matrix) {
+        row.forEach((cell, c) => {
+            widths[c] = Math.max(widths[c] ?? 0, cell.length);
+        });
+    }
+    const lines = matrix.map((row) =>
+        row.map((cell, c) => cell.padEnd(widths[c] ?? 0)).join('  ').trimEnd(),
+    );
+    const [open, close] = matrixBrackets(envName);
+    if (lines.length === 1) {
+        return open + lines[0].trim() + close;
+    }
+    return '\n' + lines.map((l) => '    ' + l).join('\n') + '\n';
+}
+
+/** Splittet den Umgebungs-Body in Zeilen. Im aufrufenden Code ist
+ *  `\\` bereits via Vorprozess zu `\x01` (ASCII-Kontrollzeichen)
+ *  ersetzt — darauf splitten wir. */
+function splitRows(body: string): string[] {
+    return body
+        .split('\x01')
+        .map((r) => r.trim())
+        .filter((r) => r.length > 0);
+}
+
+/** Rendert `cases`-Zeilen als Spalten-padded „Wert wenn Bedingung". */
+function renderCases(matrix: string[][]): string {
+    let maxValue = 0;
+    for (const row of matrix) {
+        const v = (row[0] ?? '').length;
+        if (v > maxValue) maxValue = v;
+    }
+    return matrix.map((row) => {
+        const value = (row[0] ?? '').padEnd(maxValue);
+        const rest = row.slice(1).map((c) => c.trim()).filter(Boolean).join(' ');
+        return rest ? `    ${value}    wenn ${rest}` : `    ${value.trimEnd()}`;
+    }).join('\n');
+}
+
+/** Liefert öffnende/schließende Klammer für eine Matrix-Umgebung. */
+function matrixBrackets(envName: string): [string, string] {
+    switch (envName) {
+        case 'pmatrix':  return ['(', ')'];
+        case 'bmatrix':  return ['[', ']'];
+        case 'Bmatrix':  return ['{', '}'];
+        case 'vmatrix':  return ['|', '|'];
+        case 'Vmatrix':  return ['||', '||'];
+        default:         return ['', ''];  // matrix, smallmatrix, array
+    }
+}
+
+/**
  * Wandelt einen TeX-Ausdruck in lesbaren, WinAnsi-sicheren Klartext.
  * Rein, deterministisch.
  *
@@ -170,6 +288,8 @@ function walkTex(s: string): string {
  *   `\frac{\text{zvE} - \text{GFB}}{10000}` → `(zvE - GFB)/10000`
  *   `E = m \cdot c^2`                        → `E = m · c²`
  *   `zve \geq 0`                             → `zve >= 0`
+ *   `\begin{cases}0 & x \le 0 \\ 1 & x > 0\end{cases}` →
+ *     mehrzeilig: `0    wenn x <= 0` / `1    wenn x > 0`
  */
 export function texToPlain(tex: string): string {
     // Escapes zuerst über distinkte ASCII-Marker neutralisieren, damit
@@ -182,11 +302,15 @@ export function texToPlain(tex: string): string {
         .replace(/\\\}/g, '\x03')
         .replace(/\\_/g,  '\x04')
         .replace(/\\([%&#$ ])/g, (_, c: string) => (c === ' ' ? ' ' : c));
-    return walkTex(s0)
+    const walked = walkTex(s0)
         .replace(/\x01/g, ' ')
         .replace(/\x02/g, '{')
         .replace(/\x03/g, '}')
-        .replace(/\x04/g, '_')
-        .replace(/[ \t]{2,}/g, ' ')
-        .trim();
+        .replace(/\x04/g, '_');
+    // Doppel-Whitespace nur in reinen Inline-Ausdrücken zu einem Space
+    // collapsen. Mehrzeilige Strukturen (cases/matrix/aligned via
+    // `renderEnvironment`) enthalten Padding-Spaces zur Spalten-
+    // Ausrichtung — die müssen erhalten bleiben.
+    if (walked.includes('\n')) return walked.replace(/[ \t]+$/gm, '').trimEnd();
+    return walked.replace(/[ \t]{2,}/g, ' ').trim();
 }

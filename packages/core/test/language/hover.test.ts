@@ -592,6 +592,38 @@ fn T(zve: Euro): Euro = zve
         expect(md).not.toContain('\\text');
     });
 
+    it('cases-Umgebung wird mehrzeilig + spalten-padded „Wert wenn Bedingung" gerendert (Issue #65)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Tarif:
+
+$$
+\\begin{cases}
+0 & x \\le 0 \\\\
+(a + b)(c + d) & x > 0
+\\end{cases}
+$$
+--
+fn T(x: Euro): Euro = x
+`;
+        const h = await hoverAt(src, 'fn T');
+        const md = content(h);
+        // Jede cases-Zeile auf eigener Linie mit „wenn"-Trenner.
+        expect(md).toMatch(/0\s+wenn x <= 0/);
+        expect(md).toMatch(/\(a \+ b\)\(c \+ d\)\s+wenn x > 0/);
+        // Spalten-Padding: der kürzere Wert `0` muss mit Spaces gepaddet
+        // sein, sodass beide „wenn" untereinander stehen.
+        const zeile0 = md.split('\n').find((l) => /^\s*0\s+wenn/.test(l));
+        const zeile1 = md.split('\n').find((l) => /\(a \+ b\)/.test(l));
+        expect(zeile0).toBeDefined();
+        expect(zeile1).toBeDefined();
+        // Position des „wenn" in beiden Zeilen identisch
+        expect(zeile0!.indexOf('wenn')).toBe(zeile1!.indexOf('wenn'));
+    });
+
     it('User-Bug est.findsl: komplexe `\\frac{...}{...}` + `\\cases` aus EstGrundtarif (Issue #65)', async () => {
         const src = `--
 Datei-Dokumentation.

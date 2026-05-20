@@ -64,8 +64,19 @@ export type IrExpr =
     | { readonly kind: 'crossRef'; readonly ownerClass: string; readonly memberName: string }
     /** Aufzählungs-(Un)gleichheit → Java-`==`/`!=` (Enum-Identität). */
     | { readonly kind: 'enumCmp'; readonly op: '==' | '!='; readonly left: IrExpr; readonly right: IrExpr }
-    /** Arithmetik → `left.add/sub/mul(right)`. */
-    | { readonly kind: 'arith'; readonly op: '+' | '-' | '*'; readonly left: IrExpr; readonly right: IrExpr }
+    /**
+     * Arithmetik → `left.add/sub/mul(right)` für numerische Operanden.
+     * Bei Text-Operanden (`isText=true`, #44) und Operator `+` →
+     * Java-String-Konkatenation `(left) + (right)`; andere Operatoren
+     * auf Text werden im Lowering mit klarer Meldung abgewiesen.
+     */
+    | {
+        readonly kind: 'arith';
+        readonly op: '+' | '-' | '*';
+        readonly left: IrExpr;
+        readonly right: IrExpr;
+        readonly isText?: boolean;
+      }
     /**
      * Vergleich → boolean. Für numerische Operanden:
      * `equalsValue`/`compareValue`. Für Text-Operanden (`isText=true`,

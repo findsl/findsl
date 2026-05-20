@@ -95,6 +95,11 @@ function emitExpr(e: IrExpr): string {
             return e.op === '==' ? `${l} == ${r}` : `${l} != ${r}`;
         }
         case 'arith': {
+            // (#44 Text-`+`) Text-Operand → Java-String-Konkat. Klammern
+            // garantieren korrekte Präzedenz auch bei gemischten Ausdrücken.
+            if (e.isText) {
+                return `(${emitExpr(e.left)}) + (${emitExpr(e.right)})`;
+            }
             const m = e.op === '+' ? 'add' : e.op === '-' ? 'sub' : 'mul';
             return `${emitExpr(e.left)}.${m}(${emitExpr(e.right)})`;
         }

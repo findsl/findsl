@@ -111,6 +111,20 @@ export type IrExpr =
     /** Listen-Literal — `[]<T>` → `FinDslListe.<E>empty()`, sonst `FinDslListe.of(List.of(…))`. */
     | { readonly kind: 'listLit'; readonly elementJavaType: string; readonly items: ReadonlyArray<IrExpr> }
     /**
+     * Bereich-Literal `a bis b` / `a bis unter b` / `a bis b schritt s`
+     * (SPEC § 4.16 / § 11.3, #44 L1) → `FinDslListe.bereich(from, to,
+     * exklusiv, schritt)`. Eager materialisiert (siehe Designnotiz
+     * der Runtime-Methode); alle § 11.2-Methoden funktionieren ohne
+     * Spiegel-Pflege.
+     */
+    | {
+        readonly kind: 'listRange';
+        readonly from: IrExpr;
+        readonly to: IrExpr;
+        readonly exclusive: boolean;
+        readonly step?: IrExpr;
+      }
+    /**
      * §-11.2-Listen-Methode ohne Argument (`.länge`/`.summe()`/`.leer`/
      * `.größtes()`/`.kleinstes()`/`.kopf`/`.rest`/`.zähle()`).
      * Getter-like (FieldAccess ohne Call: `.leer`/`.kopf`/`.rest`) und

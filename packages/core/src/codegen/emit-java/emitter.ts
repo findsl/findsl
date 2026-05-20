@@ -130,6 +130,16 @@ function emitExpr(e: IrExpr): string {
         }
         case 'and':
             return `(${emitExpr(e.left)}) && (${emitExpr(e.right)})`;
+        case 'or':
+            // (#44 L3a) Boolean-Disjunktion. Elvis (`oder` auf Nullable)
+            // ist ein anderer Knoten (`elvis`, Folge-PR).
+            return `(${emitExpr(e.left)}) || (${emitExpr(e.right)})`;
+        case 'nullLit':
+            // (#44 L2) `nichts` → `null`. Nullable-Typen = Java-Reference-Type.
+            return 'null';
+        case 'nullCheck':
+            // (#44 L2) `x ist nichts` / `x ist nicht nichts`.
+            return `${emitExpr(e.value)} ${e.negated ? '!=' : '=='} null`;
         case 'bool':
             return e.value ? 'true' : 'false';
         case 'neg':

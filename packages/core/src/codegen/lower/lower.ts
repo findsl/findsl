@@ -29,6 +29,7 @@ import {
     isSonstArm, isCast, isAbbruchExpr, isLetStmt, isFunktionBody,
     isNamedType, isListLiteral, isLambda, isIndex, isPruefeDecl,
     isBoolLiteral, isUnaryOp, isWennExpr, isRange, isFuerExpr,
+    isNullLiteral, isNullCheck,
 } from '../../language/generated/ast.js';
 import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrFnBody, IrField,
@@ -436,6 +437,20 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
     if (isStringLiteral(expr)) {
         return lowerStringLiteral(expr.value, reg);
     }
+    if (isNullLiteral(expr)) {
+        // (#44 L2) `nichts` → Java `null`. Nullable-Typen werden in
+        // Java durch Reference-Types repräsentiert (Java-`null` ist
+        // bit-genau zum Interpreter-Verhalten).
+        return { kind: 'nullLit' };
+    }
+    if (isNullCheck(expr)) {
+        // (#44 L2) `x ist nichts` / `x ist nicht nichts` → `== null` / `!= null`.
+        return {
+            kind: 'nullCheck',
+            value: lowerExpr(expr.value, reg),
+            negated: expr.negated === true,
+        };
+    }
     if (isAbbruchExpr(expr)) {
         if (!expr.grund) throw new Error('abbruch ohne Begründung (Teil-Parse).');
         return { kind: 'abort', reason: lowerExpr(expr.grund, reg) };
@@ -541,7 +556,11 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
             return { kind: 'cmp', op, left, right };
         }
         if (op === 'oder') {
-            throw new Error('`oder` ist Phase-3-Scope (est nutzt es nicht).');
+            // (#44 L3a) Boolean-`oder` → `||`. Elvis-`oder` auf
+            // Nullable-Operand wird in einem Folge-PR ergänzt.
+            const left = lowerExpr(expr.left, reg);
+            const right = lowerExpr(expr.right, reg);
+            return { kind: 'or', left, right };
         }
     }
     if (isWaehleExpr(expr)) {

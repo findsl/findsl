@@ -92,6 +92,19 @@ export type IrExpr =
       }
     /** Logisches `und` → `&&`. */
     | { readonly kind: 'and'; readonly left: IrExpr; readonly right: IrExpr }
+    /**
+     * Logisches `oder` auf Wahrheitswerten → `||`. (#44 L3a)
+     * Elvis-`oder` auf Nullable-Operanden ist ein anderer Pfad
+     * (`elvis`, kommt in Folge-PR).
+     */
+    | { readonly kind: 'or'; readonly left: IrExpr; readonly right: IrExpr }
+    /** `nichts`-Literal → Java `null`. (#44 L2) */
+    | { readonly kind: 'nullLit' }
+    /**
+     * `x ist nichts` / `x ist nicht nichts` → `x == null` / `x != null`.
+     * (#44 L2 — NullCheck-AST-Knoten, getrennt vom Force-Unwrap `!!`.)
+     */
+    | { readonly kind: 'nullCheck'; readonly value: IrExpr; readonly negated: boolean }
     /** Wahrheitswert-Literal `wahr`/`falsch` → Java `true`/`false`. */
     | { readonly kind: 'bool'; readonly value: boolean }
     /** Unäres `-` → `value.neg()` (Art bleibt erhalten, interpreter.ts:249). */

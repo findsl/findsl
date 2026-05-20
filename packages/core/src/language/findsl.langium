@@ -266,7 +266,13 @@ CallArg:
 
 FieldAccess:
     {infer FieldAccess}
-    '.' name=ID;
+    '.' name=ID
+    // Trailing-Lambda (SPEC § 4.11): `liste.zuordnen { x -> body }`
+    // ist Syntax-Zucker für `liste.zuordnen({ x -> body })`. Das
+    // optionale Feld trägt das Lambda ohne eigenen AST-Knoten —
+    // verhindert Parser-Ambiguität mit gewöhnlichem FieldAccess.
+    // Im Lowering wird es zu einem Call mit Lambda-Argument expandiert.
+    (trailingLambda=Lambda)?;
 
 SafeFieldAccess:
     {infer SafeFieldAccess}

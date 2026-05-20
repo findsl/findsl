@@ -112,11 +112,17 @@ list_literal       ::= "[" arg_list? "]" type_args?
 paren_expr         ::= "(" expr ")" chain_op*
 
 call_chain         ::= IDENT chain_op*
+(* Trailing-Lambda (SPEC § 4.11): `liste.zuordnen { x -> body }` ist
+   semantisch identisch zu `liste.zuordnen({ x -> body })`. Im AST
+   wird das Lambda als optionales `trailingLambda` des FieldAccess
+   getragen (kein eigener Knoten — verhindert Parser-Ambiguität). *)
 chain_op           ::= "(" arg_list? ")"
-                     | "." IDENT
+                     | "." IDENT lambda?
                      | "?." IDENT
                      | "!!"
                      | "[" expr "]"
+lambda             ::= "{" (lambda_param ("," lambda_param)* ","? "->")? expr "}"
+lambda_param       ::= IDENT (":" type)?
 
 arg_list           ::= arg ("," arg)* ","?
 arg                ::= (IDENT "=")? expr

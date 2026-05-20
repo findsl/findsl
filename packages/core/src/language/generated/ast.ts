@@ -391,11 +391,13 @@ export interface FieldAccess extends langium.AstNode {
     readonly $container: CallChain | ParenChain;
     readonly $type: 'FieldAccess';
     name?: string;
+    trailingLambda?: Lambda;
 }
 
 export const FieldAccess = {
     $type: 'FieldAccess',
-    name: 'name'
+    name: 'name',
+    trailingLambda: 'trailingLambda'
 } as const;
 
 export function isFieldAccess(item: unknown): item is FieldAccess {
@@ -564,7 +566,7 @@ export function isKonstDecl(item: unknown): item is KonstDecl {
 }
 
 export interface Lambda extends langium.AstNode {
-    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
+    readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FieldAccess | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'Lambda';
     params: Array<LambdaParam>;
     result?: Expr;
@@ -1258,6 +1260,9 @@ export class FindslAstReflection extends langium.AbstractAstReflection {
             properties: {
                 name: {
                     name: FieldAccess.name
+                },
+                trailingLambda: {
+                    name: FieldAccess.trailingLambda
                 }
             },
             superTypes: [ChainOp.$type]

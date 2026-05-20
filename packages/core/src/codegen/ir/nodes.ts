@@ -99,10 +99,29 @@ export type IrExpr =
     | { readonly kind: 'cast'; readonly value: IrExpr; readonly target: ZielTyp }
     /** Listen-Literal — `[]<T>` → `FinDslListe.<E>empty()`, sonst `FinDslListe.of(List.of(…))`. */
     | { readonly kind: 'listLit'; readonly elementJavaType: string; readonly items: ReadonlyArray<IrExpr> }
-    /** §-11.2-Listen-Methode ohne Argument (`.länge`/`.summe()`). */
-    | { readonly kind: 'listMethod'; readonly receiver: IrExpr; readonly method: 'laenge' | 'summe' }
+    /**
+     * §-11.2-Listen-Methode ohne Argument (`.länge`/`.summe()`/`.leer`/
+     * `.größtes()`/`.kleinstes()`). `.leer` ist getter-like (FieldAccess
+     * im AST, kein Call), aber im Generat `xs.leer()` — die Runtime hat
+     * konsistent eine Methode.
+     */
+    | {
+        readonly kind: 'listMethod';
+        readonly receiver: IrExpr;
+        readonly method: 'laenge' | 'summe' | 'leer' | 'groesstes' | 'kleinstes';
+      }
     /** `.zuordnen(lambda)` — Argument typsicher (kein optionales Feld). */
     | { readonly kind: 'listMap'; readonly receiver: IrExpr; readonly fn: IrExpr }
+    /**
+     * §-11.2 `.filtern(p)` mit Lambda-Prädikat — strukturell wie
+     * `listMap`, aber semantisch Filter (Runtime-Methode `filtern`).
+     */
+    | { readonly kind: 'listFilter'; readonly receiver: IrExpr; readonly fn: IrExpr }
+    /**
+     * §-11.2 `.enthält(x)` mit Wert-Argument → boolean. Argument wird
+     * im Lowering ggf. geboxt; Vergleich liegt in der Runtime.
+     */
+    | { readonly kind: 'listContains'; readonly receiver: IrExpr; readonly value: IrExpr }
     /** Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1). */
     | { readonly kind: 'lambda1'; readonly param: string; readonly body: IrExpr }
     /**

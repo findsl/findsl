@@ -580,7 +580,7 @@ function lowerChainOps(
             if (fname === 'abrunden' || fname === 'aufrunden') {
                 const target = governingMoneyTarget(op) ?? 'Ganzzahl';
                 cur = { kind: 'round', receiver: cur, mode: fname, target: target as ZielTyp };
-            } else if (fname === 'zuordnen') {
+            } else if (fname === 'zuordnen' || fname === 'filtern') {
                 // Lambda-Param-Typ = Element-Typ des Empfängers
                 // (`Liste<E>`) → in die Sicht eintragen, damit `e.feld`
                 // im Lambda-Rumpf korrekt unboxt (z. B. `k.faktor()`).
@@ -591,10 +591,25 @@ function lowerChainOps(
                 if (isLambda(lam) && lam.params.length === 1) {
                     reg.scopeTypes.set(lam.params[0].name, elemT);
                 }
-                cur = { kind: 'listMap', receiver: cur, fn: lowerLambdaArg(call.args, reg) };
-            } else if (fname === 'summe') {
-                if (call.args.length !== 0) throw new Error('`.summe()` erwartet keine Argumente.');
-                cur = { kind: 'listMethod', receiver: cur, method: 'summe' };
+                cur = fname === 'zuordnen'
+                    ? { kind: 'listMap', receiver: cur, fn: lowerLambdaArg(call.args, reg) }
+                    : { kind: 'listFilter', receiver: cur, fn: lowerLambdaArg(call.args, reg) };
+            } else if (fname === 'summe' || fname === 'größtes' || fname === 'kleinstes') {
+                if (call.args.length !== 0) {
+                    throw new Error(`\`.${fname}()\` erwartet keine Argumente.`);
+                }
+                const m = fname === 'summe' ? 'summe'
+                    : fname === 'größtes' ? 'groesstes' : 'kleinstes';
+                cur = { kind: 'listMethod', receiver: cur, method: m };
+            } else if (fname === 'enthält') {
+                if (call.args.length !== 1) {
+                    throw new Error('`.enthält(x)` erwartet genau ein Argument.');
+                }
+                cur = {
+                    kind: 'listContains',
+                    receiver: cur,
+                    value: lowerExpr(call.args[0].value, reg),
+                };
             } else {
                 throw new Error(`Listen-/Skalar-Methode "${fname}" ist Phase-3-Scope (est nutzt sie nicht).`);
             }
@@ -602,6 +617,10 @@ function lowerChainOps(
         } else {
             if (fname === 'länge') {
                 cur = { kind: 'listMethod', receiver: cur, method: 'laenge' };
+            } else if (fname === 'leer') {
+                // SPEC § 11.2: getter-like (kein Call-Klammern) →
+                // Runtime-Methode `leer()` (#44 L9).
+                cur = { kind: 'listMethod', receiver: cur, method: 'leer' };
             } else {
                 // (C): Feld ist Sicht-Subtyp IS-A FinDslNumber → kein Unbox.
                 cur = { kind: 'field', receiver: cur, name: fname };

@@ -533,6 +533,30 @@ describe('Issue #44 — Text-Interpolation (L11) ohne .asText() auf Text-Slots',
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Lücke 4: Trailing-Lambda im Higher-Order-Method-Kontext
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Trailing-Lambda nach .zuordnen', () => {
+    it('xs.zuordnen { x -> x * 2 } (ohne Klammern) parst + lowert identisch zu .zuordnen({...})', async () => {
+        const program = await parseSource(
+            'fn Map(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.zuordnen { x -> x * 2 }\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('xs.zuordnen((x) -> x.mul(FinDslNumber.ganzzahl("2")))');
+        expect(impl).not.toMatch(/xs\.zuordnen\(\)/);          // KEIN leerer Aufruf
+    });
+
+    it('mit Klammern (Regression): xs.zuordnen({ x -> x * 2 }) bleibt unverändert', async () => {
+        const program = await parseSource(
+            'fn Map2(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.zuordnen({ x -> x * 2 })\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('xs.zuordnen((x) -> x.mul(FinDslNumber.ganzzahl("2")))');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

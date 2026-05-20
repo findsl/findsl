@@ -563,9 +563,20 @@ function lowerChainOps(
         }
         const fname = op.name;
         const next = chain[i + 1];
-        const isMethodCall = next !== undefined && isCall(next);
+        // (#44 L4) Trailing-Lambda (SPEC § 4.11): `.methode { x -> body }`
+        // ist Syntax-Zucker für `.methode({ x -> body })`. Wir synthetisieren
+        // ein virtuelles `Call`-Objekt mit dem Lambda als einzigem Argument
+        // und gehen denselben Method-Call-Pfad. `chainStep` zählt, wie weit
+        // wir im `chain`-Array vorrücken (2 bei `(…)`-Call, 1 bei Trailing-
+        // Lambda — das Lambda lebt AM FieldAccess, nicht als eigenes Glied).
+        const trailingLam = (op as { trailingLambda?: Expr }).trailingLambda;
+        const hasTrailingLambda = trailingLam !== undefined;
+        const isMethodCall = (next !== undefined && isCall(next)) || hasTrailingLambda;
         if (isMethodCall) {
-            const call = next as { args: ReadonlyArray<{ name?: string; value: Expr }> };
+            const call = hasTrailingLambda
+                ? { args: [{ value: trailingLam }] as ReadonlyArray<{ name?: string; value: Expr }> }
+                : (next as { args: ReadonlyArray<{ name?: string; value: Expr }> });
+            const chainStep = hasTrailingLambda ? 1 : 2;
             if (fname === 'abrunden' || fname === 'aufrunden') {
                 const target = governingMoneyTarget(op) ?? 'Ganzzahl';
                 cur = { kind: 'round', receiver: cur, mode: fname, target: target as ZielTyp };
@@ -587,7 +598,7 @@ function lowerChainOps(
             } else {
                 throw new Error(`Listen-/Skalar-Methode "${fname}" ist Phase-3-Scope (est nutzt sie nicht).`);
             }
-            i += 2;
+            i += chainStep;
         } else {
             if (fname === 'länge') {
                 cur = { kind: 'listMethod', receiver: cur, method: 'laenge' };

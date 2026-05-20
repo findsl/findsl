@@ -1004,11 +1004,17 @@ liste.zuordnen(transformer)
 person.adresse.straße
 ```
 
-Methoden-Notation mit nachfolgendem Lambda:
+Methoden-Notation mit nachfolgendem Lambda (Trailing-Lambda, Syntax-Zucker
+— semantisch identisch zur expliziten Klammer-Form):
 
 ```findsl
-liste.filtern { x -> x > 0 }                  // Lambda direkt nach Methodenname
+liste.filtern { x -> x > 0 }                  // ≡ liste.filtern({ x -> x > 0 })
+liste.zuordnen { x -> x * 2 }                 // ≡ liste.zuordnen({ x -> x * 2 })
 ```
+
+Im AST trägt der `FieldAccess`-Knoten das Lambda als optionales Feld
+`trailingLambda`; das Lowering expandiert es zu einem Call mit dem
+Lambda als einzigem Argument.
 
 ### 4.12 Lambda-Ausdruck
 

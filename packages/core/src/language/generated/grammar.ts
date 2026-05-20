@@ -2607,6 +2607,19 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
               },
               "arguments": []
             }
+          },
+          {
+            "$type": "Assignment",
+            "feature": "trailingLambda",
+            "operator": "=",
+            "terminal": {
+              "$type": "RuleCall",
+              "rule": {
+                "$ref": "#/rules@55"
+              },
+              "arguments": []
+            },
+            "cardinality": "?"
           }
         ]
       },

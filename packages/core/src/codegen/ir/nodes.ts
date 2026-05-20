@@ -210,6 +210,13 @@ export type IrExpr =
      * FinDslLambda2. Pendant zu `lambda1` für 2-arg-Reduktionen.
      */
     | { readonly kind: 'lambda2'; readonly param1: string; readonly param2: string; readonly body: IrExpr }
+    /**
+     * Aufruf eines first-class Lambda-Werts (`FinDslLambda1` o.ä.) → `fn.apply(args)`.
+     * Wird im Lowering erzeugt, wenn `f(...)` und `f` ein lokaler `var`
+     * mit `FunctionType` ist (#44 L5). Unterscheidet sich von `call`
+     * (Java-Method-Call auf der Impl-Klasse).
+     */
+    | { readonly kind: 'lambdaCall'; readonly fn: IrExpr; readonly args: ReadonlyArray<IrExpr> }
     /** Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1). */
     | { readonly kind: 'lambda1'; readonly param: string; readonly body: IrExpr }
     /**

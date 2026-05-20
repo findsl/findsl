@@ -947,6 +947,41 @@ describe('Issue #44 — Nullable Teil 2 (Elvis/!!/?.)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — L5: Lambda als var-Wert (First-Class-Funktionen)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Lambda als var-Wert + Aufruf', () => {
+    it('var f: (Ganzzahl) -> Ganzzahl = { x -> x * 2 } → FinDslLambda1-Slot', async () => {
+        const program = await parseSource(
+            'fn Doppel(n: Ganzzahl): Ganzzahl = {\n'
+            + '    var f: (Ganzzahl) -> Ganzzahl = { x -> x * 2 }\n'
+            + '    f(n)\n'
+            + '}\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // var-Slot = FinDslLambda1<FinDslNumber, FinDslNumber>
+        expect(impl).toContain('FinDslLambda1<FinDslNumber, FinDslNumber> f =');
+        // Lambda-Body
+        expect(impl).toContain('(x) -> x.mul(FinDslNumber.ganzzahl("2"))');
+        // Lambda-Aufruf via .apply(...)
+        expect(impl).toContain('f.apply(n)');
+    });
+
+    it('var f wird mehrfach aufgerufen (Closure-Konsistenz)', async () => {
+        const program = await parseSource(
+            'fn ZweiSchritte(n: Ganzzahl): Ganzzahl = {\n'
+            + '    var f: (Ganzzahl) -> Ganzzahl = { x -> x + 1 }\n'
+            + '    f(f(n))\n'
+            + '}\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // f.apply(f.apply(n)) — verschachtelte Lambda-Calls
+        expect(impl).toContain('f.apply(f.apply(n))');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

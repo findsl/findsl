@@ -30,6 +30,7 @@ import {
     isNamedType, isListLiteral, isLambda, isIndex, isPruefeDecl,
     isBoolLiteral, isUnaryOp, isWennExpr, isRange, isFuerExpr,
     isNullLiteral, isNullCheck, isForceUnwrap, isSafeFieldAccess,
+    isFunctionType,
 } from '../../language/generated/ast.js';
 import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrFnBody, IrField,
@@ -105,6 +106,25 @@ function atomName(t: Type | undefined): string | undefined {
  * unqualifiziert.
  */
 function javaType(t: Type | undefined, reg: Registry): string {
+    // (#44 L5) Funktions-Typ → FinDslLambda1/2 (parametrisch über
+    // Sicht-Java-Typen der Parameter und des Rückgabetyps).
+    const atom = t?.atom;
+    if (atom && isFunctionType(atom)) {
+        const params = atom.paramTypes ?? [];
+        const ret = javaType(atom.returnType, reg);
+        // Java-Generics brauchen Boxed-Typen — `boolean` → `Boolean`.
+        const boxed = (j: string): string => j === 'boolean' ? 'Boolean' : j;
+        const pTypes = params.map((p) => boxed(javaType(p, reg)));
+        if (pTypes.length === 1) {
+            return `FinDslLambda1<${pTypes[0]}, ${boxed(ret)}>`;
+        }
+        if (pTypes.length === 2) {
+            return `FinDslLambda2<${pTypes[0]}, ${pTypes[1]}, ${boxed(ret)}>`;
+        }
+        throw new Error(
+            `Funktions-Typ mit ${pTypes.length} Parametern ist out-of-scope `
+            + `(nur 1- und 2-stellig per FinDslLambda1/2).`);
+    }
     const a = namedAtom(t);
     if (a === undefined) return 'FinDslNumber';            // Teil-Parse: konservativ
     if (a.name === 'Liste') {
@@ -134,6 +154,12 @@ function isNumericType(t: Type | undefined): boolean {
  * {@link javaType}.
  */
 function apiJavaType(t: Type | undefined, reg: Registry): string {
+    // (#44 L5) Funktions-Typ am API-Rand identisch zum Kern-Typ —
+    // FinDslLambda1/2 wird direkt durchgereicht (kein Wrapper).
+    const atom = t?.atom;
+    if (atom && isFunctionType(atom)) {
+        return javaType(t, reg);
+    }
     const a = namedAtom(t);
     if (a === undefined) return 'FinDslNumber';
     if (a.name === 'Liste') {
@@ -450,6 +476,38 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
             value: lowerExpr(expr.value, reg),
             negated: expr.negated === true,
         };
+    }
+    if (isLambda(expr)) {
+        // (#44 L5) Lambda als Wert (first-class) → `lambda1`/`lambda2`-IR.
+        // Im Higher-Order-Method-Kontext (`.zuordnen`/`.filtern`/...)
+        // wird Lambda direkt vom Receiver-Pfad gelowert; hier landen
+        // nur Top-Level-Lambdas (z. B. in `var f: (T) -> R = { … }`).
+        if (!expr.result) throw new Error('Lambda ohne Ergebnis (Teil-Parse).');
+        if (expr.stmts.length > 0) {
+            throw new Error('Block-Lambda als Wert ist Phase-3-Scope (Folge-PR).');
+        }
+        if (expr.params.length === 1) {
+            // Param-Typ aus Lambda-Annotation oder undefined (Kontext-Inferenz).
+            reg.scopeTypes.set(expr.params[0].name, expr.params[0].type);
+            return {
+                kind: 'lambda1',
+                param: expr.params[0].name,
+                body: lowerExpr(expr.result, reg),
+            };
+        }
+        if (expr.params.length === 2) {
+            reg.scopeTypes.set(expr.params[0].name, expr.params[0].type);
+            reg.scopeTypes.set(expr.params[1].name, expr.params[1].type);
+            return {
+                kind: 'lambda2',
+                param1: expr.params[0].name,
+                param2: expr.params[1].name,
+                body: lowerExpr(expr.result, reg),
+            };
+        }
+        throw new Error(
+            `Lambda mit ${expr.params.length} Parametern ist out-of-scope `
+            + `(nur 1- und 2-stellig per FinDslLambda1/2).`);
     }
     if (isAbbruchExpr(expr)) {
         if (!expr.grund) throw new Error('abbruch ohne Begründung (Teil-Parse).');
@@ -903,13 +961,25 @@ function lowerCallChain(
             // `evaluateCall` im Interpreter — vorher fehlten Defaults,
             // der Codegen rief `_f(n)` statt `_f(n, default)`.
             const lf = reg.localFns.get(name);
-            const args = (lf !== undefined)
-                ? resolveFnCallArgs(
-                    lf.paramNames, lf.paramTypes, lf.paramDefaults,
-                    call.args, reg, lf.internal,
-                )
-                : call.args.map((a) => lowerExpr(a.value, reg));
-            head = { kind: 'call', name, args };
+            // (#44 L5) Lambda-var im Scope (`var f: (T) -> R = …`) → der
+            // Aufruf ist `f.apply(args)`, KEIN `f(args)`-Method-Call.
+            const scopeT = reg.scopeTypes.get(name);
+            const scopeAtom = scopeT?.atom;
+            if (lf === undefined && scopeAtom && isFunctionType(scopeAtom)) {
+                head = {
+                    kind: 'lambdaCall',
+                    fn: { kind: 'ref', name },
+                    args: call.args.map((a) => lowerExpr(a.value, reg)),
+                };
+            } else {
+                const args = (lf !== undefined)
+                    ? resolveFnCallArgs(
+                        lf.paramNames, lf.paramTypes, lf.paramDefaults,
+                        call.args, reg, lf.internal,
+                    )
+                    : call.args.map((a) => lowerExpr(a.value, reg));
+                head = { kind: 'call', name, args };
+            }
         }
         return cc.chain.length > 1
             ? lowerChainOps(head, cc.chain.slice(1), reg)

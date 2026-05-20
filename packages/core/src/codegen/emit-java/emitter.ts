@@ -197,6 +197,10 @@ function emitExpr(e: IrExpr): string {
             return `${emitExpr(e.receiver)}.zusammenfassen(${emitExpr(e.start)}, ${emitExpr(e.fn)})`;
         case 'lambda2':
             return `(${e.param1}, ${e.param2}) -> ${emitExpr(e.body)}`;
+        case 'lambdaCall':
+            // (#44 L5) Aufruf eines first-class Lambda-Werts:
+            // `FinDslLambda1.apply(arg)` (kein Java-Method-Call).
+            return `${emitExpr(e.fn)}.apply(${e.args.map(emitExpr).join(', ')})`;
         case 'lambda1':
             return `(${e.param}) -> ${emitExpr(e.body)}`;
         case 'strInterp': {

@@ -1540,21 +1540,30 @@ export function lowerTestProgram(program: Program, ctx: LowerContext): IrTestMod
             const lets: IrLet[] = [];
             for (const s of stmts) {
                 if (!isLetStmt(s)) {
-                    throw new Error('`ausgabe` in prüfe-Block ist Phase-4-Scope '
+                    // `var = wähle` ist bereits unterstützt (floatLets unten).
+                    // Verbleibendes offenes Konstrukt: `ausgabe(...)`-Statement
+                    // im prüfe-Body (Side-Effect-Sink, Tracking #69).
+                    throw new Error('`ausgabe` als Anweisung im prüfe-Block ist '
+                        + 'noch nicht im Java-Codegen abgebildet '
                         + `(prüfe "${d.name}").`);
                 }
                 lets.push({
                     name: s.name,
                     javaType: javaType(s.type, reg),
-                    // `var` darf `wähle`-Wert tragen (Phase 4) → floatWaehle
-                    // (Emitter statement-lowert), nicht floatValue (wirft).
+                    // `var` darf `wähle`-Wert tragen → floatWaehle (Emitter
+                    // statement-lowert), nicht floatValue (wirft).
                     expr: floatWaehle(
                         maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`)),
                 });
             }
             const assertion = floatWaehle(lowerExpr(b.body.result, reg));
             if (isChoice(assertion)) {
-                throw new Error('`wähle` als testfall-Ergebnis ist Phase-4-Scope '
+                // `var = wähle` ist unterstützt — offen bleibt das
+                // top-level `wähle` direkt als testfall-Ergebnis-Ausdruck
+                // (Statement-Lowering analog `var = wähle`, Tracking #69).
+                throw new Error('`wähle` direkt als testfall-Ergebnis ist '
+                    + 'noch nicht im Java-Codegen abgebildet — Workaround: '
+                    + 'an `var` binden, dann `var` als Ergebnis '
                     + `(prüfe "${d.name}", testfall "${b.label}").`);
             }
             return {

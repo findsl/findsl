@@ -41,6 +41,16 @@ function readyMathJax(): Promise<void> {
     return mathJaxInit;
 }
 
+/**
+ * Test-Helper: setzt den Modul-Level-Cache zurück, damit ein
+ * Testlauf einen vorigen Init-Versuch (insb. einen abgelehnten
+ * Promise) nicht erbt. Nicht in Produktionscode aufrufen — der
+ * Cache ist absichtlich prozessweit, weil MathJax-Init teuer ist.
+ */
+export function resetMathJaxForTest(): void {
+    mathJaxInit = null;
+}
+
 export interface QuelleAnnotation {
     readonly value: string;
 }

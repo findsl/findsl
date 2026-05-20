@@ -1,20 +1,33 @@
 /**
  * FinDSL-Validator — semantische Prüfungen jenseits der reinen Grammatik.
  *
- * Aktuelle Checks:
- *   - Modul-Pfad-Konsistenz: letzte Modulpfad-Komponente muss zum
- *     Datei-Basename passen.
- *   - @Quelle-Empfehlung: Konstanten ohne `@Quelle("...")` werden mit
- *     Warnung markiert (konventionelle Pflicht für gesetzlich verankerte
- *     Werte).
- *   - @Quelle-Argument-Form: `@Quelle(...)` braucht genau ein Text-Literal
- *     als Argument (kein Aufruf, keine Zahl, kein Mehrfach-Argument).
+ * Aktuelle Checks (vgl. {@link registerValidationChecks} für die
+ * gesamte Liste der angemeldeten Validatoren):
+ *   - Namens-Konventionen: `KONST_UPPER_SNAKE`, `Datensatz`/`Aufzählung`/
+ *     `Funktion` in Großschreibung (`check…NameGross`).
+ *   - Bidirektionale Typinferenz inkl. Geld-Arithmetik-Regeln,
+ *     `wähle (subject)`-Vollständigkeit auf Aufzählungs- bzw. nullable
+ *     Subjekten und Smart-Cast-Verfeinerung für nullable Typen
+ *     (`checkTypes` → `typeCheckProgram`, siehe `findsl-types.ts`).
+ *   - Import-/Modul-Diagnosen: Pfad-Form (`checkImportPfad`), lokale
+ *     `verwende`-Konflikte (`checkImports`), Cross-Modul-Existenz
+ *     importierter Symbole (`checkImportTargetsExist`) und Intern-Sperre
+ *     für `_…`-Symbole (`checkInternalImports`).
+ *   - Duplikat-Top-Level-Namen (`checkDuplicateDecls`).
+ *   - `abbruch`-Begründungsempfehlung (`checkAbbruchBegruendung`).
+ *   - `@Quelle`-Empfehlung: `konst` ohne `@Quelle("...")` → Warnung
+ *     (konventionelle Pflicht für gesetzlich verankerte Werte).
+ *   - `@Quelle`-Argument-Form: genau ein Text-Literal als Argument
+ *     (`checkQuelleAnnotationArgs`).
+ *   - Unused-Hints für nicht referenzierte Top-Level-Decls
+ *     (`checkUnused`).
  *
- * Geplante Checks (TODO):
- *   - Bidirektionale Typinferenz mit Geld-Arithmetik-Regeln
- *   - `wähle (subject)` auf Aufzählungstyp: Vollständigkeit prüfen
- *   - Smart-Cast-Verfeinerung für nullable Typen
- *   - Modul-Pfad-Konsistenz mit Projekt-Wurzel (volle Pfad-Komponenten)
+ * Offene Punkte (Tracking-Issue #69):
+ *   - Modul-Pfad-Konsistenz mit Projekt-Wurzel: die volle Pfad-Folge
+ *     (`a.b.c`) muss mit der relativen Datei-Position unterhalb der
+ *     Projekt-Wurzel übereinstimmen, nicht nur die letzte Komponente
+ *     mit dem Datei-Basename. Aktuell wird kein Modul-Header gegen den
+ *     Dateipfad geprüft.
  */
 
 import { AstUtils, GrammarUtils } from 'langium';

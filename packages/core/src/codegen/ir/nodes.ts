@@ -66,7 +66,7 @@ export type IrExpr =
     | { readonly kind: 'enumCmp'; readonly op: '==' | '!='; readonly left: IrExpr; readonly right: IrExpr }
     /**
      * Arithmetik → `left.add/sub/mul(right)` für numerische Operanden.
-     * Bei Text-Operanden (`isText=true`, #44) und Operator `+` →
+     * Bei Text-Operanden (`isText=true`) und Operator `+` →
      * Java-String-Konkatenation `(left) + (right)`; andere Operatoren
      * auf Text werden im Lowering mit klarer Meldung abgewiesen.
      */
@@ -79,9 +79,9 @@ export type IrExpr =
       }
     /**
      * Vergleich → boolean. Für numerische Operanden:
-     * `equalsValue`/`compareValue`. Für Text-Operanden (`isText=true`,
-     * #44 Lücke 12): nur `==`/`!=` zulässig → `Objects.equals` /
-     * `!Objects.equals` (primitiver Java-`String` hat kein `.equalsValue()`).
+     * `equalsValue`/`compareValue`. Für Text-Operanden (`isText=true`):
+     * nur `==`/`!=` zulässig → `Objects.equals` / `!Objects.equals`
+     * (primitiver Java-`String` hat kein `.equalsValue()`).
      */
     | {
         readonly kind: 'cmp';
@@ -93,27 +93,27 @@ export type IrExpr =
     /** Logisches `und` → `&&`. */
     | { readonly kind: 'and'; readonly left: IrExpr; readonly right: IrExpr }
     /**
-     * Logisches `oder` auf Wahrheitswerten → `||`. (#44 L3a)
+     * Logisches `oder` auf Wahrheitswerten → `||`.
      * Elvis-`oder` auf Nullable-Operanden ist ein anderer Pfad
-     * (`elvis`, kommt in Folge-PR).
+     * (`elvis`).
      */
     | { readonly kind: 'or'; readonly left: IrExpr; readonly right: IrExpr }
-    /** `nichts`-Literal → Java `null`. (#44 L2) */
+    /** `nichts`-Literal → Java `null`. */
     | { readonly kind: 'nullLit' }
     /**
      * Elvis-`oder` auf Nullable-Operand → ternär
-     * `(left != null) ? left : right` (#44 L3b). Lowering entscheidet
+     * `(left != null) ? left : right`. Lowering entscheidet
      * Boolean-`or` vs. Elvis anhand des Typs des linken Operanden.
      */
     | { readonly kind: 'elvis'; readonly left: IrExpr; readonly right: IrExpr }
     /**
-     * `!!` Force-Unwrap → `Objects.requireNonNull(value, "!! …")`
-     * (#44 L8). Wirft `NullPointerException` mit Quell-Hint bei `null`.
+     * `!!` Force-Unwrap → `Objects.requireNonNull(value, "!! …")`.
+     * Wirft `NullPointerException` mit Quell-Hint bei `null`.
      */
     | { readonly kind: 'forceUnwrap'; readonly value: IrExpr; readonly hint: string }
     /**
      * `?.` Sicher-Zugriff → ternär
-     * `(recv != null) ? recv.feld() : null` (#44 ?.). Receiver wird
+     * `(recv != null) ? recv.feld() : null`. Receiver wird
      * im Generat doppelt evaluiert — in FinDSL P2 (seiteneffektfrei)
      * unkritisch; Optimierung via lokaler Variable wäre möglich,
      * aber der Generat-Code bleibt für jetzt KISS.
@@ -121,7 +121,7 @@ export type IrExpr =
     | { readonly kind: 'safeFieldAccess'; readonly receiver: IrExpr; readonly name: string }
     /**
      * `x ist nichts` / `x ist nicht nichts` → `x == null` / `x != null`.
-     * (#44 L2 — NullCheck-AST-Knoten, getrennt vom Force-Unwrap `!!`.)
+     * NullCheck-AST-Knoten, getrennt vom Force-Unwrap `!!`.
      */
     | { readonly kind: 'nullCheck'; readonly value: IrExpr; readonly negated: boolean }
     /** Wahrheitswert-Literal `wahr`/`falsch` → Java `true`/`false`. */
@@ -144,7 +144,7 @@ export type IrExpr =
     | { readonly kind: 'listLit'; readonly elementJavaType: string; readonly items: ReadonlyArray<IrExpr> }
     /**
      * Bereich-Literal `a bis b` / `a bis unter b` / `a bis b schritt s`
-     * (SPEC § 4.16 / § 11.3, #44 L1) → `FinDslListe.bereich(from, to,
+     * (SPEC § 4.16 / § 11.3) → `FinDslListe.bereich(from, to,
      * exklusiv, schritt)`. Eager materialisiert (siehe Designnotiz
      * der Runtime-Methode); alle § 11.2-Methoden funktionieren ohne
      * Spiegel-Pflege.
@@ -157,7 +157,7 @@ export type IrExpr =
         readonly step?: IrExpr;
       }
     /**
-     * Aufzählungs-Bereich `I bis VI` (SPEC § 11.3, #44 Aufzählungs-Bereich).
+     * Aufzählungs-Bereich `I bis VI` (SPEC § 11.3, Aufzählungs-Bereich).
      * `enumClassName` ist der vollständig qualifizierte Java-Name der
      * Enum-Klasse (`Steuerklasse` oder `OwnerClass.EnumName`); Reihenfolge
      * im FinDSL-`aufzählung`-Block = Java-`ordinal()`. Lowert zu
@@ -228,13 +228,13 @@ export type IrExpr =
     /**
      * Aufruf eines first-class Lambda-Werts (`FinDslLambda1` o.ä.) → `fn.apply(args)`.
      * Wird im Lowering erzeugt, wenn `f(...)` und `f` ein lokaler `var`
-     * mit `FunctionType` ist (#44 L5). Unterscheidet sich von `call`
+     * mit `FunctionType` ist. Unterscheidet sich von `call`
      * (Java-Method-Call auf der Impl-Klasse).
      */
     | { readonly kind: 'lambdaCall'; readonly fn: IrExpr; readonly args: ReadonlyArray<IrExpr> }
     /**
      * Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1).
-     * `lets` (optional, #44 Block-Lambda): wenn der Body Block-form ist
+     * `lets` (optional, Block-Lambda): wenn der Body Block-form ist
      * (`{ p -> var …; ergebnis }`) — Emitter generiert dann `(p) -> { …;
      * return body; }`.
      */
@@ -246,10 +246,10 @@ export type IrExpr =
       }
     /**
      * String-Literal mit Interpolation → Java-String-Konkatenation.
-     * `slotIsText[i] === true` (#44 Lücke 11) markiert Slots, deren
-     * Java-Typ bereits `String` ist → direkt anhängen (kein `.asText()`,
-     * `String` hat die Methode nicht). Numerische Slots bekommen
-     * `.asText()` wie zuvor.
+     * `slotIsText[i] === true` markiert Slots, deren Java-Typ bereits
+     * `String` ist → direkt anhängen (kein `.asText()`, `String` hat
+     * die Methode nicht). Numerische Slots bekommen `.asText()` wie
+     * zuvor.
      */
     | {
         readonly kind: 'strInterp';
@@ -322,9 +322,10 @@ export type IrDecl =
          * Deklarierter Java-Typ (API-Schicht) — für numerische `konst`
          * ist das der Sicht-Wrapper (`Euro`/`Cent`/…), für nicht-
          * numerische der echte API-Typ (`String`/`boolean`/`FinDslListe<…>`).
-         * Vor #44/L10 wurde im Emitter für nicht-numerische `konst`
-         * fälschlich auf `FinDslNumber` zurückgefallen (Generat hat nicht
-         * kompiliert: `String cannot be converted to FinDslNumber`).
+         * Designnotiz: Vor dem Wrapper-Refactor wurde im Emitter für
+         * nicht-numerische `konst` fälschlich auf `FinDslNumber`
+         * zurückgefallen (Generat hat nicht kompiliert: `String cannot
+         * be converted to FinDslNumber`).
          */
         readonly javaType: string;
         /** Numerisch → sprechender Wrapper-Typ (`Euro` …), sonst undefined. */

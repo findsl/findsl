@@ -1,0 +1,107 @@
+--
+# Korpus — Standard-Bibliothek Tests (SPEC § 11 + § 10)
+
+`prüfe`/`testfall`-Suite zu `korpus-stdlib.findsl`. Jede § 11-Methode
+hat mindestens einen Behavior-Test.
+--
+
+verwende {
+    AbrundenEuro,
+    AufrundenEuro,
+    AbrundenCent,
+    AufrundenCent,
+    AbrundenProzent,
+    AufrundenProzent,
+    AbrundenDezimal,
+    AufrundenDezimal,
+    Länge,
+    IstLeer,
+    Kopf,
+    Rest,
+    ElementBei,
+    ElementIndex,
+    Enthält,
+    Quadrate,
+    NurPositive,
+    SummeViaFold,
+    ZähleAlle,
+    ZähleGrößer,
+    Summe,
+    Größtes,
+    Kleinstes,
+    Konkat,
+    KonkatDrei,
+} aus "./korpus-stdlib"
+
+prüfe "§ 11.1 Rundungs-Methoden (EuroCent → Euro)" {
+    testfall "AbrundenEuro(12,34) → 12"   { AbrundenEuro(12,34) == 12 }
+    testfall "AufrundenEuro(12,34) → 13"  { AufrundenEuro(12,34) == 13 }
+    testfall "AbrundenEuro(0,99) → 0"     { AbrundenEuro(0,99) == 0 }
+    testfall "AufrundenEuro(0,01) → 1"    { AufrundenEuro(0,01) == 1 }
+}
+
+prüfe "§ 11.1 Rundungs-Methoden (EuroCent → Cent)" {
+    testfall "AbrundenCent(12,34) → 1234 als Cent" {
+        AbrundenCent(12,34) == (1234 als Cent)
+    }
+    testfall "AufrundenCent(12,34) → 1234 als Cent" {
+        AufrundenCent(12,34) == (1234 als Cent)
+    }
+}
+
+prüfe "§ 11.1 Rundungs-Methoden (Prozent)" {
+    testfall "AbrundenProzent(42,7%) → 42%" { AbrundenProzent(42,7%) == 42% }
+    testfall "AufrundenProzent(5,5%) → 6%"  { AufrundenProzent(5,5%) == 6% }
+}
+
+prüfe "§ 11.1 Rundungs-Methoden (Dezimal → Ganzzahl)" {
+    testfall "AbrundenDezimal(12,34) → 12" { AbrundenDezimal(12,34) == 12 }
+    testfall "AufrundenDezimal(12,34) → 13" { AufrundenDezimal(12,34) == 13 }
+}
+
+prüfe "§ 11.2 Listen-Methoden — Grundoperationen" {
+    testfall "Länge([1,2,3]) → 3"           { Länge([1, 2, 3]) == 3 }
+    testfall "IstLeer([]) → wahr"           { IstLeer([]<Ganzzahl>) }
+    testfall "IstLeer([1]) → falsch"        { nicht IstLeer([1]) }
+    testfall "Kopf([10,20]) → 10"           { Kopf([10, 20]) == 10 }
+    testfall "Rest([1,2,3]).länge → 2"      { Rest([1, 2, 3]).länge == 2 }
+    testfall "ElementBei([7,8,9], 1) → 8"   { ElementBei([7, 8, 9], 1) == 8 }
+    testfall "ElementIndex([7,8,9], 2) → 9" { ElementIndex([7, 8, 9], 2) == 9 }
+}
+
+prüfe "§ 11.2 Listen-Methoden — Such-/Prädikat-Methoden" {
+    testfall "Enthält([1,2,3], 2) → wahr"   { Enthält([1, 2, 3], 2) }
+    testfall "Enthält([1,2,3], 9) → falsch" { nicht Enthält([1, 2, 3], 9) }
+}
+
+prüfe "§ 11.2 Listen-Methoden — Map/Filter/Fold" {
+    testfall "Quadrate([1,2,3]) → [1,4,9]" {
+        var q: Liste<Ganzzahl> = Quadrate([1, 2, 3])
+        q.länge == 3 und q[0] == 1 und q[1] == 4 und q[2] == 9
+    }
+    testfall "NurPositive([-1,0,1,2]) → [1,2]" {
+        var p: Liste<Ganzzahl> = NurPositive([-1, 0, 1, 2])
+        p.länge == 2 und p[0] == 1 und p[1] == 2
+    }
+    testfall "SummeViaFold([1,2,3,4]) → 10" { SummeViaFold([1, 2, 3, 4]) == 10 }
+}
+
+prüfe "§ 11.2 Listen-Methoden — Aggregationen" {
+    testfall "ZähleAlle([1,2,3]) → 3"            { ZähleAlle([1, 2, 3]) == 3 }
+    testfall "ZähleGrößer([1,2,3,4,5], 2) → 3"   { ZähleGrößer([1, 2, 3, 4, 5], 2) == 3 }
+    testfall "Summe([1,2,3,4,5]) → 15"         { Summe([1, 2, 3, 4, 5]) == 15 }
+    testfall "Größtes([3,1,4,1,5,9,2,6]) → 9"  { Größtes([3, 1, 4, 1, 5, 9, 2, 6]) == 9 }
+    testfall "Kleinstes([3,1,4,1,5,9,2,6]) → 1" { Kleinstes([3, 1, 4, 1, 5, 9, 2, 6]) == 1 }
+}
+
+prüfe "§ 11.5 Text-`+`-Konkatenation" {
+    testfall "Konkat(\"Hallo \", \"Welt\") → \"Hallo Welt\"" {
+        Konkat("Hallo ", "Welt") == "Hallo Welt"
+    }
+    testfall "KonkatDrei(\"a\", \"b\", \"c\") → \"abc\"" {
+        KonkatDrei("a", "b", "c") == "abc"
+    }
+    testfall "Konkat mit leerem Suffix = Linke Seite" {
+        Konkat("xyz", "") == "xyz"
+    }
+}

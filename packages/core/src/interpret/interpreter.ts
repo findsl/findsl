@@ -397,7 +397,12 @@ function evalBinaryOp(op: string, leftExpr: Expr, rightExpr: Expr, env: Environm
     const r = evalExpr(rightExpr, env);
 
     switch (op) {
-        case '+':  return numericArith(l, r, (a, b) => a.add(b));
+        case '+':
+            // Text + Text → Text-Konkatenation (SPEC § 3.6, § 11.5).
+            if (l.kind === 'string' && r.kind === 'string') {
+                return new StringValue(l.value + r.value);
+            }
+            return numericArith(l, r, (a, b) => a.add(b));
         case '-':  return numericArith(l, r, (a, b) => a.sub(b));
         case '*':  return numericMul(l, r);
         case '/':  return numericDiv(l, r);

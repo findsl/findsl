@@ -1,5 +1,5 @@
 --
-# Simple — Funktionsformen (SPEC § 6.2)
+# Korpus — Funktionsformen (SPEC § 6.2)
 
 Demonstriert sämtliche `fn`-Varianten aus SPEC § 6.2:
 
@@ -11,10 +11,10 @@ Demonstriert sämtliche `fn`-Varianten aus SPEC § 6.2:
 - **§ 3.12 Funktionstypen** — `(T1, T2) -> R` als Parameter-Typ
 - **§ 3.13 Bidirektionale Inferenz** — Rückgabetyp determiniert Literale
 
-Importiert aus [`simple-typen`](./simple-typen) für die Test-Daten.
+Importiert aus [`korpus-typen`](./korpus-typen) für die Test-Daten.
 --
 
-verwende { Punkt } aus "./simple-typen"
+verwende { Punkt } aus "./korpus-typen"
 
 // ===========================================================================
 // § 6.2.1 Block-Body

@@ -1,7 +1,7 @@
 --
 # Akzeptanztests — Simple-Ausdrücke
 
-`prüfe`-Blöcke zu `simple-ausdruecke.findsl`. Jeder SPEC § 4-Ausdruck
+`prüfe`-Blöcke zu `korpus-ausdruecke.findsl`. Jeder SPEC § 4-Ausdruck
 hat mindestens einen `testfall`. Enthält außerdem den **`erwartet
 abbruch`**-Fall (§ 10.2 + § 4.19), der den Generat-Pfad für
 `FinDslAbbruch` triggert.
@@ -40,9 +40,9 @@ verwende {
     BereichMitSchritt,
     BlockMitVar,
     KehrwertOderAbbruch,
-} aus "./simple-ausdruecke"
+} aus "./korpus-ausdruecke"
 
-verwende { Person, Rot, Grün, Blau } aus "./simple-typen"
+verwende { Person, Rot, Grün, Blau } aus "./korpus-typen"
 
 prüfe "§ 4.2 Arithmetik" {
     testfall "Addition 1 € + 2 € = 3 €" {

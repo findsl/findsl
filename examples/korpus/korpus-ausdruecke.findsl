@@ -1,11 +1,11 @@
 --
-# Simple — Ausdrücke (SPEC § 4)
+# Korpus — Ausdrücke (SPEC § 4)
 
 Demonstriert jede Ausdrucksform aus SPEC § 4 als eigenständige `fn`,
 damit jeder Ausdruck per `prüfe` einzeln testbar ist und im Generat
 eine eigene Java-Methode bildet.
 
-Importiert aus [`simple-typen`](./simple-typen) — erfüllt damit
+Importiert aus [`korpus-typen`](./korpus-typen) — erfüllt damit
 **§ 8.3 `verwende`** (Cross-Modul) und stellt sicher, dass auch der
 Codegen-Pfad für modulübergreifende Komposition durchlaufen wird.
 
@@ -38,7 +38,7 @@ verwende {
     Blau,
     Person,
     Punkt,
-} aus "./simple-typen"
+} aus "./korpus-typen"
 
 // ===========================================================================
 // § 4.2 Arithmetik
@@ -201,7 +201,7 @@ fn AufrufBenannt(): Text = _Begrüßung(name = "Bertha")
 --
 Lambda als Argument einer Higher-Order-Listenmethode (`.zuordnen`).
 Closure auf externen Parameter wird durch `MachAddierer` in
-`simple-funktionen.findsl` demonstriert.
+`korpus-funktionen.findsl` demonstriert.
 --
 fn Quadriere(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.zuordnen( {
     x ->

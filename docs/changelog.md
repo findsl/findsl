@@ -2,6 +2,33 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-20 — **`examples/simple/` → `examples/korpus/`
+umbenannt + Korpus auf SPEC-Vollabdeckung erweitert (Issue #43,
+Folge zu Issue #44).** Verzeichnis `examples/simple/` →
+`examples/korpus/`, alle Dateien `simple-X.findsl` → `korpus-X.findsl`
+(11 Dateien). `simple.findsl` (Stub) gelöscht — seine § 11.1-Rundungs-
+Demos sind in `korpus-stdlib.findsl` integriert (alle 6 Permutationen:
+EuroCent → Euro/Cent, Dezimal → Ganzzahl, Prozent → Prozent). Neue
+Cluster: `korpus-stdlib.findsl` (§ 11.1 Rundung + § 11.2 alle 12
+Listen-Methoden + § 11.5 Text-`+`-Konkatenation), `korpus-schleifen.findsl`
+(§ 5.3 `für jeden`/`für jede` über Liste + Bereich + geschachtelt +
+Block-Lambda-Body, § 5.4 `ausgabe`-Anweisung). Integrationstest
+`simple-corpus.test.ts` → `korpus.test.ts` (mindestens 10 Korpus-
+Dateien, ≥10 Java-Generate, alle Imports auf `./korpus-*` aktualisiert).
+Drei begleitende Codegen-Side-Fixes: (a) Text-`+`-Konkatenation im
+Validator (`findsl-types.ts` `arithResult`) + Interpreter
+(`interpreter.ts`) — der Codegen kannte sie schon (#54), Validator
+und Interpreter nicht; (b) `Prozent.abrunden()`/`.aufrunden()` im
+Java-Codegen-Lower (`lower.ts`): bisher fiel der Target ohne Geld-
+Kontext auf `Ganzzahl` zurück, jetzt empfänger-typ-getrieben auf
+`Prozent` (SPEC § 11.1: volle Prozent, Einheit bleibt). Verifikation:
+112/112 prüfe-Items im Korpus grün, Vitest 1841/1841 (+3 zu vorher),
+Gradle `check` BUILD SUCCESSFUL (10 Java-Module + 5 JUnit-
+Testklassen bit-genau, structureTest grün), Formatter-Idempotenz
+grün.*
+
+
+
 *Letzte Aktualisierung: 2026-05-20 — **`examples/simple/`-Korpus auf
 SPEC-Vollabdeckung reaktiviert (Issue #43, nach Abschluss Issue #44).**
 Nach dem Schließen aller 14 Codegen-Lücken aus Issue #44 (17 PRs:

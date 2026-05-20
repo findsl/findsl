@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: EUPL-1.2
 
 /**
- * Integrationstest für das `examples/simple/`-Korpus (Issue #43).
+ * Integrationstest für das `examples/korpus/`-Korpus (Issue #43).
  *
- * Iteriert dynamisch über alle `simple-*.findsl`-Dateien und prüft:
+ * Iteriert dynamisch über alle `korpus-*.findsl`-Dateien und prüft:
  *  1. Parse + Validation ohne Errors (Langium-Services).
  *  2. Cross-Modul-Auflösung (`verwende`) via `loadModuleGraph` —
  *     genau das, was der CLI/Interpreter/Codegen am Korpus tut.
@@ -12,17 +12,11 @@
  *     zwei Codegen-Läufe → bit-identische Java-Generate.
  *
  * Dynamische Iteration via `readdirSync` — wer eine neue
- * `simple-foo.findsl` anlegt, wird automatisch mitgeprüft, ohne dass
+ * `korpus-foo.findsl` anlegt, wird automatisch mitgeprüft, ohne dass
  * der Test angefasst werden muss.
  *
- * Hinweise zur aktuellen Reichweite:
- *  - Der Codegen hat dokumentierte Lücken (Issue #44 — `Range`,
- *    `nichts`, Elvis-`oder`, Lambda, `wenn`, `.enthält`, `als`, `!!`,
- *    String-Interpolation, Text-`konst`, Default-Param-Expansion,
- *    Cross-Modul-Enum-Werte in Tests). Solche Konstrukte stehen
- *    aktuell nicht im Korpus — sie würden den Sweep abbrechen lassen.
- *    Sobald #44 geschlossen ist, wird der Korpus die volle SPEC-Breite
- *    decken (siehe `examples/simple/README.md`).
+ * Reichweite: nach Abschluss von Issue #44 deckt der Korpus die volle
+ * SPEC § 2-§ 11-Breite ab — siehe `examples/korpus/README.md`.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -40,22 +34,22 @@ import {
 import type { Program } from '../../src/language/generated/ast.js';
 
 const REPO_ROOT = resolve(__dirname, '../../../..');
-const SIMPLE_DIR = join(REPO_ROOT, 'examples', 'simple');
+const KORPUS_DIR = join(REPO_ROOT, 'examples/korpus');
 const CLI = join(REPO_ROOT, 'packages', 'cli', 'out', 'main.js');
 
-interface SimpleFile {
+interface KorpusFile {
     readonly fileName: string;
     readonly absPath: string;
     readonly isTest: boolean;
 }
 
-function discoverSimpleFiles(): readonly SimpleFile[] {
-    return readdirSync(SIMPLE_DIR)
-        .filter((f) => f.startsWith('simple-') && f.endsWith('.findsl'))
+function discoverKorpusFiles(): readonly KorpusFile[] {
+    return readdirSync(KORPUS_DIR)
+        .filter((f) => f.startsWith("korpus-") && f.endsWith('.findsl'))
         .sort()                                          // deterministisch
         .map((fileName) => ({
             fileName,
-            absPath: join(SIMPLE_DIR, fileName),
+            absPath: join(KORPUS_DIR, fileName),
             isTest: fileName.endsWith('.test.findsl'),
         }));
 }
@@ -76,22 +70,22 @@ function buildParser(): ParseFile {
     };
 }
 
-describe('examples/simple/-Korpus — SPEC-Konstrukt-Vollständigkeit', () => {
-    let simpleFiles: readonly SimpleFile[];
+describe('examples/korpus/-Korpus — SPEC-Konstrukt-Vollständigkeit', () => {
+    let korpusFiles: readonly KorpusFile[];
 
     beforeAll(() => {
-        simpleFiles = discoverSimpleFiles();
+        korpusFiles = discoverKorpusFiles();
     });
 
-    it('mindestens 6 simple-*.findsl-Dateien (3 Sach + 3 Tests)', () => {
-        expect(simpleFiles.length).toBeGreaterThanOrEqual(6);
+    it('mindestens 10 korpus-*.findsl-Dateien (5 Sach + 5 Tests)', () => {
+        expect(korpusFiles.length).toBeGreaterThanOrEqual(10);
     });
 
     describe('Parse + Validation pro Datei', () => {
-        it('jede simple-*.findsl parst und validiert fehlerfrei', async () => {
+        it('jede korpus-*.findsl parst und validiert fehlerfrei', async () => {
             const parser = buildParser();
             const services = createFindslServices(NodeFileSystem).Findsl;
-            for (const f of discoverSimpleFiles()) {
+            for (const f of discoverKorpusFiles()) {
                 const content = readFileSync(f.absPath, 'utf-8');
                 const document = services.shared.workspace.LangiumDocumentFactory
                     .fromString(content, URI.file(f.absPath));
@@ -112,28 +106,28 @@ describe('examples/simple/-Korpus — SPEC-Konstrukt-Vollständigkeit', () => {
     });
 
     describe('Cross-Modul-Auflösung (`verwende`)', () => {
-        it('simple-ausdruecke.test.findsl als Entry → topologische Ordnung enthält simple-typen + simple-ausdruecke', async () => {
-            const entry = join(SIMPLE_DIR, 'simple-ausdruecke.test.findsl');
+        it('korpus-ausdruecke.test.findsl als Entry → topologische Ordnung enthält korpus-typen + korpus-ausdruecke', async () => {
+            const entry = join(KORPUS_DIR, 'korpus-ausdruecke.test.findsl');
             const order = await loadModuleGraph(entry, buildParser());
             const names = order.map((m) => basename(m.filePath));
             // Foundation muss VOR ihrem Konsumenten geladen werden:
-            expect(names.indexOf('simple-typen.findsl'))
-                .toBeLessThan(names.indexOf('simple-ausdruecke.findsl'));
-            expect(names.indexOf('simple-ausdruecke.findsl'))
-                .toBeLessThan(names.indexOf('simple-ausdruecke.test.findsl'));
+            expect(names.indexOf('korpus-typen.findsl'))
+                .toBeLessThan(names.indexOf('korpus-ausdruecke.findsl'));
+            expect(names.indexOf('korpus-ausdruecke.findsl'))
+                .toBeLessThan(names.indexOf('korpus-ausdruecke.test.findsl'));
         });
 
-        it('simple-funktionen.test.findsl löst seine Imports auf', async () => {
-            const entry = join(SIMPLE_DIR, 'simple-funktionen.test.findsl');
+        it('korpus-funktionen.test.findsl löst seine Imports auf', async () => {
+            const entry = join(KORPUS_DIR, 'korpus-funktionen.test.findsl');
             const order = await loadModuleGraph(entry, buildParser());
             const names = order.map((m) => basename(m.filePath));
-            expect(names).toContain('simple-typen.findsl');
-            expect(names).toContain('simple-funktionen.findsl');
-            expect(names).toContain('simple-funktionen.test.findsl');
+            expect(names).toContain('korpus-typen.findsl');
+            expect(names).toContain('korpus-funktionen.findsl');
+            expect(names).toContain('korpus-funktionen.test.findsl');
         });
     });
 
-    describe('Codegen — Determinismus über das gesamte simple-Verzeichnis', () => {
+    describe('Codegen — Determinismus über das gesamte korpus-Verzeichnis', () => {
         it('zwei aufeinanderfolgende `codegen`-Läufe liefern bit-identische Generate', () => {
             // Voraussetzung: `npm run build` lief — sonst kein CLI.
             const cliExists = (() => {
@@ -150,15 +144,15 @@ describe('examples/simple/-Korpus — SPEC-Konstrukt-Vollständigkeit', () => {
                 console.warn(`SKIP: CLI nicht gebaut (${CLI}). Vorher \`npm run build\` ausführen.`);
                 return;
             }
-            const outA = mkdtempSync(join(tmpdir(), 'simple-gen-a-'));
-            const tstA = mkdtempSync(join(tmpdir(), 'simple-gen-at-'));
-            const outB = mkdtempSync(join(tmpdir(), 'simple-gen-b-'));
-            const tstB = mkdtempSync(join(tmpdir(), 'simple-gen-bt-'));
+            const outA = mkdtempSync(join(tmpdir(), 'korpus-gen-a-'));
+            const tstA = mkdtempSync(join(tmpdir(), 'korpus-gen-at-'));
+            const outB = mkdtempSync(join(tmpdir(), 'korpus-gen-b-'));
+            const tstB = mkdtempSync(join(tmpdir(), 'korpus-gen-bt-'));
             try {
                 const run = (out: string, tst: string) => {
                     const r = spawnSync(
                         'node',
-                        [CLI, 'codegen', SIMPLE_DIR, '-l', 'java', '-o', out, '-t', tst],
+                        [CLI, 'codegen', KORPUS_DIR, '-l', 'java', '-o', out, '-t', tst],
                         { encoding: 'utf-8' },
                     );
                     expect(r.status, `codegen-Run rot: ${r.stderr}`).toBe(0);
@@ -173,7 +167,7 @@ describe('examples/simple/-Korpus — SPEC-Konstrukt-Vollständigkeit', () => {
                 expect(collect(tstA)).toEqual(collect(tstB));
                 // Mindestumfang sichern — wer einen Cluster löscht,
                 // soll diesen Test rotgehen lassen (Regressions-Sensor).
-                expect(collect(outA).length).toBeGreaterThanOrEqual(6);  // 3 Interface + 3 Impl
+                expect(collect(outA).length).toBeGreaterThanOrEqual(10);  // 3 Interface + 3 Impl
                 expect(collect(tstA).length).toBeGreaterThanOrEqual(3);  // 3 JUnit-Klassen
             } finally {
                 rmSync(outA, { recursive: true, force: true });

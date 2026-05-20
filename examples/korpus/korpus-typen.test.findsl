@@ -1,7 +1,7 @@
 --
 # Akzeptanztests — Simple-Typen
 
-`prüfe`-Blöcke zu `simple-typen.findsl`. Verifiziert, dass die in der
+`prüfe`-Blöcke zu `korpus-typen.findsl`. Verifiziert, dass die in der
 Foundation deklarierten Konstanten, Datensätze und Aufzählungen
 syntaktisch akzeptiert werden und die erwarteten Werte tragen.
 --
@@ -25,7 +25,7 @@ verwende {
     Aktiv,
     Punkt,
     Person,
-} aus "./simple-typen"
+} aus "./korpus-typen"
 
 prüfe "§ 2.7 Literale — Konstanten-Identität" {
     testfall "Ganzzahl-Konstante mit Tausenderpunkten" {

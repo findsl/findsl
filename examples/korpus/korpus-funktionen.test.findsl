@@ -1,7 +1,7 @@
 --
 # Akzeptanztests — Simple-Funktionen
 
-`prüfe`-Blöcke zu `simple-funktionen.findsl`. Verifiziert jede
+`prüfe`-Blöcke zu `korpus-funktionen.findsl`. Verifiziert jede
 SPEC § 6.2-Funktionsform.
 --
 
@@ -15,9 +15,9 @@ verwende {
     FesterEuroBetrag,
     DreiDezimalwerte,
     VerschiebePunkt,
-} aus "./simple-funktionen"
+} aus "./korpus-funktionen"
 
-verwende { Punkt } aus "./simple-typen"
+verwende { Punkt } aus "./korpus-typen"
 
 prüfe "§ 6.2.1 Block-Body" {
     testfall "BlockBody(2,3) = (2+3) + (2*3) = 11" {

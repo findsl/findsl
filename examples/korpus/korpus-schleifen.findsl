@@ -1,0 +1,86 @@
+--
+# Korpus — Schleifen und Seiten­effekte (SPEC § 5.3 + § 5.4)
+
+Demonstriert die beiden Statement-Formen aus SPEC § 5:
+
+- **§ 5.3 Für-Jeden-Schleife** — `für jeden x aus liste { body }`
+  als Ausdruck, der eine `Liste<T>` liefert (semantisch äquivalent
+  zu `liste.zuordnen { x -> body }`).
+- **§ 5.4 ausgabe-Anweisung** — Trace-Zeile in einem
+  wertproduzierenden Block. Echter Seiteneffekt, aber kein Ausdruck;
+  ist somit nur als eigene Zeile innerhalb eines `{ … }`-Blocks
+  zulässig.
+
+Diese Datei ist eigenständig — sie importiert nichts und zeigt
+`für jeden` über `Liste<T>` und `Bereich<T>`-Literale.
+--
+
+
+// ===========================================================================
+// § 5.3 Für-Jeden-Schleife
+// ===========================================================================
+
+-- `für jeden` über eine `Liste<T>` — semantisch wie `.zuordnen`. --
+fn Verdopple(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = für jeden x aus xs {
+    x * 2
+}
+
+-- `für jeden` über einen `Bereich<T>` — kombiniert § 4.16 + § 5.3. --
+fn QuadrateBis(n: Ganzzahl): Liste<Ganzzahl> = für jeden x aus (1 bis n) {
+    x * x
+}
+
+-- `für jede` (Synonym von `für jeden`, § 5.3) über einen Inline-Bereich. --
+fn VerdoppleBereich(): Liste<Ganzzahl> = für jede x aus (1 bis 10) {
+    x * 2
+}
+
+--
+Geschachteltes `für jeden` — erzeugt eine `Liste<Liste<…>>`. Das
+äußere `für jeden` läuft über `[0,1]`, das innere über `[0,1,2]`; das
+Ergebnis ist die Liste `[[0,0,0],[0,1,2]]`. Die Hilfsfunktion sammelt
+die innere Iteration als eigene Funktion, damit die Inferenz pro
+Schleifenebene eindeutig ist.
+--
+fn _ZeileFürA(a: Ganzzahl): Liste<Ganzzahl> = für jeden b aus [0, 1, 2] {
+    a * b
+}
+
+fn Geschachtelt(): Liste<Liste<Ganzzahl>> = für jeden a aus [0, 1] {
+    _ZeileFürA(a)
+}
+
+-- `für jeden` mit `var`-Statement im Body (Block-Lambda-Lowering). --
+fn MitZwischenwert(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = für jeden x aus xs {
+    var doppelt: Ganzzahl = x * 2
+    doppelt + 1
+}
+
+// ===========================================================================
+// § 5.4 ausgabe-Anweisung
+// ===========================================================================
+
+--
+Funktion mit `ausgabe`-Trace im Block. Der Funktionswert bleibt
+unverändert; `ausgabe` schreibt parallel auf stdout. Demonstriert
+SPEC § 5.4: zulässig nur in `{ … }`-Block, nie in Ausdrucksposition.
+--
+fn MitAusgabe(zve: Euro): Euro = {
+    ausgabe("Tarifberechnung für zvE=${zve}")
+    var ergebnis: Euro = zve
+    ergebnis
+}
+
+--
+Mehrere `ausgabe`-Anweisungen + `var`-Bindungen in Quelltext-
+Reihenfolge (SPEC § 5.4: „eager in Quelltext-Reihenfolge oben nach
+unten").
+--
+fn MehrereTrace(): Ganzzahl = {
+    ausgabe("eins")
+    var x: Ganzzahl = 10
+    ausgabe("zwei: x=${x}")
+    var y: Ganzzahl = x + 5
+    ausgabe("drei: y=${y}")
+    y
+}

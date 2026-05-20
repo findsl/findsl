@@ -803,7 +803,15 @@ function lowerChainOps(
                 : (next as { args: ReadonlyArray<{ name?: string; value: Expr }> });
             const chainStep = hasTrailingLambda ? 1 : 2;
             if (fname === 'abrunden' || fname === 'aufrunden') {
-                const target = governingMoneyTarget(op) ?? 'Ganzzahl';
+                // Empfänger-Typ-getriebene Zielwahl (SPEC § 11.1):
+                //   Prozent → Prozent (kontextlos, volle Prozent)
+                //   Dezimal → Ganzzahl (kontextlos, fallback unten)
+                //   EuroCent → governingMoneyTarget (Euro/Cent), pflicht
+                const recvAtom = namedAtom(exprFinDslType(cur, reg));
+                const recvName = recvAtom?.name;
+                const target = recvName === 'Prozent'
+                    ? 'Prozent'
+                    : (governingMoneyTarget(op) ?? 'Ganzzahl');
                 cur = { kind: 'round', receiver: cur, mode: fname, target: target as ZielTyp };
             } else if (fname === 'zuordnen' || fname === 'filtern' || fname === 'zähle') {
                 // .zähle() ohne Args → parameterloser Listen-Methoden-Pfad

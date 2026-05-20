@@ -1,0 +1,21 @@
+{
+  // FinDSL ist ein npm-Monorepo; die VS-Code-Extension liegt in
+  // apps/vscode. Diese Config startet einen Extension Development Host
+  // mit genau diesem Extension-Pfad. WICHTIG: vorher einmal
+  // `npm run dist` (= build + bundle) ausführen, damit
+  // apps/vscode/out/{extension,language}/main.cjs aktuell ist.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FinDSL: Extension Development Host",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/apps/vscode"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/apps/vscode/out/**/*.cjs"
+      ]
+    }
+  ]
+}

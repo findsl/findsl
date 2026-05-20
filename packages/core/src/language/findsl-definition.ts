@@ -62,6 +62,7 @@ import {
     type Type,
     type TypeContext,
 } from './findsl-types.js';
+import { buildLocalScope, stepChainOp } from './findsl-local-scope.js';
 import type { FindslServices } from './findsl-module.js';
 
 export class FindslDefinitionProvider implements DefinitionProvider {
@@ -275,183 +276,20 @@ function inferBaseTypeAt(
 
     const header = buildModuleHeader(program);
     const ctx = header.context;
-    const localEnv = buildLocalScope(chain, ctx, program, documents);
+    const localEnv = buildLocalScope(
+        chain, ctx, program,
+        (p, n) => resolveCrossModuleType(p, n, documents),
+    );
 
     let current: Type | undefined =
         localEnv.lookup(chain.name) ?? resolveCrossModuleType(program, chain.name, documents);
     if (!current) return undefined;
 
     for (let i = 0; i < untilIndex; i++) {
-        current = stepChainOp(current, chain.chain[i]);
+        current = stepChainOp(current, chain.chain[i], false);
         if (!current || current.kind === 'unknown') return undefined;
     }
     return current;
-}
-
-function stepChainOp(t: Type, op: ChainOp): Type | undefined {
-    if (isCall(op)) {
-        if (t.kind === 'function') return t.result;
-        return TUnknown;
-    }
-    if (isFieldAccess(op)) {
-        const unwrapped = t.kind === 'nullable' ? t.inner : t;
-        if (unwrapped.kind !== 'record') return TUnknown;
-        const field = unwrapped.decl.fields.find((f) => f.name === op.name);
-        if (!field) return TUnknown;
-        const program = (unwrapped.decl as { $container?: Program }).$container;
-        if (!program) return TUnknown;
-        const localCtx = buildModuleHeader(program).context;
-        return resolveTypeAnnotation(field.type, localCtx);
-    }
-    if (isSafeFieldAccess(op)) {
-        if (t.kind === 'nullable') {
-            const inner = t.inner;
-            if (inner.kind !== 'record') return TUnknown;
-            const field = inner.decl.fields.find((f) => f.name === op.name);
-            if (!field) return TUnknown;
-            const program = (inner.decl as { $container?: Program }).$container;
-            if (!program) return TUnknown;
-            return TNull(resolveTypeAnnotation(field.type, buildModuleHeader(program).context));
-        }
-        return TUnknown;
-    }
-    if (isForceUnwrap(op)) {
-        return t.kind === 'nullable' ? t.inner : t;
-    }
-    return TUnknown;
-}
-
-function buildLocalScope(
-    from: { $container?: object },
-    ctx: TypeContext,
-    program: Program,
-    documents: LangiumDocuments,
-): TypeEnv {
-    const env = ctx.globals.child();
-    const stack: object[] = [];
-    let n: object | undefined = from;
-    while (n) {
-        stack.push(n);
-        n = (n as { $container?: object }).$container;
-    }
-    const resolve = (t: TypeAnnotation) => resolveAnnotationWithImports(t, ctx, program, documents);
-    for (const node of stack.reverse()) {
-        if (isFunktionDecl(node)) {
-            for (const p of node.params) env.define(p.name, resolve(p.type));
-        } else if (isBlockExpr(node) || isLambda(node)) {
-            for (const s of node.stmts) {
-                if (isLetStmt(s)) env.define(s.name, resolve(s.type));
-            }
-            if (isLambda(node)) {
-                for (const p of node.params) {
-                    if (p.type) {
-                        env.define(p.name, resolve(p.type));
-                    } else {
-                        // Issue #65: Lambda im HOF-Kontext erbt den
-                        // Element-Typ des Empfängers (analog Hover-Pfad).
-                        const elemT = inferHOFElementType(node, env, ctx);
-                        if (elemT) env.define(p.name, elemT);
-                    }
-                }
-            }
-        } else if (isFuerExpr(node)) {
-            // Issue #65: `für jeden k aus kinder { … }` — Iter-Variable
-            // an Element-Typ der Source binden.
-            const srcT = inferExprQuiet(node.source, env, ctx);
-            const elemT = elementOfListLike(srcT);
-            if (elemT && node.iter) env.define(node.iter, elemT);
-        }
-    }
-    return env;
-}
-
-/** Inferiert den Typ einer Expression ohne Diagnostics zu sammeln. */
-function inferExprQuiet(
-    expr: Expr | undefined,
-    env: TypeEnv,
-    ctx: TypeContext,
-): Type | undefined {
-    if (!expr) return undefined;
-    try {
-        return infer(expr, env, ctx, () => { /* swallow */ });
-    } catch {
-        return undefined;
-    }
-}
-
-/** Element-Typ für `Liste<T>` / Nullable davon. */
-function elementOfListLike(t: Type | undefined): Type | undefined {
-    if (!t) return undefined;
-    const cur = t.kind === 'nullable' ? t.inner : t;
-    return cur.kind === 'list' ? cur.element : undefined;
-}
-
-/** Element-Typ des HOF-Empfängers, in dem das Lambda lebt. Spiegelt den
- *  Hover-Pfad — beide Provider haben den gleichen Bug + den gleichen Fix. */
-function inferHOFElementType(
-    lam: object,
-    env: TypeEnv,
-    ctx: TypeContext,
-): Type | undefined {
-    const container = (lam as { $container?: AstNode }).$container;
-    if (!container) return undefined;
-
-    if (isFieldAccess(container)) {
-        // Trailing-Lambda
-        return inferReceiverElementType(container, env, ctx);
-    }
-    const callArgParent = (container as { $container?: AstNode }).$container;
-    if (callArgParent && isCall(callArgParent)) {
-        const chain = (callArgParent as { $container?: AstNode }).$container;
-        if (chain && isCallChain(chain)) {
-            const callIdx = (chain.chain as ReadonlyArray<unknown>).indexOf(callArgParent);
-            if (callIdx > 0) {
-                const prev = chain.chain[callIdx - 1];
-                if (isFieldAccess(prev)) {
-                    return inferReceiverElementType(prev, env, ctx);
-                }
-            }
-        }
-    }
-    return undefined;
-}
-
-function inferReceiverElementType(
-    fieldAccess: AstNode,
-    env: TypeEnv,
-    ctx: TypeContext,
-): Type | undefined {
-    const chain = (fieldAccess as { $container?: AstNode }).$container;
-    if (!chain || !isCallChain(chain)) return undefined;
-    const idx = (chain.chain as ReadonlyArray<unknown>).indexOf(fieldAccess);
-    if (idx < 0) return undefined;
-    if (idx === 0) {
-        const rootType = env.lookup((chain as { name?: string }).name ?? '');
-        return elementOfListLike(rootType);
-    }
-    // `CallChain` ist Teil der `Expr`-Union (siehe generated/ast.ts).
-    const fullType = inferExprQuiet(chain, env, ctx);
-    return elementOfListLike(fullType);
-}
-
-function resolveAnnotationWithImports(
-    t: TypeAnnotation,
-    ctx: TypeContext,
-    program: Program,
-    documents: LangiumDocuments,
-): Type {
-    const local = resolveTypeAnnotation(t, ctx);
-    if (local.kind !== 'unknown') return local;
-    if (!t?.atom || t.atom.$type !== 'NamedType') return local;
-    const sym = resolveCrossModuleType(program, t.atom.name, documents);
-    if (!sym) return local;
-    if (sym.kind === 'function' && sym.result.kind === 'record') {
-        return t.optional ? TNull(sym.result) : sym.result;
-    }
-    if (sym.kind === 'enum') {
-        return t.optional ? TNull(sym) : sym;
-    }
-    return local;
 }
 
 // ---------------------------------------------------------------------------

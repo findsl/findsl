@@ -27,6 +27,10 @@ import {
     type ServerOptions,
     TransportKind,
 } from 'vscode-languageclient/node.js';
+import {
+    LENS_RUN_COMMAND,
+    RUN_PRUEFE_COMMAND,
+} from '@findsl/core/language/findsl-codelens.js';
 
 let client: LanguageClient;
 /** Auflöst, sobald der Language-Server bereit ist (nach `client.start()`). */
@@ -77,10 +81,6 @@ export function deactivate(): Thenable<void> | undefined {
 // ---------------------------------------------------------------------------
 // Test-Controller
 // ---------------------------------------------------------------------------
-
-const RUN_PRUEFE_COMMAND = 'findsl.pruefe.run';
-/** Muss mit LENS_RUN_COMMAND in findsl-codelens.ts übereinstimmen. */
-const LENS_RUN_COMMAND = 'findsl.pruefe.runFromLens';
 
 function registerTestController(context: vscode.ExtensionContext): void {
     const ctrl = vscode.tests.createTestController('findsl', 'FinDSL Prüfe');

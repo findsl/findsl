@@ -67,6 +67,15 @@ import {
 } from './generated/ast.js';
 import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
 import { parseDocTags, stripDocMarkers as stripMarkersShared } from './doc-tags.js';
+import {
+    buildLocalScope,
+    elementOfListLike,
+    inferExprQuiet,
+    inferHOFElementType,
+    inferReceiverElementType,
+    resolveAnnotationWithImports,
+    stepChainOp,
+} from './findsl-local-scope.js';
 import { renderDocForHover, type QuelleAnnotation } from './doc-hover-renderer.js';
 import * as path from 'node:path';
 import { BUILTIN_ENUM_DEFS, BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
@@ -340,7 +349,10 @@ function inferBaseTypeAt(
 
     const header = buildModuleHeader(program);
     const ctx = header.context;
-    const localEnv = buildLocalScope(chain, ctx, program, provider);
+    const localEnv = buildLocalScope(
+        chain, ctx, program,
+        (p, n) => provider.resolveCrossModuleType(p, n),
+    );
 
     // Wurzel-Typ: lokal → Top-Level → Cross-Modul.
     let current: Type | undefined =
@@ -352,229 +364,10 @@ function inferBaseTypeAt(
     // typischerweise ein Wert oder Funktionsaufruf, kein Datensatz selbst.
 
     for (let i = 0; i < untilIndex; i++) {
-        current = stepChainOp(current, chain.chain[i]);
+        current = stepChainOp(current, chain.chain[i], true);
         if (!current || current.kind === 'unknown') return undefined;
     }
     return current;
-}
-
-function stepChainOp(t: Type, op: ChainOp): Type | undefined {
-    if (isCall(op)) {
-        if (t.kind === 'function') return t.result;
-        return TUnknown;
-    }
-    if (isFieldAccess(op)) {
-        const unwrapped = t.kind === 'nullable' ? t.inner : t;
-        if (unwrapped.kind !== 'record') return TUnknown;
-        const field = unwrapped.decl.fields.find((f) => f.name === op.name);
-        if (!field) return TUnknown;
-        // Wir brauchen einen TypeContext, um Field-Typen aufzulösen — der
-        // hier rumgereichte Datensatz hat noch keinen direkten Zugriff
-        // darauf. Workaround: wir bauen ihn aus dem Container des Records
-        // (Program) bei Bedarf nochmal auf. Für den Hover-Pfad (selten,
-        // einmal pro Cursor-Bewegung) ist das vertretbar.
-        const program = (unwrapped.decl as { $container?: Program }).$container;
-        if (!program) return TUnknown;
-        const localCtx = buildModuleHeader(program).context;
-        return resolveTypeAnnotation(field.type, localCtx);
-    }
-    if (isSafeFieldAccess(op)) {
-        if (t.kind === 'nullable') {
-            const inner = t.inner;
-            if (inner.kind !== 'record') return TUnknown;
-            const field = inner.decl.fields.find((f) => f.name === op.name);
-            if (!field) return TUnknown;
-            const program = (inner.decl as { $container?: Program }).$container;
-            if (!program) return TUnknown;
-            const localCtx = buildModuleHeader(program).context;
-            return TNull(resolveTypeAnnotation(field.type, localCtx));
-        }
-        if (t.kind === 'record') {
-            // ?. auf nicht-Nullable — formal ein Typ-Fehler, fürs Hover
-            // tolerant durchreichen.
-            const field = t.decl.fields.find((f) => f.name === op.name);
-            if (!field) return TUnknown;
-            const program = (t.decl as { $container?: Program }).$container;
-            if (!program) return TUnknown;
-            const localCtx = buildModuleHeader(program).context;
-            return resolveTypeAnnotation(field.type, localCtx);
-        }
-        return TUnknown;
-    }
-    if (isForceUnwrap(op)) {
-        return t.kind === 'nullable' ? t.inner : t;
-    }
-    // Index in Listen — Hover-Skelett unterstützt das nicht
-    return TUnknown;
-}
-
-/**
- * Sammelt Param- und Let-Bindings entlang der $container-Kette ausgehend
- * von einem inneren AST-Knoten. Äußere Bindings landen zuerst, innere
- * überschreiben sie — die TypeEnv-Semantik (Map-set) regelt Shadowing
- * automatisch.
- *
- * Param-Typen werden über `resolveAnnotationWithImports` aufgelöst, damit
- * Cross-Modul-importierte Datensatz-Typen (`f: Fall` mit `Fall` aus `lib`)
- * korrekt zum Record-Typ werden.
- */
-function buildLocalScope(
-    from: { $container?: object },
-    ctx: TypeContext,
-    program: Program,
-    provider: FindslHoverProvider,
-): TypeEnv {
-    const env = ctx.globals.child();
-    const stack: object[] = [];
-    let n: object | undefined = from;
-    while (n) {
-        stack.push(n);
-        n = (n as { $container?: object }).$container;
-    }
-    const resolve = (t: TypeAnnotation) => resolveAnnotationWithImports(t, ctx, program, provider);
-    for (const node of stack.reverse()) {
-        if (isFunktionDecl(node)) {
-            for (const p of node.params) {
-                env.define(p.name, resolve(p.type));
-            }
-        } else if (isBlockExpr(node) || isLambda(node)) {
-            for (const s of node.stmts) {
-                if (isLetStmt(s)) env.define(s.name, resolve(s.type));
-            }
-            if (isLambda(node)) {
-                for (const p of node.params) {
-                    if (p.type) {
-                        env.define(p.name, resolve(p.type));
-                    } else {
-                        // Issue #65: Lambda im HOF-Kontext erbt den
-                        // Element-Typ des Empfängers (`xs.zuordnen { k -> … }`
-                        // → `k: <Element-Typ von xs>`).
-                        const elemT = inferHOFElementType(node, env, ctx);
-                        if (elemT) env.define(p.name, elemT);
-                    }
-                }
-            }
-        } else if (isFuerExpr(node)) {
-            // Issue #65: `für jeden k aus kinder { … }` — die Iter-
-            // Variable `k` bekommt den Element-Typ der Source.
-            const srcT = inferExprQuiet(node.source, env, ctx);
-            const elemT = elementOfListLike(srcT);
-            if (elemT && node.iter) env.define(node.iter, elemT);
-        }
-    }
-    return env;
-}
-
-/** Inferiert den Typ einer Expression ohne Diagnostics zu sammeln. */
-function inferExprQuiet(expr: Expr | undefined, env: TypeEnv, ctx: TypeContext): Type | undefined {
-    if (!expr) return undefined;
-    try {
-        return infer(expr, env, ctx, () => { /* swallow */ });
-    } catch {
-        return undefined;
-    }
-}
-
-/** Liefert den Element-Typ für `Liste<T>` / `Bereich<T>` / Nullable davon. */
-function elementOfListLike(t: Type | undefined): Type | undefined {
-    if (!t) return undefined;
-    const cur = t.kind === 'nullable' ? t.inner : t;
-    if (cur.kind === 'list') return cur.element;
-    // Bereich-Typen sind in der Type-Hierarchie als `list` vom Element-Typ
-    // repräsentiert (siehe findsl-types.ts), daher reicht der List-Branch.
-    return undefined;
-}
-
-/** Inferiert den Element-Typ des HOF-Empfängers, in dem das Lambda lebt.
- *  Unterstützt sowohl Trailing-Lambda (`.zuordnen { k -> … }`) als auch
- *  reguläres Call-Arg (`.zuordnen({ k -> … })`). */
-function inferHOFElementType(
-    lam: object,
-    env: TypeEnv,
-    ctx: TypeContext,
-): Type | undefined {
-    const container = (lam as { $container?: AstNode }).$container;
-    if (!container) return undefined;
-
-    // Trailing-Lambda: container ist der FieldAccess selbst.
-    if (isFieldAccess(container)) {
-        return inferReceiverElementType(container, env, ctx);
-    }
-    // Regulärer Call-Arg: container ist CallArg, dessen $container ein Call ist,
-    // dessen Vorgänger im chain der HOF-FieldAccess ist.
-    const callArgParent = (container as { $container?: AstNode }).$container;
-    if (callArgParent && isCall(callArgParent)) {
-        const chain = (callArgParent as { $container?: AstNode }).$container;
-        if (chain && isCallChain(chain)) {
-            const callIdx = (chain.chain as ReadonlyArray<unknown>).indexOf(callArgParent);
-            if (callIdx > 0) {
-                const prev = chain.chain[callIdx - 1];
-                if (isFieldAccess(prev)) {
-                    return inferReceiverElementType(prev, env, ctx);
-                }
-            }
-        }
-    }
-    return undefined;
-}
-
-/** Hilfsfunktion: liefert den Element-Typ des HOF-Empfängers VOR diesem
- *  FieldAccess. */
-function inferReceiverElementType(
-    fieldAccess: AstNode,
-    env: TypeEnv,
-    ctx: TypeContext,
-): Type | undefined {
-    const chain = (fieldAccess as { $container?: AstNode }).$container;
-    if (!chain || !isCallChain(chain)) return undefined;
-    const idx = (chain.chain as ReadonlyArray<unknown>).indexOf(fieldAccess);
-    if (idx < 0) return undefined;
-    // Receiver-Typ über die Type-Checker-Infer-Funktion auf die CallChain
-    // bis zum HOF-FieldAccess (exklusiv) ableiten. Wenn idx === 0,
-    // ist der Receiver die Chain-Wurzel (Identifier).
-    if (idx === 0) {
-        const rootType = env.lookup((chain as { name?: string }).name ?? '');
-        return elementOfListLike(rootType);
-    }
-    // Komplexere Receiver: wir bauen ein synthetisches Sub-CallChain-
-    // Objekt; pragmatisch reicht uns aber `infer` auf die ganze Chain,
-    // weil wir den Element-Typ ohnehin nur grob brauchen.
-    // (`CallChain` ist Teil der `Expr`-Union — siehe generated/ast.ts.)
-    const fullType = inferExprQuiet(chain, env, ctx);
-    // Für komplexere Cases fehlt aktuell die feinkörnige Inferenz bis zu
-    // einer Chain-Position. Lieber kein falscher Typ als ein erratener.
-    return elementOfListLike(fullType);
-}
-
-/**
- * Wie `resolveTypeAnnotation`, aber mit Cross-Modul-Fallback: wenn der
- * Type-Name lokal nicht aufgelöst werden kann, wird er in den `verwende`-
- * Imports gesucht und über den Workspace geladen. Importierte Datensätze
- * sind im Header-Kontext als Konstruktor-Funktionstypen registriert; wir
- * "unwrappen" sie hier zum eigentlichen Record-Typ.
- */
-function resolveAnnotationWithImports(
-    t: TypeAnnotation,
-    ctx: TypeContext,
-    program: Program,
-    provider: FindslHoverProvider,
-): Type {
-    const local = resolveTypeAnnotation(t, ctx);
-    if (local.kind !== 'unknown') return local;
-    if (!t?.atom || t.atom.$type !== 'NamedType') return local;
-
-    const sym = provider.resolveCrossModuleType(program, t.atom.name);
-    if (!sym) return local;
-
-    // Datensatz-Konstruktor → Record
-    if (sym.kind === 'function' && sym.result.kind === 'record') {
-        return t.optional ? TNull(sym.result) : sym.result;
-    }
-    // Aufzählung
-    if (sym.kind === 'enum') {
-        return t.optional ? TNull(sym) : sym;
-    }
-    return local;
 }
 
 // ---------------------------------------------------------------------------
@@ -765,13 +558,6 @@ function quellenFromPrefix(prefix: DeclPrefix): ReadonlyArray<QuelleAnnotation> 
         .map((a) => a.args[0])
         .filter(isStringLiteral)
         .map((s) => ({ value: s.value }));
-}
-
-function stripDocMarkers(raw: string): string {
-    let s = raw;
-    if (s.startsWith('--')) s = s.slice(2);
-    if (s.endsWith('--'))   s = s.slice(0, -2);
-    return s.replace(/^\s*\n/, '').replace(/\n\s*$/, '');
 }
 
 function quelleLine(quelle?: string): string {

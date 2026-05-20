@@ -40,6 +40,7 @@
     "vscode:prepublish": "npm -w @findsl/core run langium:generate && npm run -w findsl-workspace build && npm run -w findsl-workspace bundle"
   },
   "dependencies": {
+    "@findsl/core": "*",
     "vscode-languageclient": "9.0.1"
   },
   "devDependencies": {

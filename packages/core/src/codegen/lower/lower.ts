@@ -457,7 +457,20 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
             return { kind: 'and', left: lowerExpr(expr.left, reg), right: lowerExpr(expr.right, reg) };
         }
         if (op === '+' || op === '-' || op === '*') {
-            return { kind: 'arith', op, left: lowerExpr(expr.left, reg), right: lowerExpr(expr.right, reg) };
+            const left = lowerExpr(expr.left, reg);
+            const right = lowerExpr(expr.right, reg);
+            // (#44 Text-`+`) Text-Operand → Java-String-Konkat (`+`).
+            // `-`/`*` auf Text sind nicht erlaubt — klarer Throw spiegelt
+            // die SPEC (Text hat keine Subtraktion/Multiplikation).
+            const isText = isTextExpr(left, reg) || isTextExpr(right, reg);
+            if (isText) {
+                if (op !== '+') {
+                    throw new Error(
+                        `${op === '-' ? 'Subtraktion' : 'Multiplikation'} auf Text ist nicht erlaubt.`);
+                }
+                return { kind: 'arith', op, left, right, isText: true };
+            }
+            return { kind: 'arith', op, left, right };
         }
         if (op === '/') {
             return { kind: 'div', left: lowerExpr(expr.left, reg), right: lowerExpr(expr.right, reg) };

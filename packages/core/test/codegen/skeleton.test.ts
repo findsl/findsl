@@ -688,6 +688,57 @@ describe('Issue #44 — .zusammenfassen(start, f) mit 2-stelligem Lambda', () =>
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Text-`+`-Konkatenation (neue Mini-Lücke, parallel zu L12)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Text-`+` lowert zu Java-String-Konkat (kein .add)', () => {
+    it('Text + Text → Java `(a) + (b)` statt `a.add(b)`', async () => {
+        const program = await parseSource(
+            'fn Concat(a: Text, b: Text): Text = a + b\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return (a) + (b);');
+        expect(impl).not.toContain('a.add(b)');
+    });
+
+    it('Text + Text + Text (gekettete Konkatenation)', async () => {
+        const program = await parseSource(
+            'fn Triple(a: Text, b: Text, c: Text): Text = a + b + c\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return ((a) + (b)) + (c);');
+    });
+
+    it('Text + Text-Literal → Java-String-Konkat', async () => {
+        const program = await parseSource(
+            'fn Greet(n: Text): Text = "Hallo, " + n\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return ("Hallo, ") + (n);');
+    });
+
+    it('Text - Text (Ordnungs-Op auf Text) → Throw mit klarer Meldung', async () => {
+        await expect(async () => {
+            const program = await parseSource(
+                'fn Bad(a: Text, b: Text): Text = a - b\n',
+            );
+            lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        }).rejects.toThrow(/Subtraktion.*Text|Text.*nicht erlaubt/);
+    });
+
+    it('Numerischer Vergleich (Regression): a + b → a.add(b) bleibt', async () => {
+        const program = await parseSource(
+            'fn Sum(a: Ganzzahl, b: Ganzzahl): Ganzzahl = a + b\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('a.add(b)');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

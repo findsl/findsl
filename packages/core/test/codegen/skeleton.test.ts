@@ -739,6 +739,44 @@ describe('Issue #44 — Text-`+` lowert zu Java-String-Konkat (kein .add)', () =
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — L6: wenn-Ausdruck (Lowering nach waehle mit 2 Armen)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — wenn-Ausdruck (L6) lowert zu waehle-Statement', () => {
+    it('einfacher wenn-sonst → if/return-Struktur', async () => {
+        const program = await parseSource(
+            'fn Abs(n: Ganzzahl): Ganzzahl = wenn (n < 0) -n sonst n\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // wenn (condition) then sonst else → if (condition) { return then; } return else;
+        expect(impl).toMatch(/if \(n\.compareValue\(FinDslNumber\.ganzzahl\("0"\)\) < 0\) \{\s*return Ganzzahl\.von\(n\.neg\(\)\);\s*\}\s*return Ganzzahl\.von\(n\);/s);
+    });
+
+    it('wenn mit Text-Rückgabe', async () => {
+        const program = await parseSource(
+            'fn Klassify(n: Ganzzahl): Text = wenn (n > 0) "positiv" sonst "nicht positiv"\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return "positiv";');
+        expect(impl).toContain('return "nicht positiv";');
+    });
+
+    it('verschachtelt: wenn im wenn-Zweig', async () => {
+        const program = await parseSource(
+            'fn Sign(n: Ganzzahl): Ganzzahl = '
+            + 'wenn (n > 0) 1 sonst wenn (n < 0) -1 sonst 0\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // Drei return-Zweige (1 / -1 / 0)
+        expect(impl).toMatch(/return Ganzzahl\.von\(FinDslNumber\.ganzzahl\("1"\)\);/);
+        expect(impl).toMatch(/return Ganzzahl\.von\(FinDslNumber\.ganzzahl\("1"\)\.neg\(\)\);/);
+        expect(impl).toMatch(/return Ganzzahl\.von\(FinDslNumber\.ganzzahl\("0"\)\);/);
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

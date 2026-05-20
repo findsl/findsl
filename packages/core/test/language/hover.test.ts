@@ -431,6 +431,47 @@ fn test(f: Fall): Euro = f.betrag
         expect(md).not.toMatch(/\n>\s/);
     });
 
+    it('Hover auf Feld-Zugriff aus Lambda-Param in HOF-Trailing-Syntax (Issue #65)', async () => {
+        // Spiegelt das est.findsl-Beispiel: `kinder.zuordnen { k -> k.faktor }`
+        // — k hat keine explizite Typ-Annotation, der Typ ergibt sich aus
+        // dem Element-Typ von `kinder: Liste<Kind>`.
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Kind im Steuerfall.
+
+@param faktor  Multiplikator für den Freibetrag.
+--
+datensatz Kind(faktor: Ganzzahl, anteil: Prozent)
+
+fn Summe(kinder: Liste<Kind>): Ganzzahl =
+    kinder.zuordnen( { k -> k.faktor } ).summe()
+`;
+        const h = await hoverAt(src, 'faktor }');
+        const md = content(h);
+        expect(md).toContain('Feld faktor: Ganzzahl');
+        expect(md).toContain('Multiplikator');
+    });
+
+    it('Hover auf Feld-Zugriff aus für-jeden-Iter-Variable (Issue #65 RC3)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
+
+fn XSumme(ps: Liste<Punkt>): Liste<Ganzzahl> =
+    für jeden p aus ps {
+        p.x
+    }
+`;
+        const h = await hoverAt(src, 'x\n');
+        const md = content(h);
+        expect(md).toContain('Feld x: Ganzzahl');
+    });
+
     it('Cross-Modul: Hover auf Feld-Zugriff zeigt @param aus importiertem Datensatz', async () => {
         const lib = `--
 Datei-Dokumentation des lib-Moduls.

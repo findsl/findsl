@@ -526,3 +526,25 @@ describe('Inlay-Hints: range-stabil (kein Scroll-Flackern)', () => {
         expect(teil.length).toBe(voll.length);
     });
 });
+
+describe('Inlay-Hints: Field-Zugriff aus Lambda-Param in HOF (Issue #65)', () => {
+    it('Trailing-Lambda: `xs.zuordnen { k -> k.geld }` → "€" am Geld-Feld', async () => {
+        const hs = await hints(
+            'datensatz Kind(betrag: Euro, faktor: Ganzzahl)\n'
+            + 'fn Beträge(kinder: Liste<Kind>): Liste<Euro> =\n'
+            + '    kinder.zuordnen( { k -> k.betrag } )\n',
+        );
+        expect(labels(types(hs))).toContain('€');
+    });
+
+    it('für jeden: `für jeden p aus ps { p.geld }` → "€" am Geld-Feld', async () => {
+        const hs = await hints(
+            'datensatz Punkt(betrag: Euro, x: Ganzzahl)\n'
+            + 'fn Beträge(ps: Liste<Punkt>): Liste<Euro> =\n'
+            + '    für jeden p aus ps {\n'
+            + '        p.betrag\n'
+            + '    }\n',
+        );
+        expect(labels(types(hs))).toContain('€');
+    });
+});

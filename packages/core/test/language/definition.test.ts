@@ -114,6 +114,31 @@ fn f(p: Pt): Ganzzahl = p.x
         expect(links).toHaveLength(1);
         expect(links![0].targetRange.start.line).toBe(0);
     });
+
+    it('Field-Zugriff aus Lambda-Param in HOF-Trailing-Syntax (Issue #65)', async () => {
+        // Spiegelt das est.findsl-Beispiel: `kinder.zuordnen { k -> k.faktor }`
+        const src = `datensatz Kind(faktor: Ganzzahl, anteil: Prozent)
+
+fn Summe(kinder: Liste<Kind>): Ganzzahl =
+    kinder.zuordnen( { k -> k.faktor } ).summe()
+`;
+        const links = await defAt(src, 'faktor }');
+        expect(links).toHaveLength(1);
+        // Field faktor ist in der Datensatz-Decl (Zeile 0).
+        expect(links![0].targetRange.start.line).toBe(0);
+    });
+
+    it('Field-Zugriff aus für-jeden-Iter-Variable (Issue #65 RC3)', async () => {
+        const src = `datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
+fn XSumme(ps: Liste<Punkt>): Liste<Ganzzahl> =
+    für jeden p aus ps {
+        p.x
+    }
+`;
+        const links = await defAt(src, 'x\n');
+        expect(links).toHaveLength(1);
+        expect(links![0].targetRange.start.line).toBe(0);
+    });
 });
 
 describe('Go-to-Definition: Cross-Modul', () => {

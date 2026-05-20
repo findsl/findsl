@@ -987,7 +987,18 @@ function walkChain(
         // unmittelbar folgende Call-Kettenglied.
         if (current.kind === 'list' && isFieldAccess(op) && op.name) {
             const next = chain[k + 1];
-            const callOp = next && isCall(next) ? next : undefined;
+            // Trailing-Lambda-Syntax (`xs.zuordnen { k -> body }`) ist
+            // semantisch identisch zu `xs.zuordnen({ k -> body })` und
+            // muss vom Type-Checker als Lambda-Argument behandelt werden,
+            // damit der Lambda-Param den Element-Typ erbt (bidirektionale
+            // Inferenz via `checkAgainstAnnotation`). Analog zum Lower-
+            // Pfad (`codegen/lower/lower.ts`).
+            const trailing = (op as { trailingLambda?: AstNode }).trailingLambda;
+            const callOp = next && isCall(next)
+                ? next
+                : trailing !== undefined
+                    ? ({ args: [{ value: trailing }] } as unknown as { args: ReadonlyArray<CallArg> })
+                    : undefined;
             const r = listMethod(current.element, op.name, callOp, env, ctx, report);
             if (r === undefined) {
                 report(op as unknown as AstNode,
@@ -995,7 +1006,10 @@ function walkChain(
                 current = TUnknown;
             } else {
                 current = r.type;
-                if (r.consumedCall) k++;          // folgendes Call() überspringen
+                // `consumedCall` bezieht sich nur auf das nächste reale
+                // `Call`-Chain-Glied; das synthetische Trailing-Call-
+                // Objekt verbraucht KEIN Chain-Glied.
+                if (r.consumedCall && next && isCall(next)) k++;
             }
             continue;
         }

@@ -496,6 +496,204 @@ fn test(f: Fall): Euro = f.summe
     });
 });
 
+describe('Hover: strukturiertes Doc-Markdown (Issue #65 Phase C)', () => {
+    it('Funktion mit @param/@rückgabe → Sektionen "Parameter" + "Rückgabe"', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Berechnet die Bruttosumme aus Netto + MwSt.
+
+@param netto         Netto-Betrag ohne Steuer.
+@param mehrwertsteuer Anwendbarer Mehrwertsteuersatz.
+@rückgabe Brutto-Betrag inklusive Steuer.
+--
+fn Brutto(netto: Euro, mehrwertsteuer: Prozent = 19%): Euro = netto + (netto * mehrwertsteuer)
+`;
+        const h = await hoverAt(src, 'fn Brutto');
+        const md = content(h);
+        expect(md).toContain('**Parameter**');
+        expect(md).toContain('`netto` — Netto-Betrag ohne Steuer.');
+        expect(md).toContain('`mehrwertsteuer` — Anwendbarer Mehrwertsteuersatz.');
+        expect(md).toContain('**Rückgabe**');
+        expect(md).toContain('Brutto-Betrag inklusive Steuer.');
+        // Prosa muss vor den Sektionen stehen (Beschreibung zuerst)
+        const proseIdx = md.indexOf('Berechnet die Bruttosumme');
+        const paramIdx = md.indexOf('**Parameter**');
+        expect(proseIdx).toBeGreaterThan(-1);
+        expect(paramIdx).toBeGreaterThan(proseIdx);
+    });
+
+    it('Datensatz mit @param → Parameter-Sektion in Signatur-Reihenfolge sortiert', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Geometrischer Punkt in der Ebene.
+
+@param y  Vertikale Koordinate.
+@param x  Horizontale Koordinate.
+--
+datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
+`;
+        const h = await hoverAt(src, 'datensatz Punkt');
+        const md = content(h);
+        expect(md).toContain('**Parameter**');
+        // Auch wenn @param-Tags in der Doc in y-x-Reihenfolge stehen,
+        // sollen sie nach Signatur-Reihenfolge (x, y) sortiert werden.
+        const xIdx = md.indexOf('`x`');
+        const yIdx = md.indexOf('`y`');
+        expect(xIdx).toBeGreaterThan(-1);
+        expect(yIdx).toBeGreaterThan(xIdx);
+    });
+
+    it('Inline-Math `$x \\cdot y$` wird als SVG-Bild gerendert + Klartext-alt (Issue #65)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Berechnet die Tarifkurve nach $T(\\text{zve}) = a \\cdot \\text{zve} + b$.
+--
+fn T(zve: Euro): Euro = zve
+`;
+        const h = await hoverAt(src, 'fn T');
+        const md = content(h);
+        // SVG-Bild mit data-URL; alt-Text ist Klartext-Variante.
+        expect(md).toContain('![T(zve) = a · zve + b](data:image/svg+xml');
+        // Kein rohes TeX im Output.
+        expect(md).not.toContain('\\cdot');
+        expect(md).not.toMatch(/\$T\(.*\$/);
+    });
+
+    it('Block-Math `$$ \\frac{a}{b} $$` wird als SVG-Bild gerendert + Klartext-alt (Issue #65)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Tarifformel:
+
+$$
+y = \\frac{\\text{zvE} - \\text{GFB}}{10000}
+$$
+--
+fn T(zve: Euro): Euro = zve
+`;
+        const h = await hoverAt(src, 'fn T');
+        const md = content(h);
+        // Block-Math als SVG-Bild (alt = Klartext-Variante).
+        expect(md).toContain('![y = (zvE - GFB)/10000](data:image/svg+xml');
+        expect(md).not.toContain('\\frac');
+        expect(md).not.toContain('\\text');
+    });
+
+    it('Block-Math mit cases-Umgebung wird als SVG-Bild gerendert (Issue #65)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Tarif:
+
+$$
+\\begin{cases}
+0 & x \\le 0 \\\\
+(a + b)(c + d) & x > 0
+\\end{cases}
+$$
+--
+fn T(x: Euro): Euro = x
+`;
+        const h = await hoverAt(src, 'fn T');
+        const md = content(h);
+        // cases-Block wird als SVG-Bild gerendert; alt-Text enthält
+        // die texToPlain-Variante (zur Barrierefreiheit + Fallback).
+        expect(md).toContain('data:image/svg+xml');
+        expect(md).toMatch(/!\[.*wenn x <= 0.*\]/);
+        expect(md).toMatch(/!\[.*wenn x > 0.*\]/);
+    });
+
+    it('User-Bug est.findsl: komplexe Formeln werden alle als SVG-Bild gerendert (Issue #65)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Tariflicher Einkommensteuerbetrag nach dem Grundtarif.
+
+Mit den Hilfsgrößen $y = \\frac{\\text{zvE} - \\text{GFB}}{10000}$ (Zone 2)
+und $z = \\frac{\\text{zvE} - \\text{ZONE\\_2}}{10000}$ (Zone 3) lautet
+der Tarif zonenweise:
+
+$$
+\\text{ESt}(\\text{zvE}) =
+\\begin{cases}
+0 & \\text{zvE} \\le \\text{GFB} \\\\
+(a_2\\,y + b_2)\\,y & \\text{Zone 2}
+\\end{cases}
+$$
+--
+fn EstGrundtarif(zve: Euro): Euro = zve
+`;
+        const h = await hoverAt(src, 'fn EstGrundtarif');
+        const md = content(h);
+        // Inline-Hilfsgrößen als SVG-Bilder (alt = Klartext)
+        expect(md).toContain('![y = (zvE - GFB)/10000](data:image/svg+xml');
+        expect(md).toContain('![z = (zvE - ZONE_2)/10000](data:image/svg+xml');
+        // Block-Formel als SVG-Bild (alt enthält cases-Plain-Text)
+        expect(md).toMatch(/!\[.*ESt\(zvE\).*wenn zvE <= GFB.*\]\(data:image\/svg\+xml/);
+        // Kein rohes TeX im Output
+        expect(md).not.toContain('\\frac');
+        expect(md).not.toContain('\\cdot');
+        expect(md).not.toContain('\\begin{cases}');
+    });
+
+    it('Funktion ohne @param-Tags zeigt nur Prosa (keine leere Parameter-Sektion)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Verdoppelt einen Eurobetrag — kein Doc-Tag.
+--
+fn V(x: Euro): Euro = x * 2
+`;
+        const h = await hoverAt(src, 'fn V');
+        const md = content(h);
+        expect(md).toContain('Verdoppelt einen Eurobetrag');
+        expect(md).not.toContain('**Parameter**');
+        expect(md).not.toContain('**Rückgabe**');
+    });
+
+    it('@Quelle-Annotation wird durch `---`-Trenner abgetrennt', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Steuerformel.
+
+@param zve  Zu versteuerndes Einkommen.
+--
+@Quelle("§ 32a Abs. 1 EStG")
+fn T(zve: Euro): Euro = zve
+`;
+        const h = await hoverAt(src, 'fn T');
+        const md = content(h);
+        expect(md).toContain('**Parameter**');
+        expect(md).toContain('*Quelle:* § 32a Abs. 1 EStG');
+        // Quelle muss durch `---` von der Param-Sektion getrennt sein
+        const paramIdx = md.indexOf('**Parameter**');
+        const sepIdx = md.indexOf('---', paramIdx);
+        const quelleIdx = md.indexOf('*Quelle:*', sepIdx);
+        expect(sepIdx).toBeGreaterThan(paramIdx);
+        expect(quelleIdx).toBeGreaterThan(sepIdx);
+    });
+});
+
 describe('Hover-Grenzfälle', () => {
     it('Cursor auf unbekanntem Identifier → kein Hover', async () => {
         const src = `fn f(): Ganzzahl = unbekannt

@@ -67,6 +67,7 @@ import {
 } from './generated/ast.js';
 import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
 import { parseDocTags, stripDocMarkers as stripMarkersShared } from './doc-tags.js';
+import { renderDocForHover, type QuelleAnnotation } from './doc-hover-renderer.js';
 import * as path from 'node:path';
 import { BUILTIN_ENUM_DEFS, BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
 import {
@@ -177,8 +178,8 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
     // Langium 4: liefert den Markdown-Inhalt als String; die Basisklasse
     // wickelt ihn selbst in ein `Hover`. Wird hier nur als abstrakter
     // Vertrag erfüllt — der eigentliche Pfad läuft über `getHoverContent`.
-    protected override getAstNodeHoverContent(node: AstNode): MaybePromise<string | undefined> {
-        const h = formatResolved({ kind: 'decl', node });
+    protected override async getAstNodeHoverContent(node: AstNode): Promise<string | undefined> {
+        const h = await formatResolved({ kind: 'decl', node });
         if (!h) return undefined;
         const c = h.contents;
         if (typeof c === 'string') return c;
@@ -579,7 +580,7 @@ function resolveAnnotationWithImports(
 // Markdown-Formatierung
 // ---------------------------------------------------------------------------
 
-function formatResolved(r: Resolved): Hover | undefined {
+async function formatResolved(r: Resolved): Promise<Hover | undefined> {
     switch (r.kind) {
         case 'decl':          return formatDeclNode(r.node);
         case 'cross-decl':    return formatCrossDeclNode(r.node, r.sourceModule);
@@ -594,8 +595,8 @@ function formatResolved(r: Resolved): Hover | undefined {
  * mit dem lokalen Hover, aber mit einer zusätzlichen Hinweis-Zeile auf das
  * Quell-Modul — so weiß der Nutzer, wohin die Definition gehört.
  */
-function formatCrossDeclNode(node: AstNode, sourceFile: string): Hover | undefined {
-    const local = formatDeclNode(node);
+async function formatCrossDeclNode(node: AstNode, sourceFile: string): Promise<Hover | undefined> {
+    const local = await formatDeclNode(node);
     if (!local) return undefined;
     const original = typeof local.contents === 'string'
         ? local.contents
@@ -604,13 +605,13 @@ function formatCrossDeclNode(node: AstNode, sourceFile: string): Hover | undefin
     return markdown(`${prefix}\n\n${original}`);
 }
 
-function formatDeclNode(node: AstNode): Hover | undefined {
+async function formatDeclNode(node: AstNode): Promise<Hover | undefined> {
     if (isAbbruchExpr(node))     return markdown(formatAbbruch());
     if (isAusgabeStmt(node))     return markdown(formatAusgabe());
-    if (isKonstDecl(node))       return markdown(formatKonst(node));
-    if (isFunktionDecl(node))    return markdown(formatFunktion(node));
-    if (isDatensatzDecl(node))   return markdown(formatDatensatz(node));
-    if (isAufzaehlungDecl(node)) return markdown(formatAufzaehlung(node));
+    if (isKonstDecl(node))       return markdown(await formatKonst(node));
+    if (isFunktionDecl(node))    return markdown(await formatFunktion(node));
+    if (isDatensatzDecl(node))   return markdown(await formatDatensatz(node));
+    if (isAufzaehlungDecl(node)) return markdown(await formatAufzaehlung(node));
     if (isField(node))           return markdown(formatField(node));
     if (isParam(node))           return markdown(formatParam(node));
     return undefined;
@@ -648,7 +649,7 @@ function formatAusgabe(): string {
     return joinSections(sig, body);
 }
 
-function formatKonst(decl: KonstDecl): string {
+async function formatKonst(decl: KonstDecl): Promise<string> {
     // Wert in die Code-Signatur einweben (Issue #65 B1) — Konstanten-
     // Werte sind in einem Steuer-DSL primäres Interesse beim Hover
     // (Tarifeckwert, Hebesatz, Grundfreibetrag …). Lange/mehrzeilige
@@ -656,7 +657,7 @@ function formatKonst(decl: KonstDecl): string {
     const valueText = compactValueText(decl.value?.$cstNode?.text);
     const head = `konst ${decl.name}: ${typeToString(decl.type)}`;
     const sig = fence(valueText ? `${head} = ${valueText}` : head);
-    return joinSections(sig, formatDocPrefix(decl.docPrefix));
+    return joinSections(sig, await formatDocPrefix(decl.docPrefix));
 }
 
 /** Macht aus dem CST-Text eines Wertes eine einzeilige, gekürzte Form
@@ -670,16 +671,17 @@ function compactValueText(raw: string | undefined): string {
     return trimmed.length > MAX ? trimmed.slice(0, MAX - 1) + '…' : trimmed;
 }
 
-function formatFunktion(decl: FunktionDecl): string {
+async function formatFunktion(decl: FunktionDecl): Promise<string> {
     const params = decl.params.map((p) => {
         const def = p.default ? ' = …' : '';
         return `${p.name}: ${typeToString(p.type)}${def}`;
     }).join(', ');
     const sig = fence(`fn ${decl.name}(${params}): ${typeToString(decl.returnType)}`);
-    return joinSections(sig, formatDocPrefix(decl.docPrefix));
+    const paramOrder = decl.params.map((p) => p.name);
+    return joinSections(sig, await formatDocPrefix(decl.docPrefix, paramOrder));
 }
 
-function formatDatensatz(decl: DatensatzDecl): string {
+async function formatDatensatz(decl: DatensatzDecl): Promise<string> {
     const sig = fence(`datensatz ${decl.name}(…${decl.fields.length} Felder…)`);
     const fields = decl.fields.length
         ? '**Felder:**\n' + decl.fields.map((f) => {
@@ -687,12 +689,13 @@ function formatDatensatz(decl: DatensatzDecl): string {
             return `- \`${f.name}: ${typeToString(f.type)}${def}\``;
         }).join('\n')
         : '';
-    return joinSections(sig, formatDocPrefix(decl.docPrefix), fields);
+    const paramOrder = decl.fields.map((f) => f.name);
+    return joinSections(sig, await formatDocPrefix(decl.docPrefix, paramOrder), fields);
 }
 
-function formatAufzaehlung(decl: AufzaehlungDecl): string {
+async function formatAufzaehlung(decl: AufzaehlungDecl): Promise<string> {
     const sig = fence(`aufzählung ${decl.name} { ${decl.values.join(', ')} }`);
-    return joinSections(sig, formatDocPrefix(decl.docPrefix));
+    return joinSections(sig, await formatDocPrefix(decl.docPrefix));
 }
 
 function formatField(field: Field): string {
@@ -738,16 +741,26 @@ function formatBuiltinEnumValue(value: string, enumName: string): Hover {
 // Doc-Prefix und Helfer
 // ---------------------------------------------------------------------------
 
-function formatDocPrefix(prefix?: DeclPrefix): string {
+/** Ersetzt durch `renderDocForHover` (Issue #65 Phase C) — strukturiertes
+ *  Markdown mit Parameter-/Rückgabe-Sektionen + Formel-Rendering. Diese
+ *  Funktion ist nur noch ein dünner Wrapper für Aufrufer, die keine
+ *  Param-Reihenfolge mitgeben können (Aufzählungen, Konstanten).
+ *  Async, weil der Math-Renderer (MathJax) eine einmalige Init braucht. */
+async function formatDocPrefix(prefix?: DeclPrefix, paramOrder?: ReadonlyArray<string>): Promise<string> {
     if (!prefix) return '';
-    const body = prefix.doc ? stripDocMarkers(prefix.doc).trim() : '';
-    const quellen = (prefix.annotations ?? [])
+    return renderDocForHover({
+        docRaw: prefix.doc,
+        paramOrder,
+        quellen: quellenFromPrefix(prefix),
+    });
+}
+
+function quellenFromPrefix(prefix: DeclPrefix): ReadonlyArray<QuelleAnnotation> {
+    return (prefix.annotations ?? [])
         .filter((a) => a.name === 'Quelle')
         .map((a) => a.args[0])
         .filter(isStringLiteral)
-        .map((s) => `*Quelle:* ${s.value}`)
-        .join('\n\n');
-    return [body, quellen].filter(Boolean).join('\n\n---\n\n');
+        .map((s) => ({ value: s.value }));
 }
 
 function stripDocMarkers(raw: string): string {

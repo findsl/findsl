@@ -88,7 +88,7 @@ import {
     isUnaryOp,
     isWaehleExpr,
     isWennExpr,
-    type Beispiel,
+    type Testfall,
     type BlockStmt,
     type CallArg,
     type ChainOp,
@@ -1224,14 +1224,14 @@ function constructRecord(
 }
 
 // ---------------------------------------------------------------------------
-// Beispiel-Auswertung (für prüfe-Blöcke)
+// Testfall-Auswertung (für prüfe-Blöcke)
 // ---------------------------------------------------------------------------
 
-export function evalBeispiel(beispiel: Beispiel, env: Environment): Value {
+export function evalTestfall(testfall: Testfall, env: Environment): Value {
     // `testfall "L" { (var …)* assertion }` — gleiche Blockform wie ein
     // `fn`-Rumpf: Setup-Anweisungen in einer Kind-Env, dann die finale
     // Assertion auswerten.
-    const block = beispiel.body;
+    const block = testfall.body;
     if (!block || !block.result) {
         throw new InterpretError('testfall ohne Block-Ergebnis (Teil-Parse).');
     }

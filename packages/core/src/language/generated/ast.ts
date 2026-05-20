@@ -143,25 +143,6 @@ export function isAusgabeStmt(item: unknown): item is AusgabeStmt {
     return reflection.isInstance(item, AusgabeStmt.$type);
 }
 
-export interface Beispiel extends langium.AstNode {
-    readonly $container: PruefeDecl;
-    readonly $type: 'Beispiel';
-    body: BlockExpr;
-    erwartetAbbruch: boolean;
-    label: string;
-}
-
-export const Beispiel = {
-    $type: 'Beispiel',
-    body: 'body',
-    erwartetAbbruch: 'erwartetAbbruch',
-    label: 'label'
-} as const;
-
-export function isBeispiel(item: unknown): item is Beispiel {
-    return reflection.isInstance(item, Beispiel.$type);
-}
-
 export interface BinaryOp extends langium.AstNode {
     readonly $container: AbbruchExpr | Annotation | AusgabeStmt | BinaryOp | BlockExpr | CallArg | Cast | FallArm | Field | FuerExpr | FunktionBody | Index | KonstDecl | Lambda | LetStmt | ListLiteral | NullCheck | Param | ParenChain | Range | SonstArm | UnaryOp | WaehleExpr | WennExpr;
     readonly $type: 'BinaryOp';
@@ -182,7 +163,7 @@ export function isBinaryOp(item: unknown): item is BinaryOp {
 }
 
 export interface BlockExpr extends langium.AstNode {
-    readonly $container: Beispiel | FuerExpr | FunktionBody;
+    readonly $container: FuerExpr | FunktionBody | Testfall;
     readonly $type: 'BlockExpr';
     result: Expr;
     stmts: Array<BlockStmt>;
@@ -776,16 +757,16 @@ export function isProgram(item: unknown): item is Program {
 export interface PruefeDecl extends langium.AstNode {
     readonly $container: Program;
     readonly $type: 'PruefeDecl';
-    beispiele: Array<Beispiel>;
     docPrefix?: DeclPrefix;
     name: string;
+    testfaelle: Array<Testfall>;
 }
 
 export const PruefeDecl = {
     $type: 'PruefeDecl',
-    beispiele: 'beispiele',
     docPrefix: 'docPrefix',
-    name: 'name'
+    name: 'name',
+    testfaelle: 'testfaelle'
 } as const;
 
 export function isPruefeDecl(item: unknown): item is PruefeDecl {
@@ -856,6 +837,25 @@ export const StringLiteral = {
 
 export function isStringLiteral(item: unknown): item is StringLiteral {
     return reflection.isInstance(item, StringLiteral.$type);
+}
+
+export interface Testfall extends langium.AstNode {
+    readonly $container: PruefeDecl;
+    readonly $type: 'Testfall';
+    body: BlockExpr;
+    erwartetAbbruch: boolean;
+    label: string;
+}
+
+export const Testfall = {
+    $type: 'Testfall',
+    body: 'body',
+    erwartetAbbruch: 'erwartetAbbruch',
+    label: 'label'
+} as const;
+
+export function isTestfall(item: unknown): item is Testfall {
+    return reflection.isInstance(item, Testfall.$type);
 }
 
 export type TopDecl = AufzaehlungDecl | DatensatzDecl | FunktionDecl | KonstDecl | PruefeDecl;
@@ -978,7 +978,6 @@ export type FindslAstType = {
     Annotation: Annotation
     AufzaehlungDecl: AufzaehlungDecl
     AusgabeStmt: AusgabeStmt
-    Beispiel: Beispiel
     BinaryOp: BinaryOp
     BlockExpr: BlockExpr
     BlockStmt: BlockStmt
@@ -1021,6 +1020,7 @@ export type FindslAstType = {
     SafeFieldAccess: SafeFieldAccess
     SonstArm: SonstArm
     StringLiteral: StringLiteral
+    Testfall: Testfall
     TopDecl: TopDecl
     Type: Type
     TypeArgs: TypeArgs
@@ -1079,22 +1079,6 @@ export class FindslAstReflection extends langium.AbstractAstReflection {
                 }
             },
             superTypes: [BlockStmt.$type]
-        },
-        Beispiel: {
-            name: Beispiel.$type,
-            properties: {
-                body: {
-                    name: Beispiel.body
-                },
-                erwartetAbbruch: {
-                    name: Beispiel.erwartetAbbruch,
-                    defaultValue: false
-                },
-                label: {
-                    name: Beispiel.label
-                }
-            },
-            superTypes: []
         },
         BinaryOp: {
             name: BinaryOp.$type,
@@ -1547,15 +1531,15 @@ export class FindslAstReflection extends langium.AbstractAstReflection {
         PruefeDecl: {
             name: PruefeDecl.$type,
             properties: {
-                beispiele: {
-                    name: PruefeDecl.beispiele,
-                    defaultValue: []
-                },
                 docPrefix: {
                     name: PruefeDecl.docPrefix
                 },
                 name: {
                     name: PruefeDecl.name
+                },
+                testfaelle: {
+                    name: PruefeDecl.testfaelle,
+                    defaultValue: []
                 }
             },
             superTypes: [TopDecl.$type]
@@ -1605,6 +1589,22 @@ export class FindslAstReflection extends langium.AbstractAstReflection {
                 }
             },
             superTypes: [Literal.$type]
+        },
+        Testfall: {
+            name: Testfall.$type,
+            properties: {
+                body: {
+                    name: Testfall.body
+                },
+                erwartetAbbruch: {
+                    name: Testfall.erwartetAbbruch,
+                    defaultValue: false
+                },
+                label: {
+                    name: Testfall.label
+                }
+            },
+            superTypes: []
         },
         TopDecl: {
             name: TopDecl.$type,

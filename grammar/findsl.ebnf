@@ -55,8 +55,8 @@ field              ::= IDENT ":" type ("=" expr)?
 
 aufzählung_decl    ::= decl_prefix? "aufzählung" IDENT "{" IDENT ("," IDENT)* ","? "}"
 
-prüfe_decl         ::= decl_prefix? "prüfe" STR_LIT "{" prüfe_beispiel+ "}"
-prüfe_beispiel     ::= "testfall" STR_LIT ("erwartet" "abbruch")? block_expr
+prüfe_decl         ::= decl_prefix? "prüfe" STR_LIT "{" testfall+ "}"
+testfall           ::= "testfall" STR_LIT ("erwartet" "abbruch")? block_expr
 
 
 (* === Bindungen und Blöcke === *)

@@ -19,7 +19,7 @@ import {
 import { isPruefeDecl, type Program, type PruefeDecl } from './generated/ast.js';
 import {
     runSinglePruefe,
-    type BeispielReport,
+    type TestfallReport,
     type PruefeReport,
 } from '../interpret/pruefe.js';
 import { RUN_PRUEFE_COMMAND } from './findsl-codelens.js';
@@ -38,13 +38,19 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
     }
 
     /**
-     * args = [documentUri: string, pruefeIndex: number]. Liefert den
-     * `PruefeReport` zurück (für programmatische Aufrufer/Tests) und
-     * zeigt parallel eine Notification.
+     * args = [documentUri: string, pruefeIndex: number, testfallIndex?: number].
+     * Liefert den `PruefeReport` zurück (für programmatische Aufrufer/Tests)
+     * und zeigt parallel eine Notification. Wenn `testfallIndex` angegeben
+     * ist, wird nur dieser einzelne `testfall` ausgeführt (Issue #79-
+     * Folge: einzelne Gutter-Play-Pfeile sollen nicht den ganzen Block
+     * runnen).
      */
     private async runPruefe(args: unknown[]): Promise<PruefeReport | undefined> {
         const uri = String(args?.[0] ?? '');
         const index = Number(args?.[1] ?? 0);
+        const testfallIndex = args?.[2] === undefined || args?.[2] === null
+            ? undefined
+            : Number(args[2]);
         const connection = this.shared.lsp.Connection;
 
         const documents = this.shared.workspace.LangiumDocuments;
@@ -62,7 +68,7 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
             if (p) workspace.push(p);
         }
 
-        const report = runSinglePruefe(workspace, entry, index);
+        const report = runSinglePruefe(workspace, entry, index, testfallIndex);
 
         // Inline-Diagnosen pro fehlgeschlagenem testfall. publishDiagnostics
         // ersetzt PRO URI komplett — daher die aktuellen Validierungs-
@@ -71,7 +77,7 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
         // (nächste Editor-Änderung) bzw. zum nächsten Lauf — bewusst
         // ephemer: ein Testergebnis ist eine Momentaufnahme.
         const pruefeDecls = entry.decls.filter(isPruefeDecl);
-        const testDiags = buildPruefeDiagnostics(pruefeDecls[index], report);
+        const testDiags = buildPruefeDiagnostics(pruefeDecls[index], report, testfallIndex);
         const base = (doc?.diagnostics ?? []) as Diagnostic[];
         connection?.sendDiagnostics({
             uri,
@@ -101,21 +107,27 @@ const ZERO_RANGE: Range = {
 
 /**
  * Erzeugt eine Diagnose pro NICHT bestandenem testfall. Die Ergebnis-
- * Reihenfolge entspricht `decl.beispiele` (beide iterieren in Deklarations-
+ * Reihenfolge entspricht `decl.testfaelle` (beide iterieren in Deklarations-
  * Reihenfolge) → Index-Zuordnung ist exakt, kein Label-Matching nötig.
  * Bei Modul-Initialisierungsfehler (synthetischer Einzel-Report ohne
- * passende Beispiele) hängt die Diagnose am `prüfe`-Block.
+ * passende Testfälle) hängt die Diagnose am `prüfe`-Block.
+ *
+ * Wenn der Report aus einem Einzel-Testfall-Lauf stammt (Issue #79-
+ * Folge: `testfallIndex` gesetzt), liegt das Ergebnis bei `report.results[0]`,
+ * gehört aber zu `decl.testfaelle[testfallIndex]` — `offset` korrigiert
+ * das.
  */
 export function buildPruefeDiagnostics(
-    decl: PruefeDecl | undefined, report: PruefeReport,
+    decl: PruefeDecl | undefined, report: PruefeReport, testfallIndex?: number,
 ): Diagnostic[] {
     const out: Diagnostic[] = [];
+    const offset = testfallIndex ?? 0;
     report.results.forEach((r, i) => {
         if (r.status === 'pass') return;
-        const beispiel = decl?.beispiele[i];
+        const testfall = decl?.testfaelle[offset + i];
         const range =
-            beispiel?.body?.result?.$cstNode?.range
-            ?? beispiel?.$cstNode?.range
+            testfall?.body?.result?.$cstNode?.range
+            ?? testfall?.$cstNode?.range
             ?? decl?.$cstNode?.range
             ?? ZERO_RANGE;
         const istFehler = r.status === 'error';
@@ -124,14 +136,14 @@ export function buildPruefeDiagnostics(
             severity: DiagnosticSeverity.Error,
             source: 'findsl prüfe',
             code: istFehler ? 'findsl.testfall-fehler' : 'findsl.testfall-fehlgeschlagen',
-            message: `Testfall „${r.beispielLabel}" `
+            message: `Testfall „${r.testfallLabel}" `
                 + `${istFehler ? 'Laufzeitfehler' : 'fehlgeschlagen'}: ${r.detail}`,
         });
     });
     return out;
 }
 
-const ICON: Record<BeispielReport['status'], string> = {
+const ICON: Record<TestfallReport['status'], string> = {
     pass: '✓', fail: '✗', error: '⚠',
 };
 
@@ -143,6 +155,6 @@ function formatReport(report: PruefeReport): string {
     const problems = report.results
         .filter((r) => r.status !== 'pass')
         .slice(0, 10)
-        .map((r) => `${ICON[r.status]} "${r.beispielLabel}": ${r.detail}`);
+        .map((r) => `${ICON[r.status]} "${r.testfallLabel}": ${r.detail}`);
     return problems.length ? `${head}\n${problems.join('\n')}` : head;
 }

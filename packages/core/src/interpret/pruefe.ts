@@ -14,7 +14,7 @@ import {
     type Value,
 } from './values.js';
 import {
-    evalBeispiel,
+    evalTestfall,
     interpretProgram,
     type InterpretedModule,
     type ModuleRegistry,
@@ -24,12 +24,12 @@ import type { Program, PruefeDecl } from '../language/generated/ast.js';
 import type { LoadedModule } from './module-loader.js';
 import { programFilePath } from '../language/import-path.js';
 
-export type BeispielStatus = 'pass' | 'fail' | 'error';
+export type TestfallStatus = 'pass' | 'fail' | 'error';
 
-export interface BeispielReport {
+export interface TestfallReport {
     readonly pruefeName: string;
-    readonly beispielLabel: string;
-    readonly status: BeispielStatus;
+    readonly testfallLabel: string;
+    readonly status: TestfallStatus;
     /** Ausgewerteter Wert bei pass/fail, Fehlermeldung bei error. */
     readonly detail: string;
 }
@@ -39,7 +39,7 @@ export interface PruefeReport {
     readonly passed: number;
     readonly failed: number;
     readonly errored: number;
-    readonly results: ReadonlyArray<BeispielReport>;
+    readonly results: ReadonlyArray<TestfallReport>;
     /** Gesammelte `ausgabe`-Zeilen des gesamten Laufs (SPEC § 5.4). */
     readonly ausgaben: ReadonlyArray<string>;
 }
@@ -58,7 +58,7 @@ export interface PruefeReport {
 export function runPruefe(program: Program): PruefeReport;
 export function runPruefe(modules: ReadonlyArray<LoadedModule>): PruefeReport;
 export function runPruefe(arg: Program | ReadonlyArray<LoadedModule>): PruefeReport {
-    const results: BeispielReport[] = [];
+    const results: TestfallReport[] = [];
     const ausgaben: string[] = [];
     const sink = (t: string): void => { ausgaben.push(t); };
 
@@ -84,7 +84,7 @@ export function runPruefe(arg: Program | ReadonlyArray<LoadedModule>): PruefeRep
         } catch (err) {
             results.push({
                 pruefeName:    '',
-                beispielLabel: '<modul-graph-initialisierung>',
+                testfallLabel: '<modul-graph-initialisierung>',
                 status:        'error',
                 detail:        formatError(err),
             });
@@ -106,7 +106,7 @@ export function runPruefe(arg: Program | ReadonlyArray<LoadedModule>): PruefeRep
     } catch (err) {
         results.push({
             pruefeName:     '',
-            beispielLabel:  '<modul-initialisierung>',
+            testfallLabel:  '<modul-initialisierung>',
             status:         'error',
             detail:         formatError(err),
         });
@@ -125,30 +125,44 @@ export function runPruefe(arg: Program | ReadonlyArray<LoadedModule>): PruefeRep
  * Quelle dieser Semantik; sowohl `runPruefe` als auch `runSinglePruefe`
  * (CodeLens) rufen sie auf.
  */
-export function runPruefeDecl(decl: PruefeDecl, env: Environment): BeispielReport[] {
-    const results: BeispielReport[] = [];
-    for (const beispiel of decl.beispiele) {
-        const erwartetAbbruch = beispiel.erwartetAbbruch === true;
+/**
+ * Führt die `testfall`-Items eines `prüfe`-Blocks aus. Optionaler
+ * `testfallIndex` selektiert einen einzelnen Testfall — wird vom
+ * Test-Controller-Pfad genutzt, wenn der Nutzer NICHT den Block-Run
+ * sondern den Gutter-Play-Pfeil eines einzelnen `testfall` klickt
+ * (Issue #79-Folge).
+ */
+export function runPruefeDecl(
+    decl: PruefeDecl, env: Environment, testfallIndex?: number,
+): TestfallReport[] {
+    const testfaelle = testfallIndex === undefined
+        ? decl.testfaelle
+        : decl.testfaelle[testfallIndex] !== undefined
+            ? [decl.testfaelle[testfallIndex]]
+            : [];
+    const results: TestfallReport[] = [];
+    for (const testfall of testfaelle) {
+        const erwartetAbbruch = testfall.erwartetAbbruch === true;
         try {
-            const value: Value = evalBeispiel(beispiel, env);
+            const value: Value = evalTestfall(testfall, env);
             if (erwartetAbbruch) {
                 results.push({
                     pruefeName:    decl.name,
-                    beispielLabel: beispiel.label,
+                    testfallLabel: testfall.label,
                     status:        'fail',
                     detail:        `erwartete abbruch, ergab ${valueToString(value)}`,
                 });
             } else if (value.kind === 'bool' && value.value) {
                 results.push({
                     pruefeName:    decl.name,
-                    beispielLabel: beispiel.label,
+                    testfallLabel: testfall.label,
                     status:        'pass',
                     detail:        'wahr',
                 });
             } else {
                 results.push({
                     pruefeName:    decl.name,
-                    beispielLabel: beispiel.label,
+                    testfallLabel: testfall.label,
                     status:        'fail',
                     detail:        `ergab ${valueToString(value)}`,
                 });
@@ -160,7 +174,7 @@ export function runPruefeDecl(decl: PruefeDecl, env: Environment): BeispielRepor
                 // (mit Anzeige der Begründung, SPEC § 10.2).
                 results.push({
                     pruefeName:    decl.name,
-                    beispielLabel: beispiel.label,
+                    testfallLabel: testfall.label,
                     status:        erwartetAbbruch ? 'pass' : 'fail',
                     detail:        erwartetAbbruch
                         ? `Abbruch wie erwartet: "${err.grund}"`
@@ -169,7 +183,7 @@ export function runPruefeDecl(decl: PruefeDecl, env: Environment): BeispielRepor
             } else {
                 results.push({
                     pruefeName:    decl.name,
-                    beispielLabel: beispiel.label,
+                    testfallLabel: testfall.label,
                     status:        'error',
                     detail:        formatError(err),
                 });
@@ -190,7 +204,10 @@ export function runPruefeDecl(decl: PruefeDecl, env: Environment): BeispielRepor
  * @param pruefeIndex Index unter den `PruefeDecl`s des Entry-Programms
  */
 export function runSinglePruefe(
-    workspace: ReadonlyArray<Program>, entry: Program, pruefeIndex: number,
+    workspace: ReadonlyArray<Program>,
+    entry: Program,
+    pruefeIndex: number,
+    testfallIndex?: number,
 ): PruefeReport {
     const ausgaben: string[] = [];
     const sink = (t: string): void => { ausgaben.push(t); };
@@ -227,18 +244,18 @@ export function runSinglePruefe(
         mod = interpretProgram(entry, registry, sink, programFilePath(entry));
     } catch (err) {
         return summarize([{
-            pruefeName: '', beispielLabel: '<modul-initialisierung>',
+            pruefeName: '', testfallLabel: '<modul-initialisierung>',
             status: 'error', detail: formatError(err),
         }], ausgaben);
     }
 
     const decl = mod.pruefen[pruefeIndex];
     if (!decl) return summarize([], ausgaben);
-    return summarize(runPruefeDecl(decl, mod.env), ausgaben);
+    return summarize(runPruefeDecl(decl, mod.env, testfallIndex), ausgaben);
 }
 
 function summarize(
-    results: ReadonlyArray<BeispielReport>,
+    results: ReadonlyArray<TestfallReport>,
     ausgaben: ReadonlyArray<string> = [],
 ): PruefeReport {
     let passed = 0;

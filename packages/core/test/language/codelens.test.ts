@@ -33,11 +33,15 @@ async function setup(sources: Record<string, string>) {
         return r ?? [];
     };
 
-    const run = async (mod: string, index: number): Promise<PruefeReport | undefined> => {
+    const run = async (
+        mod: string, index: number, testfallIndex?: number,
+    ): Promise<PruefeReport | undefined> => {
         const doc = docs.find((d) => d.uri.path.endsWith(`/${mod}.findsl`))!;
         const handler = services.shared.lsp.ExecuteCommandHandler!;
+        const args: unknown[] = [doc.uri.toString(), index];
+        if (testfallIndex !== undefined) args.push(testfallIndex);
         return (await handler.executeCommand(
-            'findsl.pruefe.run', [doc.uri.toString(), index],
+            'findsl.pruefe.run', args,
         )) as PruefeReport | undefined;
     };
 
@@ -184,6 +188,35 @@ prüfe "Zweit" { testfall "y" { f() == 2 } }
         const handler = services.shared.lsp.ExecuteCommandHandler!;
         const r = await handler.executeCommand('findsl.pruefe.run', ['file:///nope.findsl', 0]);
         expect(r).toBeUndefined();
+    });
+
+    it('testfallIndex selektiert nur diesen einen testfall (Issue #79-Folge)', async () => {
+        const { run } = await setup({
+            m: `fn f(): Ganzzahl = 1
+prüfe "Set" {
+    testfall "a" { f() == 1 }
+    testfall "b" { f() == 99 }
+    testfall "c" { f() == 1 }
+}
+`,
+        });
+        // testfallIndex = 1 → nur "b" (fails)
+        const r = await run('m', 0, 1);
+        expect(r!.total).toBe(1);
+        expect(r!.passed).toBe(0);
+        expect(r!.failed).toBe(1);
+        expect(r!.results[0].testfallLabel).toBe('b');
+    });
+
+    it('testfallIndex außerhalb der Range → leerer Report', async () => {
+        const { run } = await setup({
+            m: `fn f(): Ganzzahl = 1
+prüfe "Set" { testfall "a" { f() == 1 } }
+`,
+        });
+        const r = await run('m', 0, 99);
+        expect(r!.total).toBe(0);
+        expect(r!.results).toEqual([]);
     });
 });
 

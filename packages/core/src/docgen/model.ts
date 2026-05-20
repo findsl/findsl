@@ -252,7 +252,7 @@ function declDoc(decl: Program['decls'][number], src: string): DeclDoc {
         };
     }
     if (isPruefeDecl(decl)) {
-        const examples = decl.beispiele.map((b) => ({
+        const examples = decl.testfaelle.map((b) => ({
             label: b.label,
             code: cstText(b.body, src).replace(/^\{\s*|\s*\}$/g, '').trim(),
             erwartetAbbruch: b.erwartetAbbruch === true,

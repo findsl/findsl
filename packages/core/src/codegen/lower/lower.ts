@@ -1195,7 +1195,7 @@ export function lowerTestProgram(program: Program, ctx: LowerContext): IrTestMod
     const suites: IrTestSuite[] = [];
     for (const d of program.decls as ReadonlyArray<TopDecl>) {
         if (!isPruefeDecl(d)) continue;                  // Nur prüfe-Blöcke
-        const cases: IrTestCase[] = d.beispiele.map((b) => {
+        const cases: IrTestCase[] = d.testfaelle.map((b) => {
             const stmts = b.body.stmts ?? [];
             // Per-testfall-Sicht: `var`-Typen für Record-Feld-Unbox in
             // den Assertions (z. B. `e.gesamtbetragDerEinkuenfte()`).

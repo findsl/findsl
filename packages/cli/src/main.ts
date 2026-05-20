@@ -387,8 +387,8 @@ Beispiele:
                 if (r.status === 'pass' && !options.verbose) continue;
                 const icon = r.status === 'pass' ? '✓' : (r.status === 'fail' ? '✗' : '!');
                 const where = r.pruefeName
-                    ? `[${r.pruefeName}] ${r.beispielLabel}`
-                    : r.beispielLabel;
+                    ? `[${r.pruefeName}] ${r.testfallLabel}`
+                    : r.testfallLabel;
                 console.log(`  ${icon} ${where} — ${r.detail}`);
             }
 

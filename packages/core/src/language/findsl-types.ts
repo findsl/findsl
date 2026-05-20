@@ -511,7 +511,7 @@ export function typeCheckProgram(
     if (options.recordType) {
         for (const decl of program.decls) {
             if (!isPruefeDecl(decl)) continue;
-            for (const b of decl.beispiele) {
+            for (const b of decl.testfaelle) {
                 const block = b.body;
                 if (!block) continue;
                 // Blockform wie ein fn-Rumpf: Setup-Env aufbauen, dann

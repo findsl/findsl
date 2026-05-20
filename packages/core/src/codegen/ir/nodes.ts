@@ -384,7 +384,7 @@ export interface IrModule {
  * erwarteten `abbruch` aus (`erwartetAbbruch` → `assertThrows`).
  */
 export interface IrTestCase {
-    /** `Beispiel.label` (roh) → `@DisplayName`. */
+    /** `Testfall.label` (roh) → `@DisplayName`. */
     readonly label: string;
     readonly erwartetAbbruch: boolean;
     readonly lets: ReadonlyArray<IrLet>;

@@ -167,7 +167,7 @@ export class FindslDocumentSymbolProvider implements DocumentSymbolProvider {
         const full = decl.$cstNode?.range;
         if (!full || !decl.name) return undefined;
         const children: DocumentSymbol[] = [];
-        for (const tf of decl.beispiele) {
+        for (const tf of decl.testfaelle) {
             const tr = tf.$cstNode?.range;
             if (!tr || !tf.label) continue;
             children.push({
@@ -179,7 +179,7 @@ export class FindslDocumentSymbolProvider implements DocumentSymbolProvider {
         }
         return {
             name:           decl.name,
-            detail:         `(${decl.beispiele.length} Testfälle)`,
+            detail:         `(${decl.testfaelle.length} Testfälle)`,
             kind:           SymbolKind.Namespace,
             range:          full,
             selectionRange: stringLeafRange(decl.$cstNode) ?? full,

@@ -117,7 +117,7 @@ export class FindslCodeLensProvider implements CodeLensProvider {
             const pruefeIndex = index++;
             if (!cst) continue;
             const anchor = Range.create(cst.range.start, cst.range.start);
-            const n = decl.beispiele.length;
+            const n = decl.testfaelle.length;
             const titel = n === 1 ? '▶ 1 Testfall ausführen' : `▶ ${n} Testfälle ausführen`;
             lenses.push({
                 range: anchor,

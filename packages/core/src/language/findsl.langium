@@ -111,9 +111,9 @@ AufzaehlungDecl:
 
 PruefeDecl:
     docPrefix=DeclPrefix?
-    'prüfe' name=STRING '{' beispiele+=Beispiel+ '}';
+    'prüfe' name=STRING '{' testfaelle+=Testfall+ '}';
 
-Beispiel:
+Testfall:
     'testfall' label=STRING (erwartetAbbruch?='erwartet' 'abbruch')? body=BlockExpr;
 
 

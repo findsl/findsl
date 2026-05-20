@@ -38,7 +38,7 @@ import {
 } from 'vscode-languageserver';
 import {
     type Expr,
-    isBeispiel,
+    isTestfall,
     isBinaryOp,
     isCall,
     isCallChain,
@@ -166,7 +166,7 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
             this.emitMoney(bodyResultExpr(node.body), acceptor);
             return;
         }
-        if (isBeispiel(node)) {                    // testfall-Block-Assertion
+        if (isTestfall(node)) {                    // testfall-Block-Assertion
             this.emitMoney(node.body?.result, acceptor);
             return;
         }

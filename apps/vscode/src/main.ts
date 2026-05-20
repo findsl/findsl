@@ -37,9 +37,9 @@ let client: LanguageClient;
 let clientStartup: Promise<void> | undefined;
 
 /** Form des vom Server zurückgegebenen Reports (JSON-serialisiert). */
-interface BeispielResult {
+interface TestfallResult {
     pruefeName: string;
-    beispielLabel: string;
+    testfallLabel: string;
     status: 'pass' | 'fail' | 'error';
     detail: string;
 }
@@ -48,7 +48,7 @@ interface PruefeReport {
     passed: number;
     failed: number;
     errored: number;
-    results: BeispielResult[];
+    results: TestfallResult[];
     ausgaben?: string[];
 }
 
@@ -310,94 +310,156 @@ async function runHandler(
             }
         }
 
-        const blocks = new Set<vscode.TestItem>();
+        // Run-Targets sammeln. Unterscheidung (Issue #79-Folge):
+        //  - `prüfe`-Block-Item → ganzer Block läuft (testfallIndex = undefined)
+        //  - `testfall`-Item → nur DIESER Testfall läuft (testfallIndex gesetzt)
+        // Wenn beim Block-Run ein einzelner testfall auch in `include`
+        // ist, wird der Block-Run bevorzugt (gleicher Effekt, weniger Calls).
+        const targets = new Map<string, RunTarget>();
         const collect = (item: vscode.TestItem): void => {
-            if (/::pruefe::\d+$/.test(item.id)) { blocks.add(item); return; }
-            if (item.parent && /::pruefe::\d+$/.test(item.parent.id)) {
-                blocks.add(item.parent); return;
+            const blockMatch = item.id.match(/^(.*)::pruefe::(\d+)$/);
+            if (blockMatch) {
+                if (!item.uri) return;
+                // Block-Run überschreibt einen ggf. schon gesammelten
+                // Einzel-Run (gleicher Block → ganzer ist umfassender).
+                targets.set(item.id, { kind: 'block', item, pruefeIndex: Number(blockMatch[2]) });
+                return;
+            }
+            const parent = item.parent;
+            if (parent && /::pruefe::\d+$/.test(parent.id)) {
+                if (targets.has(parent.id) && targets.get(parent.id)?.kind === 'block') return;
+                const parentMatch = parent.id.match(/^(.*)::pruefe::(\d+)$/);
+                const tfMatch = item.id.match(/::pruefe::\d+::(\d+)$/);
+                if (!parentMatch || !tfMatch || !item.uri) return;
+                targets.set(item.id, {
+                    kind: 'testfall',
+                    item,
+                    block: parent,
+                    pruefeIndex: Number(parentMatch[2]),
+                    testfallIndex: Number(tfMatch[1]),
+                });
+                return;
             }
             item.children.forEach(collect);
         };
         roots.forEach(collect);
 
-        for (const block of blocks) {
+        for (const target of targets.values()) {
             if (token.isCancellationRequested) break;
-            const m = block.id.match(/^(.*)::pruefe::(\d+)$/);
-            if (!m || !block.uri) continue;
-            const pruefeIndex = Number(m[2]);
-
-            const children = childItems(block);
-            children.forEach((c) => run.started(c));
-            run.started(block);
-
-            let report: PruefeReport | null = null;
-            try {
-                report = await withTimeout(
-                    client.sendRequest<PruefeReport | null>(
-                        'workspace/executeCommand',
-                        {
-                            command: RUN_PRUEFE_COMMAND,
-                            arguments: [block.uri.toString(), pruefeIndex],
-                        },
-                    ),
-                    RUN_TIMEOUT_MS,
-                );
-            } catch (err) {
-                const msg = new vscode.TestMessage(
-                    err instanceof TimeoutError
-                        ? `Zeitüberschreitung (${RUN_TIMEOUT_MS / 1000}s) — `
-                          + `möglicherweise Endlos-Auswertung oder Server nicht aktuell.`
-                        : `Ausführung fehlgeschlagen: `
-                          + `${err instanceof Error ? err.message : String(err)}`,
-                );
-                run.errored(block, msg);
-                children.forEach((c) => run.errored(c, msg));
-                continue;
-            }
-
-            if (!report) {
-                const msg = new vscode.TestMessage('Kein Ergebnis vom Server.');
-                run.errored(block, msg);
-                children.forEach((c) => run.errored(c, msg));
-                continue;
-            }
-
-            // Gesammelte `ausgabe`-Zeilen ins Test-Output-Terminal
-            // (SPEC § 5.4). Terminal-Renderer braucht CRLF.
-            if (report.ausgaben && report.ausgaben.length > 0) {
-                run.appendOutput(`— ausgabe (${block.label}) —\r\n`);
-                for (const line of report.ausgaben) {
-                    run.appendOutput(line.replace(/\n/g, '\r\n') + '\r\n');
-                }
-            }
-
-            report.results.forEach((r, i) => {
-                const item = children[i];
-                if (!item) return;
-                if (r.status === 'pass') {
-                    run.passed(item);
-                } else {
-                    const message = new vscode.TestMessage(r.detail);
-                    if (item.uri && item.range) {
-                        message.location = new vscode.Location(item.uri, item.range);
-                    }
-                    if (r.status === 'error') run.errored(item, message);
-                    else run.failed(item, message);
-                }
-            });
-            if (report.failed + report.errored === 0) {
-                run.passed(block);
-            } else {
-                run.failed(block, new vscode.TestMessage(
-                    `${report.passed}/${report.total} bestanden, `
-                    + `${report.failed} fehlgeschlagen, ${report.errored} Fehler`,
-                ));
-            }
+            await runTarget(client, run, target);
         }
     } finally {
         // MUSS immer laufen — sonst drehen die Items endlos.
         run.end();
     }
+}
+
+type RunTarget =
+    | { readonly kind: 'block'; readonly item: vscode.TestItem; readonly pruefeIndex: number }
+    | { readonly kind: 'testfall'; readonly item: vscode.TestItem; readonly block: vscode.TestItem;
+        readonly pruefeIndex: number; readonly testfallIndex: number };
+
+async function runTarget(
+    cl: LanguageClient,
+    run: vscode.TestRun,
+    target: RunTarget,
+): Promise<void> {
+    const uri = (target.kind === 'block' ? target.item.uri : target.item.uri)!;
+    const args = target.kind === 'block'
+        ? [uri.toString(), target.pruefeIndex]
+        : [uri.toString(), target.pruefeIndex, target.testfallIndex];
+
+    // Started-State markieren.
+    const children = target.kind === 'block' ? childItems(target.item) : [];
+    if (target.kind === 'block') {
+        children.forEach((c) => run.started(c));
+        run.started(target.item);
+    } else {
+        run.started(target.item);
+    }
+
+    let report: PruefeReport | null = null;
+    try {
+        report = await withTimeout(
+            cl.sendRequest<PruefeReport | null>('workspace/executeCommand', {
+                command: RUN_PRUEFE_COMMAND, arguments: args,
+            }),
+            RUN_TIMEOUT_MS,
+        );
+    } catch (err) {
+        const msg = new vscode.TestMessage(
+            err instanceof TimeoutError
+                ? `Zeitüberschreitung (${RUN_TIMEOUT_MS / 1000}s) — `
+                  + `möglicherweise Endlos-Auswertung oder Server nicht aktuell.`
+                : `Ausführung fehlgeschlagen: `
+                  + `${err instanceof Error ? err.message : String(err)}`,
+        );
+        if (target.kind === 'block') {
+            run.errored(target.item, msg);
+            children.forEach((c) => run.errored(c, msg));
+        } else {
+            run.errored(target.item, msg);
+        }
+        return;
+    }
+
+    if (!report) {
+        const msg = new vscode.TestMessage('Kein Ergebnis vom Server.');
+        if (target.kind === 'block') {
+            run.errored(target.item, msg);
+            children.forEach((c) => run.errored(c, msg));
+        } else {
+            run.errored(target.item, msg);
+        }
+        return;
+    }
+
+    // Gesammelte `ausgabe`-Zeilen ins Test-Output-Terminal (SPEC § 5.4).
+    if (report.ausgaben && report.ausgaben.length > 0) {
+        const label = target.kind === 'block' ? target.item.label : target.item.label;
+        run.appendOutput(`— ausgabe (${label}) —\r\n`);
+        for (const line of report.ausgaben) {
+            run.appendOutput(line.replace(/\n/g, '\r\n') + '\r\n');
+        }
+    }
+
+    if (target.kind === 'testfall') {
+        // Einzel-Lauf liefert genau 1 Result (oder 0 bei Modul-Init-Fehler).
+        const r = report.results[0];
+        if (!r) {
+            run.errored(target.item, new vscode.TestMessage('Kein Ergebnis vom Server.'));
+            return;
+        }
+        applyResult(run, target.item, r);
+        return;
+    }
+
+    // Block-Lauf: Results positionsgleich zu children.
+    report.results.forEach((r, i) => {
+        const item = children[i];
+        if (item) applyResult(run, item, r);
+    });
+    if (report.failed + report.errored === 0) {
+        run.passed(target.item);
+    } else {
+        run.failed(target.item, new vscode.TestMessage(
+            `${report.passed}/${report.total} bestanden, `
+            + `${report.failed} fehlgeschlagen, ${report.errored} Fehler`,
+        ));
+    }
+}
+
+function applyResult(run: vscode.TestRun, item: vscode.TestItem, r: TestfallResult): void {
+    if (r.status === 'pass') {
+        run.passed(item);
+        return;
+    }
+    const message = new vscode.TestMessage(r.detail);
+    if (item.uri && item.range) {
+        message.location = new vscode.Location(item.uri, item.range);
+    }
+    if (r.status === 'error') run.errored(item, message);
+    else run.failed(item, message);
 }
 
 function collectAll(ctrl: vscode.TestController): vscode.TestItem[] {

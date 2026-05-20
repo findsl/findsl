@@ -941,7 +941,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
           },
           {
             "$type": "Assignment",
-            "feature": "beispiele",
+            "feature": "testfaelle",
             "operator": "+=",
             "terminal": {
               "$type": "RuleCall",
@@ -964,7 +964,7 @@ export const FindslGrammar = (): Grammar => loadedFindslGrammar ?? (loadedFindsl
     },
     {
       "$type": "ParserRule",
-      "name": "Beispiel",
+      "name": "Testfall",
       "definition": {
         "$type": "Group",
         "elements": [

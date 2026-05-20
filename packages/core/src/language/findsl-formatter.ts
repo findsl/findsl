@@ -428,7 +428,7 @@ export class FindslFormatter extends AbstractFormatter {
             const close = f.keyword('}');
             open.prepend(Formatting.oneSpace());
             f.interior(open, close).prepend(Formatting.indent());
-            f.properties('beispiele').prepend(Formatting.indent());
+            f.properties('testfaelle').prepend(Formatting.indent());
             close.prepend(Formatting.newLine());
             return;
         }

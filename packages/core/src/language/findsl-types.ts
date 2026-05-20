@@ -993,11 +993,15 @@ function walkChain(
             // damit der Lambda-Param den Element-Typ erbt (bidirektionale
             // Inferenz via `checkAgainstAnnotation`). Analog zum Lower-
             // Pfad (`codegen/lower/lower.ts`).
-            const trailing = (op as { trailingLambda?: AstNode }).trailingLambda;
-            const callOp = next && isCall(next)
+            // `op` ist nach `isFieldAccess(op)` schon FieldAccess →
+            // `trailingLambda?: Lambda` ohne Cast. Das synthetische
+            // CallOp erfüllt strukturell die `ListMethodCallOp`-Form
+            // (siehe Signatur unten) — kein `as unknown as`-Lie nötig.
+            const trailing = op.trailingLambda;
+            const callOp: ListMethodCallOp | undefined = next && isCall(next)
                 ? next
                 : trailing !== undefined
-                    ? ({ args: [{ value: trailing }] } as unknown as { args: ReadonlyArray<CallArg> })
+                    ? { args: [{ value: trailing }] }
                     : undefined;
             const r = listMethod(current.element, op.name, callOp, env, ctx, report);
             if (r === undefined) {
@@ -1096,10 +1100,18 @@ function walkChain(
  * (für Argument-Methoden); `consumedCall` signalisiert dem Aufrufer, es
  * zu überspringen. `undefined` ⇒ unbekannte Methode.
  */
+/** Minimaler strukturaler Argument-Typ, den `listMethod` konsumiert.
+ *  Reicht für echtes `CallArg` (hat `value: Expr` + optional `name`) und
+ *  für das synthetische Trailing-Lambda-Wrap `{ value: lam }` (Lambda ⊆ Expr).
+ *  Frühere `(… as unknown as { args: ReadonlyArray<CallArg> })`-Lüge
+ *  wurde durch diesen Mindesttyp ersetzt — `listMethod` greift nie auf
+ *  `$type`/`$container`/`$cstNode` zu. */
+type ListMethodCallOp = { args: ReadonlyArray<{ value: Expr; name?: string }> };
+
 function listMethod(
     elem: Type,
     name: string,
-    callOp: { args: ReadonlyArray<CallArg> } | undefined,
+    callOp: ListMethodCallOp | undefined,
     env: TypeEnv, ctx: TypeContext, report: Reporter,
 ): { type: Type; consumedCall: boolean } | undefined {
     const args = callOp?.args ?? [];

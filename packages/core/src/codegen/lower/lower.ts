@@ -142,9 +142,18 @@ function javaType(t: Type | undefined, reg: Registry): string {
 
 /** `true` ⇔ skalarer numerischer FinDSL-Typ (kein `Liste<…>`/`Bereich<…>`). */
 function isNumericType(t: Type | undefined): boolean {
+    return numericAtomName(t) !== undefined;
+}
+
+/** Name des numerischen Wrapper-Atoms (`Euro`/`Cent`/…) — sonst undefined.
+ *  Kombiniert `isNumericType` + `namedAtom().name` in einem Lookup → kein
+ *  Doppel-Resolve und kein `!`-Assertion bei den Box-Callsites. */
+function numericAtomName(t: Type | undefined): string | undefined {
     const a = namedAtom(t);
-    return a !== undefined && a.name !== 'Liste' && a.name !== 'Bereich'
-        && NUMERIC_NAMES.has(a.name);
+    if (!a || a.name === 'Liste' || a.name === 'Bereich' || !NUMERIC_NAMES.has(a.name)) {
+        return undefined;
+    }
+    return a.name;
 }
 
 /**
@@ -1077,10 +1086,9 @@ function resolveFnCallArgs(
     let posIdx = 0;
     return paramNames.map((pname, idx) => {
         const pt = paramTypes[idx];
+        const wrapper = internal ? undefined : numericAtomName(pt);
         const box = (e: IrExpr): IrExpr =>
-            (!internal && isNumericType(pt))
-                ? { kind: 'box', wrapper: namedAtom(pt)!.name, expr: e }
-                : e;
+            wrapper ? { kind: 'box', wrapper, expr: e } : e;
         const byName = named.get(pname);
         if (byName) return box(lowerExpr(byName, reg));
         if (posIdx < positional.length) return box(lowerExpr(positional[posIdx++], reg));
@@ -1111,8 +1119,9 @@ function resolveCtorArgs(
         // Record-Felder sind Wrapper-getypt (API) → numerisches Argument
         // (Rechen-Schicht) boxen. Box ist rein strukturell (ändert Wert/
         // Tag nicht) — constructRecord-Spiegel: Defaults OHNE moneyAnno.
+        const wrapper = numericAtomName(f.type);
         const box = (e: IrExpr): IrExpr =>
-            isNumericType(f.type) ? { kind: 'box', wrapper: namedAtom(f.type)!.name, expr: e } : e;
+            wrapper ? { kind: 'box', wrapper, expr: e } : e;
         const byName = named.get(f.name);
         if (byName) return box(lowerExpr(byName, reg));
         if (posIdx < positional.length) return box(lowerExpr(positional[posIdx++], reg));
@@ -1380,18 +1389,28 @@ function floatWaehle(e: IrExpr): IrExpr {
             const x = floatWaehle(e.reason);
             return isChoice(x) ? pushCtxExpr(x, (y) => ({ ...e, reason: y })) : { ...e, reason: x };
         }
-        case 'call': case 'crossCall': case 'ctor': case 'listLit': {
-            const key = e.kind === 'listLit' ? 'items' : 'args';
-            const xs = (e as unknown as Record<string, IrExpr[]>)[key].map(floatWaehle);
+        case 'call': case 'crossCall': case 'ctor': {
+            // Discriminated-Union-Narrowing: alle drei haben `args` — kein
+            // dynamischer Key, kein Record-Lie.
+            const xs = e.args.map(floatWaehle);
             const idx = xs.findIndex(isChoice);
-            if (idx < 0) {
-                return { ...e, [key]: xs } as IrExpr;
-            }
+            if (idx < 0) return { ...e, args: xs };
             const w = xs[idx] as Extract<IrExpr, { kind: 'waehle' }>;
             return pushCtxExpr(w, (leaf) => {
                 const next = xs.slice();
                 next[idx] = leaf;
-                return { ...e, [key]: next } as IrExpr;
+                return { ...e, args: next };
+            });
+        }
+        case 'listLit': {
+            const xs = e.items.map(floatWaehle);
+            const idx = xs.findIndex(isChoice);
+            if (idx < 0) return { ...e, items: xs };
+            const w = xs[idx] as Extract<IrExpr, { kind: 'waehle' }>;
+            return pushCtxExpr(w, (leaf) => {
+                const next = xs.slice();
+                next[idx] = leaf;
+                return { ...e, items: next };
             });
         }
         case 'strInterp': {
@@ -1468,7 +1487,7 @@ export function lowerProgram(program: Program, ctx: LowerContext): IrModule {
                     maybeMoneyAnno(lowerExpr(d.value, reg), d.type, `Konstante "${d.name}"`),
                     `Konstante "${d.name}"`),
                 javaType: apiJavaType(d.type, reg),
-                wrapper: isNumericType(d.type) ? namedAtom(d.type)!.name : undefined,
+                wrapper: numericAtomName(d.type),
                 info: extractDoc(d.docPrefix),
             });
         } else if (isAufzaehlungDecl(d)) {

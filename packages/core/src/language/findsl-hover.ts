@@ -28,7 +28,6 @@ import {
     type CstNode,
     type LangiumDocument,
     type LangiumDocuments,
-    type MaybePromise,
     CstUtils,
 } from 'langium';
 import { AstNodeHoverProvider } from 'langium/lsp';
@@ -57,6 +56,7 @@ import {
     type ChainOp,
     type DatensatzDecl,
     type DeclPrefix,
+    type Expr,
     type Field,
     type FunktionDecl,
     type KonstDecl,
@@ -151,15 +151,15 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
     }
 
     override async getHoverContent(document: LangiumDocument, params: HoverParams): Promise<Hover | undefined> {
-        const rootCst = document.parseResult?.value?.$cstNode;
-        if (!rootCst) return undefined;
+        const program = document.parseResult?.value as Program | undefined;
+        const rootCst = program?.$cstNode;
+        if (!program || !rootCst) return undefined;
         const offset = document.textDocument.offsetAt(params.position);
 
         // 1. Cursor auf einem ID-Token → identifier-getriebene Auflösung.
         const idNode = CstUtils.findDeclarationNodeAtOffset(
             rootCst, offset, this.grammarConfig.nameRegexp,
         );
-        const program = document.parseResult.value as Program;
         if (idNode) {
             const resolved = this.resolveIdToken(idNode, program);
             if (resolved) return formatResolved(resolved);
@@ -466,7 +466,7 @@ function buildLocalScope(
 }
 
 /** Inferiert den Typ einer Expression ohne Diagnostics zu sammeln. */
-function inferExprQuiet(expr: import('./generated/ast.js').Expr | undefined, env: TypeEnv, ctx: TypeContext): Type | undefined {
+function inferExprQuiet(expr: Expr | undefined, env: TypeEnv, ctx: TypeContext): Type | undefined {
     if (!expr) return undefined;
     try {
         return infer(expr, env, ctx, () => { /* swallow */ });
@@ -539,7 +539,8 @@ function inferReceiverElementType(
     // Komplexere Receiver: wir bauen ein synthetisches Sub-CallChain-
     // Objekt; pragmatisch reicht uns aber `infer` auf die ganze Chain,
     // weil wir den Element-Typ ohnehin nur grob brauchen.
-    const fullType = inferExprQuiet(chain as unknown as import('./generated/ast.js').Expr, env, ctx);
+    // (`CallChain` ist Teil der `Expr`-Union — siehe generated/ast.ts.)
+    const fullType = inferExprQuiet(chain, env, ctx);
     // Für komplexere Cases fehlt aktuell die feinkörnige Inferenz bis zu
     // einer Chain-Position. Lieber kein falscher Typ als ein erratener.
     return elementOfListLike(fullType);
@@ -720,18 +721,21 @@ function formatParam(param: Param): string {
     return fence(`Parameter ${param.name}: ${typeToString(param.type)}${def}`);
 }
 
-function formatBuiltinFn(name: string): Hover {
-    const b = BUILTIN_FUNCTIONS.get(name)!;
+function formatBuiltinFn(name: string): Hover | undefined {
+    const b = BUILTIN_FUNCTIONS.get(name);
+    if (!b) return undefined;
     return markdown(joinSections(fence(b.signature), b.doc, quelleLine(b.quelle)));
 }
 
-function formatBuiltinEnum(name: string): Hover {
-    const b = BUILTIN_ENUMS.get(name)!;
+function formatBuiltinEnum(name: string): Hover | undefined {
+    const b = BUILTIN_ENUMS.get(name);
+    if (!b) return undefined;
     return markdown(joinSections(fence(b.signature), b.doc, quelleLine(b.quelle)));
 }
 
-function formatBuiltinEnumValue(value: string, enumName: string): Hover {
-    const e = BUILTIN_ENUMS.get(enumName)!;
+function formatBuiltinEnumValue(value: string, enumName: string): Hover | undefined {
+    const e = BUILTIN_ENUMS.get(enumName);
+    if (!e) return undefined;
     const sig = fence(`${value}: ${enumName}`);
     const body = `Wert der eingebauten Aufzählung **${enumName}**.\n\n${e.doc}`;
     return markdown(joinSections(sig, body, quelleLine(e.quelle)));

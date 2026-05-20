@@ -46,6 +46,7 @@ import {
     isSafeFieldAccess,
     type CallChain,
     type ChainOp,
+    type Expr,
     type Field,
     type Program,
     type Type as TypeAnnotation,
@@ -77,8 +78,9 @@ export class FindslDefinitionProvider implements DefinitionProvider {
         document: LangiumDocument,
         params: DefinitionParams,
     ): MaybePromise<LocationLink[] | undefined> {
-        const rootCst = document.parseResult?.value?.$cstNode;
-        if (!rootCst) return undefined;
+        const program = document.parseResult?.value as Program | undefined;
+        const rootCst = program?.$cstNode;
+        if (!program || !rootCst) return undefined;
         const offset = document.textDocument.offsetAt(params.position);
 
         const idNode = CstUtils.findDeclarationNodeAtOffset(
@@ -86,7 +88,6 @@ export class FindslDefinitionProvider implements DefinitionProvider {
         );
         if (!idNode) return undefined;
 
-        const program = document.parseResult.value as Program;
         const target = resolveTargetForIdToken(idNode, program, this.documents);
         if (!target) return undefined;
 
@@ -366,7 +367,7 @@ function buildLocalScope(
 
 /** Inferiert den Typ einer Expression ohne Diagnostics zu sammeln. */
 function inferExprQuiet(
-    expr: import('./generated/ast.js').Expr | undefined,
+    expr: Expr | undefined,
     env: TypeEnv,
     ctx: TypeContext,
 ): Type | undefined {
@@ -428,7 +429,8 @@ function inferReceiverElementType(
         const rootType = env.lookup((chain as { name?: string }).name ?? '');
         return elementOfListLike(rootType);
     }
-    const fullType = inferExprQuiet(chain as unknown as import('./generated/ast.js').Expr, env, ctx);
+    // `CallChain` ist Teil der `Expr`-Union (siehe generated/ast.ts).
+    const fullType = inferExprQuiet(chain, env, ctx);
     return elementOfListLike(fullType);
 }
 

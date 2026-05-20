@@ -496,6 +496,140 @@ fn test(f: Fall): Euro = f.summe
     });
 });
 
+describe('Hover: strukturiertes Doc-Markdown (Issue #65 Phase C)', () => {
+    it('Funktion mit @param/@rückgabe → Sektionen "Parameter" + "Rückgabe"', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Berechnet die Bruttosumme aus Netto + MwSt.
+
+@param netto         Netto-Betrag ohne Steuer.
+@param mehrwertsteuer Anwendbarer Mehrwertsteuersatz.
+@rückgabe Brutto-Betrag inklusive Steuer.
+--
+fn Brutto(netto: Euro, mehrwertsteuer: Prozent = 19%): Euro = netto + (netto * mehrwertsteuer)
+`;
+        const h = await hoverAt(src, 'fn Brutto');
+        const md = content(h);
+        expect(md).toContain('**Parameter**');
+        expect(md).toContain('`netto` — Netto-Betrag ohne Steuer.');
+        expect(md).toContain('`mehrwertsteuer` — Anwendbarer Mehrwertsteuersatz.');
+        expect(md).toContain('**Rückgabe**');
+        expect(md).toContain('Brutto-Betrag inklusive Steuer.');
+        // Prosa muss vor den Sektionen stehen (Beschreibung zuerst)
+        const proseIdx = md.indexOf('Berechnet die Bruttosumme');
+        const paramIdx = md.indexOf('**Parameter**');
+        expect(proseIdx).toBeGreaterThan(-1);
+        expect(paramIdx).toBeGreaterThan(proseIdx);
+    });
+
+    it('Datensatz mit @param → Parameter-Sektion in Signatur-Reihenfolge sortiert', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Geometrischer Punkt in der Ebene.
+
+@param y  Vertikale Koordinate.
+@param x  Horizontale Koordinate.
+--
+datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
+`;
+        const h = await hoverAt(src, 'datensatz Punkt');
+        const md = content(h);
+        expect(md).toContain('**Parameter**');
+        // Auch wenn @param-Tags in der Doc in y-x-Reihenfolge stehen,
+        // sollen sie nach Signatur-Reihenfolge (x, y) sortiert werden.
+        const xIdx = md.indexOf('`x`');
+        const yIdx = md.indexOf('`y`');
+        expect(xIdx).toBeGreaterThan(-1);
+        expect(yIdx).toBeGreaterThan(xIdx);
+    });
+
+    it('Mathematische Notation $x + y$ wird als Code-Span gerendert', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Berechnet die Tarifkurve nach $T(zve) = a \\cdot zve + b$.
+--
+fn T(zve: Euro): Euro = zve
+`;
+        const h = await hoverAt(src, 'fn T');
+        const md = content(h);
+        // Inline-Math soll als Backtick-Code-Span erscheinen — nicht
+        // mehr im rohen $…$-Format.
+        expect(md).toContain('`T(zve) = a \\cdot zve + b`');
+        expect(md).not.toMatch(/\$T\(zve\).*?\$/);
+    });
+
+    it('Mathematische Block-Notation $$ … $$ wird zu Fenced Code-Block', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Tarifformel:
+
+$$
+T(zve) = a \\cdot zve + b
+$$
+--
+fn T(zve: Euro): Euro = zve
+`;
+        const h = await hoverAt(src, 'fn T');
+        const md = content(h);
+        expect(md).toContain('```math');
+        expect(md).toContain('T(zve) = a \\cdot zve + b');
+    });
+
+    it('Funktion ohne @param-Tags zeigt nur Prosa (keine leere Parameter-Sektion)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Verdoppelt einen Eurobetrag — kein Doc-Tag.
+--
+fn V(x: Euro): Euro = x * 2
+`;
+        const h = await hoverAt(src, 'fn V');
+        const md = content(h);
+        expect(md).toContain('Verdoppelt einen Eurobetrag');
+        expect(md).not.toContain('**Parameter**');
+        expect(md).not.toContain('**Rückgabe**');
+    });
+
+    it('@Quelle-Annotation wird durch `---`-Trenner abgetrennt', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Steuerformel.
+
+@param zve  Zu versteuerndes Einkommen.
+--
+@Quelle("§ 32a Abs. 1 EStG")
+fn T(zve: Euro): Euro = zve
+`;
+        const h = await hoverAt(src, 'fn T');
+        const md = content(h);
+        expect(md).toContain('**Parameter**');
+        expect(md).toContain('*Quelle:* § 32a Abs. 1 EStG');
+        // Quelle muss durch `---` von der Param-Sektion getrennt sein
+        const paramIdx = md.indexOf('**Parameter**');
+        const sepIdx = md.indexOf('---', paramIdx);
+        const quelleIdx = md.indexOf('*Quelle:*', sepIdx);
+        expect(sepIdx).toBeGreaterThan(paramIdx);
+        expect(quelleIdx).toBeGreaterThan(sepIdx);
+    });
+});
+
 describe('Hover-Grenzfälle', () => {
     it('Cursor auf unbekanntem Identifier → kein Hover', async () => {
         const src = `fn f(): Ganzzahl = unbekannt

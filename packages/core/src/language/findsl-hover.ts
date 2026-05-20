@@ -67,6 +67,7 @@ import {
 } from './generated/ast.js';
 import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
 import { parseDocTags, stripDocMarkers as stripMarkersShared } from './doc-tags.js';
+import { renderDocForHover, type QuelleAnnotation } from './doc-hover-renderer.js';
 import * as path from 'node:path';
 import { BUILTIN_ENUM_DEFS, BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
 import {
@@ -676,7 +677,8 @@ function formatFunktion(decl: FunktionDecl): string {
         return `${p.name}: ${typeToString(p.type)}${def}`;
     }).join(', ');
     const sig = fence(`fn ${decl.name}(${params}): ${typeToString(decl.returnType)}`);
-    return joinSections(sig, formatDocPrefix(decl.docPrefix));
+    const paramOrder = decl.params.map((p) => p.name);
+    return joinSections(sig, formatDocPrefix(decl.docPrefix, paramOrder));
 }
 
 function formatDatensatz(decl: DatensatzDecl): string {
@@ -687,7 +689,8 @@ function formatDatensatz(decl: DatensatzDecl): string {
             return `- \`${f.name}: ${typeToString(f.type)}${def}\``;
         }).join('\n')
         : '';
-    return joinSections(sig, formatDocPrefix(decl.docPrefix), fields);
+    const paramOrder = decl.fields.map((f) => f.name);
+    return joinSections(sig, formatDocPrefix(decl.docPrefix, paramOrder), fields);
 }
 
 function formatAufzaehlung(decl: AufzaehlungDecl): string {
@@ -738,16 +741,25 @@ function formatBuiltinEnumValue(value: string, enumName: string): Hover {
 // Doc-Prefix und Helfer
 // ---------------------------------------------------------------------------
 
-function formatDocPrefix(prefix?: DeclPrefix): string {
+/** Ersetzt durch `renderDocForHover` (Issue #65 Phase C) — strukturiertes
+ *  Markdown mit Parameter-/Rückgabe-Sektionen + Formel-Rendering. Diese
+ *  Funktion ist nur noch ein dünner Wrapper für Aufrufer, die keine
+ *  Param-Reihenfolge mitgeben können (Aufzählungen, Konstanten). */
+function formatDocPrefix(prefix?: DeclPrefix, paramOrder?: ReadonlyArray<string>): string {
     if (!prefix) return '';
-    const body = prefix.doc ? stripDocMarkers(prefix.doc).trim() : '';
-    const quellen = (prefix.annotations ?? [])
+    return renderDocForHover({
+        docRaw: prefix.doc,
+        paramOrder,
+        quellen: quellenFromPrefix(prefix),
+    });
+}
+
+function quellenFromPrefix(prefix: DeclPrefix): ReadonlyArray<QuelleAnnotation> {
+    return (prefix.annotations ?? [])
         .filter((a) => a.name === 'Quelle')
         .map((a) => a.args[0])
         .filter(isStringLiteral)
-        .map((s) => `*Quelle:* ${s.value}`)
-        .join('\n\n');
-    return [body, quellen].filter(Boolean).join('\n\n---\n\n');
+        .map((s) => ({ value: s.value }));
 }
 
 function stripDocMarkers(raw: string): string {

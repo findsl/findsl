@@ -557,6 +557,57 @@ describe('Issue #44 — Trailing-Lambda nach .zuordnen', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Lücke 9: weitere Listen-Methoden (§ 11.2)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Listen-Methoden .leer/.enthält/.filtern/.größtes/.kleinstes', () => {
+    it('.leer (parameterlos, getter-like) → boolean', async () => {
+        const program = await parseSource(
+            'fn Empty(xs: Liste<Ganzzahl>): Wahrheitswert = xs.leer\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return xs.leer();');
+    });
+
+    it('.enthält(x) → boolean (Wertvergleich)', async () => {
+        const program = await parseSource(
+            'fn Has(xs: Liste<Ganzzahl>, n: Ganzzahl): Wahrheitswert = xs.enthält(n)\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return xs.enthaelt(n);');
+    });
+
+    it('.filtern(p) mit Trailing-Lambda → FinDslListe', async () => {
+        const program = await parseSource(
+            'fn Positive(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.filtern { x -> x > 0 }\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain(
+            'return xs.filtern((x) -> x.compareValue(FinDslNumber.ganzzahl("0")) > 0);');
+    });
+
+    it('.größtes() → numerisches Maximum', async () => {
+        const program = await parseSource(
+            'fn Max(xs: Liste<Ganzzahl>): Ganzzahl = xs.größtes()\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return Ganzzahl.von(xs.groesstes());');
+    });
+
+    it('.kleinstes() → numerisches Minimum', async () => {
+        const program = await parseSource(
+            'fn Min(xs: Liste<Ganzzahl>): Ganzzahl = xs.kleinstes()\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('return Ganzzahl.von(xs.kleinstes());');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

@@ -114,6 +114,99 @@ public record FinDslListe<E>(List<E> elements) {
     }
 
     /**
+     * {@code .leer} (SPEC § 11.2): true wenn die Liste keine Elemente hat.
+     *
+     * @return {@code true} bei leerer Liste, sonst {@code false}.
+     */
+    public boolean leer() {
+        return elements.isEmpty();
+    }
+
+    /**
+     * {@code .enthält(x)} (SPEC § 11.2): true wenn {@code x} als
+     * Element vorkommt. Vergleich per {@link FinDslNumber#equalsValue}
+     * für numerische Elemente (bit-genau zum Interpreter), sonst per
+     * {@link java.util.Objects#equals}.
+     *
+     * @param x das zu suchende Element.
+     * @return {@code true} bei Treffer, sonst {@code false}.
+     */
+    public boolean enthaelt(E x) {
+        for (E e : elements) {
+            if (e instanceof FinDslNumber n && x instanceof FinDslNumber xn) {
+                if (n.equalsValue(xn)) {
+                    return true;
+                }
+            } else if (java.util.Objects.equals(e, x)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * {@code .filtern(p)} (SPEC § 11.2, interpreter.ts §11.2): liefert
+     * eine neue Liste mit allen Elementen, für die {@code p} {@code true}
+     * zurückgibt (Reihenfolge bewahrt, eager).
+     *
+     * @param p Prädikat-Lambda; muss {@link Boolean} zurückgeben.
+     * @return neue gefilterte {@link FinDslListe}.
+     */
+    public FinDslListe<E> filtern(FinDslLambda1<E, Boolean> p) {
+        List<E> out = new ArrayList<>(elements.size());
+        for (E e : elements) {
+            if (Boolean.TRUE.equals(p.apply(e))) {
+                out.add(e);
+            }
+        }
+        return new FinDslListe<>(out);
+    }
+
+    /**
+     * {@code .größtes()} (SPEC § 11.2): Maximum aller Elemente per
+     * {@link FinDslNumber#compareValue}. Wirft bei leerer Liste oder
+     * nicht-numerischen Elementen (wie das Orakel).
+     *
+     * @return größtes Element als {@link FinDslNumber}.
+     */
+    public FinDslNumber groesstes() {
+        if (elements.isEmpty()) {
+            throw new FinDslRuntimeError(
+                "Liste.größtes auf leerer Liste (SPEC § 11.2).");
+        }
+        FinDslNumber best = alsZahl(elements.get(0));
+        for (int i = 1; i < elements.size(); i++) {
+            FinDslNumber n = alsZahl(elements.get(i));
+            if (n.compareValue(best) > 0) {
+                best = n;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * {@code .kleinstes()} (SPEC § 11.2): Minimum aller Elemente per
+     * {@link FinDslNumber#compareValue}. Wirft bei leerer Liste oder
+     * nicht-numerischen Elementen (wie das Orakel).
+     *
+     * @return kleinstes Element als {@link FinDslNumber}.
+     */
+    public FinDslNumber kleinstes() {
+        if (elements.isEmpty()) {
+            throw new FinDslRuntimeError(
+                "Liste.kleinstes auf leerer Liste (SPEC § 11.2).");
+        }
+        FinDslNumber best = alsZahl(elements.get(0));
+        for (int i = 1; i < elements.size(); i++) {
+            FinDslNumber n = alsZahl(elements.get(i));
+            if (n.compareValue(best) < 0) {
+                best = n;
+            }
+        }
+        return best;
+    }
+
+    /**
      * Castet ein Element zu {@link FinDslNumber} oder wirft (wie das
      * Orakel bei nicht-numerischer Liste).
      *

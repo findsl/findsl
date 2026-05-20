@@ -3,16 +3,21 @@
 #
 # Fork-sicher: läuft auf `pull_request` (KEIN pull_request_target), hat damit
 # KEINEN Zugriff auf Repo-Secrets und checkt den PR-Code gefahrlos aus.
+# Es wird KEIN ungeprüfter `github.event.*`-Input in `run:`-Shells interpoliert.
 #
-# Der Job-Name `build` ist zugleich der Status-Check-Kontext, der im
-# `main`-Ruleset als Pflicht-Check (merge-blockierend) hinterlegt ist.
-# Wird der Job hier umbenannt, MUSS der Ruleset-Kontext mitgezogen werden.
+# Job-Namen sind zugleich die Status-Check-Kontexte, die im `main`-Ruleset
+# als Pflicht-Checks (merge-blockierend) hinterlegt sind. Aktuelle Pflicht-
+# Kontexte: `build` (Node/Vitest), `java` (JDK 21 / Gradle-Codegen-Gate,
+# Issue #7). Werden Jobs hier umbenannt, MUSS der Ruleset-Kontext mit-
+# gezogen werden (Settings → Rules → main).
 #
 # Build-Roundtrip == die im Projekt verbindliche Reihenfolge
 # (CLAUDE.md / CONTRIBUTING.md): langium:generate → build → bundle → test
 # (inkl. Bundle-Smoke). Reihenfolge nicht ändern.
 #
 # Actions sind per Commit-SHA gepinnt (Supply-Chain-Härtung, wie plugwerk).
+# Neue Tag-Refs (`@v4`) werden von Renovate (`helpers:pinGitHubActionDigests`,
+# `pinDigests: true`) beim nächsten Lauf auf eine SHA gepinnt.
 # ---------------------------------------------------------------------------
 name: CI
 
@@ -56,3 +61,69 @@ jobs:
 
       - name: Test (Vitest, inkl. Bundle-Smoke)
         run: npm test
+
+  # -------------------------------------------------------------------------
+  # `java` — Codegen-Gate (Issue #7): generiert aus examples/**/*.findsl Java,
+  # kompiliert gegen die Hand-Runtime, führt das generierte prüfe→JUnit als
+  # Interpreter-Orakel (bit-genau) plus die JavaParser-Struktur-Invarianten
+  # aus. Logik liegt vollständig deklarativ in `runtimes/java/build.gradle.kts`
+  # (Tasks `generateFindslJava`, `generatedTest`, `structureTest`, hängt an
+  # `check`).
+  #
+  # Audit-Modus (ADR2, gemäß `runtimes/java/gradle.properties`):
+  # `--no-daemon --no-configuration-cache --rerun-tasks` → kein Hintergrund-
+  # zustand, jede Phase frisch, jeder Output von Grund auf erzeugt.
+  # -------------------------------------------------------------------------
+  java:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      # JDK 21 (Temurin) ist Pflicht (ADR9). `cache: gradle` cached
+      # ~/.gradle/caches und ~/.gradle/wrapper — Re-Runs sind wesentlich
+      # schneller, ohne dass das CI-Ergebnis vom Cache abhängt
+      # (--rerun-tasks erzwingt echte Re-Execution).
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Langium artifacts
+        run: npm run langium:generate
+
+      # Nur `build` (TypeScript-Compile) — das Gradle-Gate braucht die
+      # CLI unter `packages/cli/out/main.js`. Bundle/Vitest gehört in
+      # den `build`-Job, hier nicht nochmal.
+      - name: Build (CLI für Gradle-Codegen)
+        run: npm run build
+
+      - name: Gradle check (Codegen-Gate)
+        working-directory: runtimes/java
+        run: ./gradlew check --no-daemon --no-configuration-cache --rerun-tasks --console=plain --stacktrace
+
+      # Test-Reports bei Failure hochladen — JUnit-XML + HTML der drei
+      # Test-Tasks (test / generatedTest / structureTest). Hilft, einen
+      # roten CI-Lauf ohne lokale JDK-Installation zu diagnostizieren.
+      - name: Upload Gradle test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-test-reports
+          path: |
+            runtimes/java/build/reports/tests/
+            runtimes/java/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -538,23 +538,31 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
     if (isFuerExpr(expr)) {
         // (#44 für-jeden) SPEC § 5.3: `für jeden iter aus source { body }`
         // ist semantisch äquivalent zu `source.zuordnen { iter -> body }`.
-        // Lowern als `listMap` mit `lambda1` — wiederverwendet bestehenden
-        // Emit-Pfad (kein neuer IR-Knoten nötig).
+        // (#44 Block-für-jeden) Body mit `var`-Statements lowert zu
+        // Block-Lambda — Emitter generiert `(iter) -> { …; return …; }`.
         if (!expr.source) throw new Error('für jeden ohne Quelle (Teil-Parse).');
         if (!expr.iter) throw new Error('für jeden ohne Iter-Variable (Teil-Parse).');
         if (!expr.body) throw new Error('für jeden ohne Body (Teil-Parse).');
-        if (expr.body.stmts.length > 0) {
-            throw new Error(
-                'für-jeden mit `var`-Statements im Body ist Phase-3-Scope '
-                + '(äquivalent .zuordnen({ x -> { var …; ergebnis } }) — Folge-PR).');
-        }
         const receiver = lowerExpr(expr.source, reg);
-        // Element-Typ aus dem Quellen-Typ ableiten → in scopeTypes
-        // eintragen (analog `.zuordnen { x -> … }`-Pfad).
         const recvAtom = namedAtom(exprFinDslType(receiver, reg));
         const elemT = recvAtom?.name === 'Liste'
             ? recvAtom.typeArgs?.args?.[0] : undefined;
         reg.scopeTypes.set(expr.iter, elemT);
+        // Block-`var`-Statements im Body → `lets` im Lambda.
+        const lets: IrLet[] = [];
+        for (const s of expr.body.stmts) {
+            if (!isLetStmt(s)) {
+                throw new Error('`ausgabe` im für-jeden-Body ist Phase-4-Scope.');
+            }
+            reg.scopeTypes.set(s.name, s.type);
+            lets.push({
+                name: s.name,
+                javaType: javaType(s.type, reg),
+                expr: floatValue(
+                    maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
+                    `var "${s.name}"`),
+            });
+        }
         return {
             kind: 'listMap',
             receiver,
@@ -562,6 +570,7 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
                 kind: 'lambda1',
                 param: expr.iter,
                 body: lowerExpr(expr.body.result, reg),
+                lets: lets.length > 0 ? lets : undefined,
             },
         };
     }
@@ -883,7 +892,12 @@ function lowerChainOps(
     return cur;
 }
 
-/** Einziges `.zuordnen`-Argument = einstelliges Ausdrucks-Lambda. */
+/**
+ * Einziges Higher-Order-Argument = einstelliges Lambda (Ausdruck oder
+ * Block mit `var`-Statements, #44 Block-Lambda). Element-Typ des
+ * Empfängers muss vorher in `scopeTypes` für `lam.params[0].name`
+ * gesetzt sein (für Datensatz-Feld-Unbox im Body).
+ */
 function lowerLambdaArg(
     args: ReadonlyArray<{ name?: string; value: Expr }>,
     reg: Registry,
@@ -894,10 +908,29 @@ function lowerLambdaArg(
         throw new Error('`.zuordnen`-Argument muss ein einstelliges Lambda sein (Phase 2).');
     }
     if (!lam.result) throw new Error('Lambda ohne Ergebnis (Teil-Parse).');
-    if (lam.stmts.length > 0) {
-        throw new Error('Block-Lambda als `.zuordnen`-Argument ist Phase-3-Scope.');
+    // (#44 Block-Lambda) `{ p -> var …; ergebnis }` — Block-Form
+    // generiert `(p) -> { final … = …; return …; }` im Emitter.
+    const lets: IrLet[] = [];
+    for (const s of lam.stmts) {
+        if (!isLetStmt(s)) {
+            throw new Error('`ausgabe` im Lambda-Body ist Phase-4-Scope.');
+        }
+        // Per-Lambda-Sicht: var-Typ für Folge-Lowerings im Body
+        reg.scopeTypes.set(s.name, s.type);
+        lets.push({
+            name: s.name,
+            javaType: javaType(s.type, reg),
+            expr: floatValue(
+                maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
+                `var "${s.name}"`),
+        });
     }
-    return { kind: 'lambda1', param: lam.params[0].name, body: lowerExpr(lam.result, reg) };
+    return {
+        kind: 'lambda1',
+        param: lam.params[0].name,
+        body: lowerExpr(lam.result, reg),
+        lets: lets.length > 0 ? lets : undefined,
+    };
 }
 
 /**

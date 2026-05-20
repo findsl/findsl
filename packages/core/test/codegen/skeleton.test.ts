@@ -982,6 +982,40 @@ describe('Issue #44 — Lambda als var-Wert + Aufruf', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Block-für-jeden / Block-Lambda als Higher-Order-Argument
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Block-für-jeden + Block-Lambda', () => {
+    it('für jeden mit var-Statements im Body → Block-Lambda mit return', async () => {
+        const program = await parseSource(
+            'fn Verarbeite(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = für jeden x aus xs {\n'
+            + '    var doppelt: Ganzzahl = x * 2\n'
+            + '    doppelt + 1\n'
+            + '}\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        // Block-Lambda generiert als `(x) -> { ...; return ...; }`
+        expect(impl).toContain('xs.zuordnen((x) -> {');
+        expect(impl).toContain('final FinDslNumber doppelt =');
+        expect(impl).toContain('return doppelt.add(FinDslNumber.ganzzahl("1"));');
+    });
+
+    it('.zuordnen mit Block-Lambda als direktes Argument', async () => {
+        const program = await parseSource(
+            'fn Map(xs: Liste<Ganzzahl>): Liste<Ganzzahl> = xs.zuordnen({\n'
+            + '    x ->\n'
+            + '    var y: Ganzzahl = x + 1\n'
+            + '    y * 2\n'
+            + '})\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('xs.zuordnen((x) -> {');
+        expect(impl).toContain('final FinDslNumber y =');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

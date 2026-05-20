@@ -431,3 +431,90 @@ fn StandardPreis(): Euro = Bruttopreis(100)
         );
     });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {
+    const TYPEN_SRC = `aufzählung Farbe { Rot, Blau }\n`;
+    const LOGIK_SRC = `verwende { Farbe, Rot, Blau } aus "./typen"
+
+fn Score(f: Farbe): Ganzzahl = wähle (f) {
+    falls Rot  -> 1
+    falls Blau -> 2
+}
+`;
+    const TEST_SRC = `verwende { Score, Farbe } aus "./logik"
+
+prüfe "Farbtest" {
+    testfall "Rot=1" { Score(Rot) == 1 }
+    testfall "Blau=2" { Score(Blau) == 2 }
+}
+`;
+
+    it('Lowering qualifiziert Enum-Werte korrekt, WENN alle transitiv erreichbaren Module im imports-Array sind', async () => {
+        // Das Lowering selbst ist korrekt: gib ALLE transitiv erreichbaren
+        // Module (incl. `typen`) als `imports` → das Generat ist qualifiziert.
+        const typenProgram = await parseSource(TYPEN_SRC);
+        const logikProgram = await parseSource(LOGIK_SRC);
+        const testProgram = await parseSource(TEST_SRC);
+        const ir = lowerTestProgram(testProgram, {
+            javaPackage: undefined,
+            className: 'LogikTest',
+            imports: [
+                {
+                    program: logikProgram,
+                    className: 'Logik',
+                    javaPackage: undefined,
+                    bindings: [
+                        { localName: 'Score', sourceName: 'Score' },
+                        { localName: 'Farbe', sourceName: 'Farbe' },
+                    ],
+                },
+                {
+                    // Transitiv: hier brauchen wir `typen` im imports-Array,
+                    // damit `Rot`/`Blau` als Cross-Modul-Enum erkannt werden.
+                    program: typenProgram,
+                    className: 'Typen',
+                    javaPackage: undefined,
+                    bindings: [],
+                },
+            ],
+        });
+        const out = emitJavaTestModule(ir);
+        expect(out).toContain('logik.score(Typen.Farbe.Rot)');
+        expect(out).toContain('logik.score(Typen.Farbe.Blau)');
+    });
+
+    it('REGRESSION: WENN nur direkte Imports im imports-Array → Enum-Werte unqualifiziert (Bug-Sensor für CLI-Fix)', async () => {
+        // Ohne transitive Imports — wie das CLI heute aufruft —
+        // werden Rot/Blau unqualifiziert emittiert (javac: cannot find).
+        // Dieser Test PRÜFT den heutigen Zustand; sobald das CLI
+        // transitive Module mitliefert, ist dieser Pfad nicht mehr
+        // relevant (aber das Lowering bleibt korrekt — siehe Test oben).
+        const logikProgram = await parseSource(LOGIK_SRC);
+        const testProgram = await parseSource(TEST_SRC);
+        const ir = lowerTestProgram(testProgram, {
+            javaPackage: undefined,
+            className: 'LogikTest',
+            imports: [
+                {
+                    program: logikProgram,
+                    className: 'Logik',
+                    javaPackage: undefined,
+                    bindings: [
+                        { localName: 'Score', sourceName: 'Score' },
+                        { localName: 'Farbe', sourceName: 'Farbe' },
+                    ],
+                },
+                // KEIN typen-Eintrag → Enum-Werte nicht-qualifiziert!
+            ],
+        });
+        const out = emitJavaTestModule(ir);
+        // Heute (RED-Sensor): unqualifiziert. Nach CLI-Fix kann diese
+        // Annahme NICHT mehr direkt getroffen werden, weil das Lowering
+        // unverändert bleibt — der Bug-Fix ist im CLI (transitive
+        // Import-Schließung), nicht im Lowering.
+        expect(out).toMatch(/logik\.score\((Rot|Farbe\.Rot)\)/);
+    });
+});

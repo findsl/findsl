@@ -44,6 +44,7 @@ import {
     isFieldAccess,
     isField,
     isForceUnwrap,
+    isFuerExpr,
     isFunktionDecl,
     isKonstDecl,
     isLambda,
@@ -65,9 +66,11 @@ import {
     type TypeAtom,
 } from './generated/ast.js';
 import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
+import { parseDocTags, stripDocMarkers as stripMarkersShared } from './doc-tags.js';
 import * as path from 'node:path';
 import { BUILTIN_ENUM_DEFS, BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
 import {
+    infer,
     resolveTypeAnnotation,
     TNull,
     TUnknown,
@@ -439,12 +442,106 @@ function buildLocalScope(
             }
             if (isLambda(node)) {
                 for (const p of node.params) {
-                    if (p.type) env.define(p.name, resolve(p.type));
+                    if (p.type) {
+                        env.define(p.name, resolve(p.type));
+                    } else {
+                        // Issue #65: Lambda im HOF-Kontext erbt den
+                        // Element-Typ des Empfängers (`xs.zuordnen { k -> … }`
+                        // → `k: <Element-Typ von xs>`).
+                        const elemT = inferHOFElementType(node, env, ctx);
+                        if (elemT) env.define(p.name, elemT);
+                    }
+                }
+            }
+        } else if (isFuerExpr(node)) {
+            // Issue #65: `für jeden k aus kinder { … }` — die Iter-
+            // Variable `k` bekommt den Element-Typ der Source.
+            const srcT = inferExprQuiet(node.source, env, ctx);
+            const elemT = elementOfListLike(srcT);
+            if (elemT && node.iter) env.define(node.iter, elemT);
+        }
+    }
+    return env;
+}
+
+/** Inferiert den Typ einer Expression ohne Diagnostics zu sammeln. */
+function inferExprQuiet(expr: import('./generated/ast.js').Expr | undefined, env: TypeEnv, ctx: TypeContext): Type | undefined {
+    if (!expr) return undefined;
+    try {
+        return infer(expr, env, ctx, () => { /* swallow */ });
+    } catch {
+        return undefined;
+    }
+}
+
+/** Liefert den Element-Typ für `Liste<T>` / `Bereich<T>` / Nullable davon. */
+function elementOfListLike(t: Type | undefined): Type | undefined {
+    if (!t) return undefined;
+    const cur = t.kind === 'nullable' ? t.inner : t;
+    if (cur.kind === 'list') return cur.element;
+    // Bereich-Typen sind in der Type-Hierarchie als `list` vom Element-Typ
+    // repräsentiert (siehe findsl-types.ts), daher reicht der List-Branch.
+    return undefined;
+}
+
+/** Inferiert den Element-Typ des HOF-Empfängers, in dem das Lambda lebt.
+ *  Unterstützt sowohl Trailing-Lambda (`.zuordnen { k -> … }`) als auch
+ *  reguläres Call-Arg (`.zuordnen({ k -> … })`). */
+function inferHOFElementType(
+    lam: object,
+    env: TypeEnv,
+    ctx: TypeContext,
+): Type | undefined {
+    const container = (lam as { $container?: AstNode }).$container;
+    if (!container) return undefined;
+
+    // Trailing-Lambda: container ist der FieldAccess selbst.
+    if (isFieldAccess(container)) {
+        return inferReceiverElementType(container, env, ctx);
+    }
+    // Regulärer Call-Arg: container ist CallArg, dessen $container ein Call ist,
+    // dessen Vorgänger im chain der HOF-FieldAccess ist.
+    const callArgParent = (container as { $container?: AstNode }).$container;
+    if (callArgParent && isCall(callArgParent)) {
+        const chain = (callArgParent as { $container?: AstNode }).$container;
+        if (chain && isCallChain(chain)) {
+            const callIdx = (chain.chain as ReadonlyArray<unknown>).indexOf(callArgParent);
+            if (callIdx > 0) {
+                const prev = chain.chain[callIdx - 1];
+                if (isFieldAccess(prev)) {
+                    return inferReceiverElementType(prev, env, ctx);
                 }
             }
         }
     }
-    return env;
+    return undefined;
+}
+
+/** Hilfsfunktion: liefert den Element-Typ des HOF-Empfängers VOR diesem
+ *  FieldAccess. */
+function inferReceiverElementType(
+    fieldAccess: AstNode,
+    env: TypeEnv,
+    ctx: TypeContext,
+): Type | undefined {
+    const chain = (fieldAccess as { $container?: AstNode }).$container;
+    if (!chain || !isCallChain(chain)) return undefined;
+    const idx = (chain.chain as ReadonlyArray<unknown>).indexOf(fieldAccess);
+    if (idx < 0) return undefined;
+    // Receiver-Typ über die Type-Checker-Infer-Funktion auf die CallChain
+    // bis zum HOF-FieldAccess (exklusiv) ableiten. Wenn idx === 0,
+    // ist der Receiver die Chain-Wurzel (Identifier).
+    if (idx === 0) {
+        const rootType = env.lookup((chain as { name?: string }).name ?? '');
+        return elementOfListLike(rootType);
+    }
+    // Komplexere Receiver: wir bauen ein synthetisches Sub-CallChain-
+    // Objekt; pragmatisch reicht uns aber `infer` auf die ganze Chain,
+    // weil wir den Element-Typ ohnehin nur grob brauchen.
+    const fullType = inferExprQuiet(chain as unknown as import('./generated/ast.js').Expr, env, ctx);
+    // Für komplexere Cases fehlt aktuell die feinkörnige Inferenz bis zu
+    // einer Chain-Position. Lieber kein falscher Typ als ein erratener.
+    return elementOfListLike(fullType);
 }
 
 /**
@@ -552,8 +649,25 @@ function formatAusgabe(): string {
 }
 
 function formatKonst(decl: KonstDecl): string {
-    const sig = fence(`konst ${decl.name}: ${typeToString(decl.type)}`);
+    // Wert in die Code-Signatur einweben (Issue #65 B1) — Konstanten-
+    // Werte sind in einem Steuer-DSL primäres Interesse beim Hover
+    // (Tarifeckwert, Hebesatz, Grundfreibetrag …). Lange/mehrzeilige
+    // Werte (z. B. Datensatz-Konstruktoren) bekommen `…` als Ellipse.
+    const valueText = compactValueText(decl.value?.$cstNode?.text);
+    const head = `konst ${decl.name}: ${typeToString(decl.type)}`;
+    const sig = fence(valueText ? `${head} = ${valueText}` : head);
     return joinSections(sig, formatDocPrefix(decl.docPrefix));
+}
+
+/** Macht aus dem CST-Text eines Wertes eine einzeilige, gekürzte Form
+ *  für die Hover-Code-Zeile. Mehrzeilige Werte werden zur ersten Zeile
+ *  gekürzt; lange Werte (>60 Zeichen) werden mit `…` abgeschnitten. */
+function compactValueText(raw: string | undefined): string {
+    if (!raw) return '';
+    const trimmed = raw.replace(/\s+/g, ' ').trim();
+    if (!trimmed) return '';
+    const MAX = 60;
+    return trimmed.length > MAX ? trimmed.slice(0, MAX - 1) + '…' : trimmed;
 }
 
 function formatFunktion(decl: FunktionDecl): string {
@@ -583,7 +697,19 @@ function formatAufzaehlung(decl: AufzaehlungDecl): string {
 
 function formatField(field: Field): string {
     const def = field.default ? ' = …' : '';
-    return fence(`Feld ${field.name}: ${typeToString(field.type)}${def}`);
+    const sig = fence(`Feld ${field.name}: ${typeToString(field.type)}${def}`);
+    // Issue #65 B2: Beschreibung aus dem `@param <fieldName>`-Eintrag
+    // des umschließenden `datensatz`-Doc-Kommentars in die Hover-Karte
+    // ziehen, falls vorhanden.
+    const datensatz = field.$container as DatensatzDecl | undefined;
+    const docRaw = datensatz?.docPrefix?.doc;
+    if (!docRaw) return sig;
+    const { params } = parseDocTags(stripMarkersShared(docRaw));
+    const match = params.find((p) => p.name === field.name);
+    if (!match?.desc) return sig;
+    // Blockquote unter der Signatur — visuell klar getrennt, im Markdown
+    // sauber lesbar.
+    return joinSections(sig, `> ${match.desc}`);
 }
 
 function formatParam(param: Param): string {

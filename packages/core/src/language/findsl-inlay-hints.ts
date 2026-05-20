@@ -271,8 +271,15 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
         if (isBinaryOp(expr)) {
             const op = expr.op;
             if (op === '+' || op === '-'
+                || op === '*' || op === '/'
                 || op === '==' || op === '!=' || op === '<'
                 || op === '<=' || op === '>' || op === '>=') {
+                // Issue #65 Folge: auch `*` und `/` rekurrieren in beide
+                // Operanden — sonst bleiben Geld-/Prozent-Konstanten in
+                // Multiplikations-Ketten (z. B. `(KFB + BEA) * k.faktor`)
+                // unsichtbar. `emitLeaf` filtert via `typeMap.get(expr)`,
+                // sodass nur Operanden mit Geld-/Prozent-Tag tatsächlich
+                // einen Hint erhalten.
                 this.emitMoney(expr.left, acceptor);
                 this.emitMoney(expr.right, acceptor);
                 return;
@@ -293,10 +300,30 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
             for (const arm of expr.arms) this.emitMoney(arm.result, acceptor);
             return;
         }
-        if (isCast(expr)) return;                          // `als`: bewusst aus
-        // `ParenChain` (`(a*b).abrunden()`) ist wie `CallChain` ein
-        // Leaf: ein Geld-Symbol am Ergebnis (Typ aus dem Type-Checker).
-        if (isNumberLiteral(expr) || isCallChain(expr) || isParenChain(expr)) {
+        if (isCast(expr)) {
+            // `als T`-Cast: der Ziel-Typ steht textuell rechts vom `als`
+            // und braucht kein zusätzliches Leaf-Hint. Aber die inneren
+            // Sub-Ausdrücke des Cast-Werts (z. B. `messzahl * (a - b)`
+            // in `(messzahl * (a - b)) als EuroCent`) müssen ihre Einheit
+            // trotzdem zeigen — sonst sind Geld-/Prozent-Operanden in
+            // Cast-Hüllen unsichtbar (Issue #65 User-Bug
+            // `Steuermessbetrag11`).
+            this.emitMoney(expr.value, acceptor);
+            return;
+        }
+        // `ParenChain` (`(a*b).abrunden()`): in den inneren `receiver`
+        // rekurrieren, damit auch Geld-/Prozent-Sub-Ausdrücke in der
+        // Klammer Symbole bekommen (Issue #65 User-Bug:
+        // `(ZONE_4_SATZ * zve - ZONE_4_ABZUG).abrunden()`). Wenn die
+        // ParenChain Postfix-Operationen trägt (`.abrunden()`/`.zuordnen`),
+        // bekommt das Endergebnis zusätzlich ein Leaf-Hint nach `)` —
+        // ohne Postfix wäre der zweite Hint ein Doppler zu den inneren.
+        if (isParenChain(expr)) {
+            this.emitMoney(expr.receiver, acceptor);
+            if (expr.chain && expr.chain.length > 0) emitLeaf();
+            return;
+        }
+        if (isNumberLiteral(expr) || isCallChain(expr)) {
             emitLeaf();
         }
     }
@@ -353,12 +380,6 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
 }
 
 /**
- * Einheiten-Symbol für einen (ggf. nullable) Geld-/Prozent-Typ:
- * `Euro`/`EuroCent` → `€`, `Cent` → `¢`, `Prozent` → `%`; sonst
- * (Zahl, Nicht-Einheit) `undefined`. Doppelhints an `19%`-Literalen
- * werden in `emitLeaf` verhindert (Suffix-Skip).
- */
-/**
  * Einheiten-Symbol aus dem Typ-AST-Namen (für Stellen, an denen es
  * nur eine Typ-Annotation gibt, nicht ein typisierter Ausdruck — z. B.
  * `Field`/`Param` ohne Default).
@@ -370,6 +391,12 @@ function unitNameSymbol(typeName: string | undefined): string | undefined {
     return undefined;
 }
 
+/**
+ * Einheiten-Symbol für einen (ggf. nullable) Geld-/Prozent-Typ:
+ * `Euro`/`EuroCent` → `€`, `Cent` → `¢`, `Prozent` → `%`; sonst
+ * (Zahl, Nicht-Einheit) `undefined`. Doppelhints an `19%`-Literalen
+ * werden in `emitLeaf` verhindert (Suffix-Skip).
+ */
 function unitSymbol(t: Type | undefined): string | undefined {
     let cur = t;
     while (cur && cur.kind === 'nullable') cur = cur.inner;

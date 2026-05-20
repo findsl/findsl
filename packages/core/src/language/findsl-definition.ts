@@ -36,6 +36,7 @@ import {
     isFieldAccess,
     isField,
     isForceUnwrap,
+    isFuerExpr,
     isFunktionDecl,
     isKonstDecl,
     isLambda,
@@ -52,6 +53,7 @@ import {
 import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
 import * as path from 'node:path';
 import {
+    infer,
     resolveTypeAnnotation,
     TNull,
     TUnknown,
@@ -340,11 +342,94 @@ function buildLocalScope(
                 if (isLetStmt(s)) env.define(s.name, resolve(s.type));
             }
             if (isLambda(node)) {
-                for (const p of node.params) if (p.type) env.define(p.name, resolve(p.type));
+                for (const p of node.params) {
+                    if (p.type) {
+                        env.define(p.name, resolve(p.type));
+                    } else {
+                        // Issue #65: Lambda im HOF-Kontext erbt den
+                        // Element-Typ des Empfängers (analog Hover-Pfad).
+                        const elemT = inferHOFElementType(node, env, ctx);
+                        if (elemT) env.define(p.name, elemT);
+                    }
+                }
             }
+        } else if (isFuerExpr(node)) {
+            // Issue #65: `für jeden k aus kinder { … }` — Iter-Variable
+            // an Element-Typ der Source binden.
+            const srcT = inferExprQuiet(node.source, env, ctx);
+            const elemT = elementOfListLike(srcT);
+            if (elemT && node.iter) env.define(node.iter, elemT);
         }
     }
     return env;
+}
+
+/** Inferiert den Typ einer Expression ohne Diagnostics zu sammeln. */
+function inferExprQuiet(
+    expr: import('./generated/ast.js').Expr | undefined,
+    env: TypeEnv,
+    ctx: TypeContext,
+): Type | undefined {
+    if (!expr) return undefined;
+    try {
+        return infer(expr, env, ctx, () => { /* swallow */ });
+    } catch {
+        return undefined;
+    }
+}
+
+/** Element-Typ für `Liste<T>` / Nullable davon. */
+function elementOfListLike(t: Type | undefined): Type | undefined {
+    if (!t) return undefined;
+    const cur = t.kind === 'nullable' ? t.inner : t;
+    return cur.kind === 'list' ? cur.element : undefined;
+}
+
+/** Element-Typ des HOF-Empfängers, in dem das Lambda lebt. Spiegelt den
+ *  Hover-Pfad — beide Provider haben den gleichen Bug + den gleichen Fix. */
+function inferHOFElementType(
+    lam: object,
+    env: TypeEnv,
+    ctx: TypeContext,
+): Type | undefined {
+    const container = (lam as { $container?: AstNode }).$container;
+    if (!container) return undefined;
+
+    if (isFieldAccess(container)) {
+        // Trailing-Lambda
+        return inferReceiverElementType(container, env, ctx);
+    }
+    const callArgParent = (container as { $container?: AstNode }).$container;
+    if (callArgParent && isCall(callArgParent)) {
+        const chain = (callArgParent as { $container?: AstNode }).$container;
+        if (chain && isCallChain(chain)) {
+            const callIdx = (chain.chain as ReadonlyArray<unknown>).indexOf(callArgParent);
+            if (callIdx > 0) {
+                const prev = chain.chain[callIdx - 1];
+                if (isFieldAccess(prev)) {
+                    return inferReceiverElementType(prev, env, ctx);
+                }
+            }
+        }
+    }
+    return undefined;
+}
+
+function inferReceiverElementType(
+    fieldAccess: AstNode,
+    env: TypeEnv,
+    ctx: TypeContext,
+): Type | undefined {
+    const chain = (fieldAccess as { $container?: AstNode }).$container;
+    if (!chain || !isCallChain(chain)) return undefined;
+    const idx = (chain.chain as ReadonlyArray<unknown>).indexOf(fieldAccess);
+    if (idx < 0) return undefined;
+    if (idx === 0) {
+        const rootType = env.lookup((chain as { name?: string }).name ?? '');
+        return elementOfListLike(rootType);
+    }
+    const fullType = inferExprQuiet(chain as unknown as import('./generated/ast.js').Expr, env, ctx);
+    return elementOfListLike(fullType);
 }
 
 function resolveAnnotationWithImports(

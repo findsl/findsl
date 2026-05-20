@@ -82,6 +82,32 @@ konst R: Euro = GFB + 5
         const md = content(h);
         expect(md).toContain('konst GFB: Euro');
     });
+
+    it('Hover auf Konstante zeigt den Wert (Issue #65 B1) — Geld-Literal', async () => {
+        const h = await hoverAt('konst GFB: Euro = 12.096\n', 'GFB');
+        expect(content(h)).toContain('konst GFB: Euro = 12.096');
+    });
+
+    it('Hover auf Konstante zeigt den Wert — Prozent-Literal', async () => {
+        const h = await hoverAt('konst SATZ: Prozent = 19%\n', 'SATZ');
+        expect(content(h)).toContain('konst SATZ: Prozent = 19%');
+    });
+
+    it('Hover auf Konstante zeigt den Wert — Datensatz-Konstruktor (gekürzt)', async () => {
+        const src = `datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
+konst URSPRUNG: Punkt = Punkt(x = 0, y = 0)
+`;
+        const h = await hoverAt(src, 'URSPRUNG');
+        const md = content(h);
+        expect(md).toContain('konst URSPRUNG: Punkt = Punkt(x = 0, y = 0)');
+    });
+
+    it('Hover auf Konstante kürzt sehr lange Werte mit „…"', async () => {
+        const src = `konst LONG: Text = "${'x'.repeat(200)}"\n`;
+        const h = await hoverAt(src, 'LONG');
+        const md = content(h);
+        expect(md).toMatch(/konst LONG: Text = "x+…/);
+    });
 });
 
 describe('Hover auf Funktionen', () => {
@@ -356,6 +382,117 @@ fn test(f: Fall): Euro = f.summe
         const h = await hoverInModules({ lib, app }, 'app', 'summe\n');
         const md = content(h);
         expect(md).toContain('Feld summe: Euro');
+    });
+
+    it('Hover auf Feld-Zugriff zeigt @param-Beschreibung (Issue #65 B2)', async () => {
+        // Erstes `--…--` ist Datei-Doku; das zweite ist die
+        // Datensatz-Doku (SPEC: fileDoc=DeclPrefix? am Programm-Anfang).
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Geometrischer Punkt in der Ebene.
+
+@param x  Horizontale Koordinate, positiv nach rechts.
+@param y  Vertikale Koordinate, positiv nach oben.
+--
+datensatz Punkt(
+    x: Ganzzahl,
+    y: Ganzzahl,
+)
+
+konst URSPRUNG: Punkt = Punkt(0, 0)
+konst REF_X: Ganzzahl = URSPRUNG.x
+`;
+        const h = await hoverAt(src, 'x\n');
+        const md = content(h);
+        expect(md).toContain('Feld x: Ganzzahl');
+        expect(md).toContain('Horizontale Koordinate');
+    });
+
+    it('Hover auf Feld OHNE @param-Beschreibung zeigt nur Signatur', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Steuerfall ohne Feld-Doku.
+--
+datensatz Fall(betrag: Euro)
+
+fn test(f: Fall): Euro = f.betrag
+`;
+        const h = await hoverAt(src, 'betrag\n');
+        const md = content(h);
+        expect(md).toContain('Feld betrag: Euro');
+        // Kein Blockquote-Marker (`> `) am Anfang einer Zeile, weil
+        // keine @param-Beschreibung extrahiert wurde.
+        expect(md).not.toMatch(/\n>\s/);
+    });
+
+    it('Hover auf Feld-Zugriff aus Lambda-Param in HOF-Trailing-Syntax (Issue #65)', async () => {
+        // Spiegelt das est.findsl-Beispiel: `kinder.zuordnen { k -> k.faktor }`
+        // — k hat keine explizite Typ-Annotation, der Typ ergibt sich aus
+        // dem Element-Typ von `kinder: Liste<Kind>`.
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Kind im Steuerfall.
+
+@param faktor  Multiplikator für den Freibetrag.
+--
+datensatz Kind(faktor: Ganzzahl, anteil: Prozent)
+
+fn Summe(kinder: Liste<Kind>): Ganzzahl =
+    kinder.zuordnen( { k -> k.faktor } ).summe()
+`;
+        const h = await hoverAt(src, 'faktor }');
+        const md = content(h);
+        expect(md).toContain('Feld faktor: Ganzzahl');
+        expect(md).toContain('Multiplikator');
+    });
+
+    it('Hover auf Feld-Zugriff aus für-jeden-Iter-Variable (Issue #65 RC3)', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+datensatz Punkt(x: Ganzzahl, y: Ganzzahl)
+
+fn XSumme(ps: Liste<Punkt>): Liste<Ganzzahl> =
+    für jeden p aus ps {
+        p.x
+    }
+`;
+        const h = await hoverAt(src, 'x\n');
+        const md = content(h);
+        expect(md).toContain('Feld x: Ganzzahl');
+    });
+
+    it('Cross-Modul: Hover auf Feld-Zugriff zeigt @param aus importiertem Datensatz', async () => {
+        const lib = `--
+Datei-Dokumentation des lib-Moduls.
+--
+
+--
+Steuerfall — vollständige Eingabe.
+
+@param summe   Gesamtsumme aller Einkünfte des Veranlagungsjahres.
+@param steuer  Berechneter Steuerbetrag nach Anwendung des Tarifs.
+--
+datensatz Fall(summe: Euro, steuer: Euro)
+`;
+        const app = `verwende {Fall} aus "./lib"
+
+fn test(f: Fall): Euro = f.summe
+`;
+        const h = await hoverInModules({ lib, app }, 'app', 'summe\n');
+        const md = content(h);
+        expect(md).toContain('Feld summe: Euro');
+        expect(md).toContain('Gesamtsumme');
     });
 });
 

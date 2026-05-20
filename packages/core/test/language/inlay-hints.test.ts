@@ -329,12 +329,17 @@ describe('Inlay-Hints: Symbol in +/- -Ausdruck (Typ-Propagierung)', () => {
         expect(types(hs).some((h) => h.position.line === 1 && h.label === '¢')).toBe(true);
     });
 
-    it('* / propagieren NICHT (wie Type-Checker): B * 2 ohne Symbol am 2', async () => {
+    it('* / rekurrieren in Operanden (Issue #65): B * 2 → "€" am B, KEIN Symbol am 2', async () => {
+        // Issue #65: Geld-Konstanten/Refs in `*`-Ketten sollen sichtbar
+        // sein (User-Bug: `(KFB + BEA) * k.faktor * k.auslandsfaktor`).
+        // Die Filterung geschieht über `moneySymbol(typeMap.get(expr))`:
+        // `B` ist Euro → €, `2` ist Ganzzahl → kein Symbol.
         const hs = await hints(
             'konst B: Euro = 233\nkonst R: EuroCent = B * 2\n',
         );
-        // nur ggf. Symbol an B selbst nicht (B ist Referenz); am `2` keiner.
-        expect(types(hs).some((h) => h.position.line === 1)).toBe(false);
+        const z1 = types(hs).filter((h) => h.position.line === 1);
+        expect(z1.length).toBe(1);
+        expect(z1[0].label).toBe('€');
     });
 });
 
@@ -524,5 +529,91 @@ describe('Inlay-Hints: range-stabil (kein Scroll-Flackern)', () => {
             start: { line: 2, character: 0 }, end: { line: 2, character: 1 },
         });
         expect(teil.length).toBe(voll.length);
+    });
+});
+
+describe('Inlay-Hints: Field-Zugriff aus Lambda-Param in HOF (Issue #65)', () => {
+    it('Trailing-Lambda: `xs.zuordnen { k -> k.geld }` → "€" am Geld-Feld', async () => {
+        const hs = await hints(
+            'datensatz Kind(betrag: Euro, faktor: Ganzzahl)\n'
+            + 'fn Beträge(kinder: Liste<Kind>): Liste<Euro> =\n'
+            + '    kinder.zuordnen( { k -> k.betrag } )\n',
+        );
+        expect(labels(types(hs))).toContain('€');
+    });
+
+    it('für jeden: `für jeden p aus ps { p.geld }` → "€" am Geld-Feld', async () => {
+        const hs = await hints(
+            'datensatz Punkt(betrag: Euro, x: Ganzzahl)\n'
+            + 'fn Beträge(ps: Liste<Punkt>): Liste<Euro> =\n'
+            + '    für jeden p aus ps {\n'
+            + '        p.betrag\n'
+            + '    }\n',
+        );
+        expect(labels(types(hs))).toContain('€');
+    });
+
+    it('User-Bug gewst.findsl: `(messzahl * (a - b)) als EuroCent` zeigt Hints an Operanden (Issue #65)', async () => {
+        // `als T`-Cast soll die Sub-Ausdrücke nicht ausblenden — nur das
+        // Cast-Ziel `als EuroCent` selbst ist textuell sichtbar.
+        const hs = await hints(
+            'fn Steuermessbetrag(\n'
+            + '    abgerundeterGewerbeertrag: EuroCent,\n'
+            + '    freibetrag:                EuroCent,\n'
+            + '    messzahl:                  Prozent,\n'
+            + '): EuroCent = (messzahl * (abgerundeterGewerbeertrag - freibetrag)) als EuroCent\n',
+        );
+        const labelList = labels(types(hs));
+        // messzahl → 1× `%` (Prozent-Referenz)
+        expect(labelList.filter((l) => l === '%').length).toBeGreaterThanOrEqual(1);
+        // abgerundeterGewerbeertrag + freibetrag → mindestens 2× `€`
+        expect(labelList.filter((l) => l === '€').length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('User-Bug est.findsl: `wähle`-arm mit `(ZONE_X_SATZ * zve - ZONE_X_ABZUG).abrunden()` (Issue #65)', async () => {
+        // Inneres Sub-Ausdrücke der ParenChain müssen Geld-/Prozent-
+        // Symbole tragen — vor dem Fix war ParenChain ein „Leaf" und
+        // lieferte nur einen Hint am Ende.
+        const hs = await hints(
+            'konst ZONE_4_OBERGRENZE: Euro    = 277.825\n'
+            + 'konst ZONE_4_SATZ:       Prozent = 42%\n'
+            + 'konst ZONE_4_ABZUG:      Euro    = 17.602\n'
+            + 'konst ZONE_5_SATZ:       Prozent = 45%\n'
+            + 'konst ZONE_5_ABZUG:      Euro    = 19.553\n'
+            + 'fn Tarif(zve: Euro): Euro = wähle {\n'
+            + '    falls zve < ZONE_4_OBERGRENZE + 1 -> (ZONE_4_SATZ * zve - ZONE_4_ABZUG).abrunden()\n'
+            + '    sonst                             -> (ZONE_5_SATZ * zve - ZONE_5_ABZUG).abrunden()\n'
+            + '}\n',
+        );
+        // ZONE_4_SATZ + ZONE_5_SATZ → 2× `%` (Prozent, Nicht-Literal-Wert)
+        const prozent = types(hs).filter((h) => h.label === '%');
+        expect(prozent.length).toBeGreaterThanOrEqual(2);
+        // zve + ZONE_4_ABZUG + ZONE_5_ABZUG (mindestens) → mehrere `€`
+        const euro = types(hs).filter((h) => h.label === '€');
+        expect(euro.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('User-Bug: `(KFB + BEA) * k.faktor * k.auslandsfaktor` → "€" an KFB+BEA, "%" an auslandsfaktor', async () => {
+        // Exakter User-Bug aus est.findsl `KinderfreibetragGesamt`:
+        // bei einer komplexen Multiplikations-Kette innerhalb einer
+        // Lambda müssen alle Geld-/Prozent-Sub-Ausdrücke sichtbar sein.
+        const hs = await hints(
+            'konst KINDERFREIBETRAG: Euro = 3.000\n'
+            + 'konst BEA_FREIBETRAG:  Euro = 1.464\n'
+            + 'konst ZWOELF: Ganzzahl = 12\n'
+            + 'datensatz Kind(faktor: Ganzzahl, berücksichtigteMonate: Ganzzahl, auslandsfaktor: Prozent)\n'
+            + 'fn Summe(kinder: Liste<Kind>): Euro =\n'
+            + '    kinder.zuordnen( { k ->\n'
+            + '        (KINDERFREIBETRAG + BEA_FREIBETRAG)\n'
+            + '            * k.faktor\n'
+            + '            * (k.berücksichtigteMonate / ZWOELF)\n'
+            + '            * k.auslandsfaktor\n'
+            + '    } ).summe()\n',
+        );
+        const labelList = labels(types(hs));
+        // Mindestens ein € (für die Geld-Konstanten oder die Paren-Klammer)
+        // und mindestens ein % (für k.auslandsfaktor).
+        expect(labelList).toContain('€');
+        expect(labelList).toContain('%');
     });
 });

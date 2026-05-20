@@ -141,11 +141,12 @@ function renderMath(tex: string, display: boolean, mathReady: boolean): string {
     if (mathReady) {
         try {
             const { svg } = texToSvg(tex, display);
+            const themed = themeAwareSvg(svg);
             // SVG ohne XML-Deklaration und ohne `<?xml`-Header (MathJax
             // liefert reines `<svg …>…</svg>`) → direkt URL-kodieren.
             // `#`/`%`/`<` etc. müssen escaped sein; `encodeURIComponent`
             // ist die sicherste Variante für `data:image/svg+xml;utf8,…`.
-            const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+            const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(themed)}`;
             const alt = altText(tex);
             // Display-Math: leere Zeile davor/danach, sodass Markdown das
             // Bild als Block rendert statt inline. Inline-Math: kein
@@ -158,6 +159,29 @@ function renderMath(tex: string, display: boolean, mathReady: boolean): string {
     // Fallback: lesbarer Klartext (cases-Pretty-Print, Unicode-Operatoren).
     const plain = texToPlain(tex);
     return display ? '\n\n```findsl\n' + plain + '\n```\n\n' : '`' + plain + '`';
+}
+
+/**
+ * Injiziert einen Stylesheet-Block ins MathJax-SVG, der `currentColor`
+ * an das Editor-Theme koppelt.
+ *
+ * MathJax rendert mit `stroke="currentColor" fill="currentColor"` —
+ * weil das SVG aber als `data:`-URL in einem `<img>` läuft, gibt es
+ * keine CSS-Vererbung vom umgebenden Markdown. Wir setzen das `color`-
+ * Property im SVG selbst, abhängig von `prefers-color-scheme` (vom
+ * VS-Code-Theme propagiert in den Webview-Renderer): dunkles Grau für
+ * Light-Themes, helles Grau für Dark-Themes. Damit erscheint die
+ * Formel in derselben Farbe wie der umgebende Kommentar-Text.
+ */
+function themeAwareSvg(svg: string): string {
+    // Style-Block am Anfang des SVG-Inhalts einfügen — nach dem
+    // öffnenden `<svg …>`-Tag, vor dem ersten Kind.
+    const style =
+        '<style>'
+        + 'svg{color:#1f2328}'
+        + '@media (prefers-color-scheme:dark){svg{color:#cccccc}}'
+        + '</style>';
+    return svg.replace(/(<svg[^>]*>)/, `$1${style}`);
 }
 
 /** Markdown-Alt-Text für das SVG-Bild — Klartext-Variante der Formel,

@@ -191,6 +191,7 @@ function lowerStringLiteral(raw: string, reg: Registry): IrExpr {
         ? raw.slice(2, -2) : raw;
     const parts: string[] = [];
     const slots: IrExpr[] = [];
+    const slotIsText: boolean[] = [];
     let i = 0;
     for (;;) {
         const start = body.indexOf('${', i);
@@ -212,9 +213,12 @@ function lowerStringLiteral(raw: string, reg: Registry): IrExpr {
             slot = { kind: 'field', receiver: slot, name: segs[k] };
         }
         slots.push(slot);
+        // (#44 Lücke 11) Text-Slots → Java-`String` → KEIN `.asText()`
+        // beim Emit (existiert auf primitivem String nicht).
+        slotIsText.push(atomName(exprFinDslType(slot, reg)) === 'Text');
         i = end + 1;
     }
-    return { kind: 'strInterp', parts, slots };
+    return { kind: 'strInterp', parts, slots, slotIsText };
 }
 
 /**
@@ -470,6 +474,16 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
                 }
                 return { kind: 'enumCmp', op, left, right };
             }
+            // (#44 Lücke 12) Text-Vergleich → `Objects.equals` statt
+            // `.equalsValue` (primitiver Java-`String` hat letzteres
+            // nicht). Ordnungsvergleiche auf Text bleiben unzulässig.
+            const isText = isTextExpr(left, reg) || isTextExpr(right, reg);
+            if (isText) {
+                if (op !== '==' && op !== '!=') {
+                    throw new Error(`Ordnungsvergleich "${op}" auf Text ist unzulässig.`);
+                }
+                return { kind: 'cmp', op, left, right, isText: true };
+            }
             return { kind: 'cmp', op, left, right };
         }
         if (op === 'oder') {
@@ -514,6 +528,21 @@ function exprFinDslType(e: IrExpr, reg: Registry): Type | undefined {
             ?.returnType;
     }
     return undefined;            // ctor/list-ops etc.: nicht als Empfänger nötig
+}
+
+/**
+ * (#44 Lücken 11/12) Ist der Ausdruck Text-typisiert?
+ *
+ * - `strInterp` → immer Text (jedes String-Literal ergibt Java-`String`).
+ * - Sonst Typ via `exprFinDslType` und Atom-Name === 'Text'.
+ *
+ * Wichtig für: Text-Vergleich `==`/`!=` (→ `Objects.equals`) und
+ * Text-Interpolations-Slots (→ KEIN `.asText()`-Suffix). Beide
+ * Pfade würden auf primitivem Java-`String` zu javac-Fehlern führen.
+ */
+function isTextExpr(e: IrExpr, reg: Registry): boolean {
+    if (e.kind === 'strInterp') return true;
+    return atomName(exprFinDslType(e, reg)) === 'Text';
 }
 
 

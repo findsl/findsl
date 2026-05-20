@@ -157,6 +157,21 @@ export type IrExpr =
         readonly step?: IrExpr;
       }
     /**
+     * Aufzählungs-Bereich `I bis VI` (SPEC § 11.3, #44 Aufzählungs-Bereich).
+     * `enumClassName` ist der vollständig qualifizierte Java-Name der
+     * Enum-Klasse (`Steuerklasse` oder `OwnerClass.EnumName`); Reihenfolge
+     * im FinDSL-`aufzählung`-Block = Java-`ordinal()`. Lowert zu
+     * `FinDslListe.enumBereich(enumClass.class, from, to, exklusiv, schritt)`.
+     */
+    | {
+        readonly kind: 'listEnumRange';
+        readonly enumClassName: string;
+        readonly from: IrExpr;
+        readonly to: IrExpr;
+        readonly exclusive: boolean;
+        readonly step?: IrExpr;
+      }
+    /**
      * §-11.2-Listen-Methode ohne Argument (`.länge`/`.summe()`/`.leer`/
      * `.größtes()`/`.kleinstes()`/`.kopf`/`.rest`/`.zähle()`).
      * Getter-like (FieldAccess ohne Call: `.leer`/`.kopf`/`.rest`) und

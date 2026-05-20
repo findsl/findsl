@@ -67,6 +67,39 @@ public record FinDslListe<E>(List<E> elements) {
      *                  steht Schrittweite v1.0-offen → hier numerisch).
      * @return materialisierte {@link FinDslListe} der Bereichswerte.
      */
+    /**
+     * Aufzählungs-Bereich `a bis b` über Enum-Werte (SPEC § 11.3,
+     * #44 Aufzählungs-Bereich). Nutzt {@link Enum#ordinal()} zur
+     * Reihenfolge — die Reihenfolge im FinDSL-`aufzählung`-Block
+     * bestimmt also die Bereich-Iteration (Spiegel des Interpreter-
+     * Verhaltens).
+     *
+     * @param <E>       Enum-Typ.
+     * @param enumClass {@code Steuerklasse.class} o. ä.
+     * @param from      Startwert (inklusiv).
+     * @param to        Endwert.
+     * @param exklusiv  `true` → `to` NICHT enthalten.
+     * @param schritt   Schrittweite (Ganzzahl, `null` = 1).
+     * @return materialisierte {@link FinDslListe} der Enum-Werte.
+     */
+    public static <E extends Enum<E>> FinDslListe<E> enumBereich(
+            Class<E> enumClass, E from, E to, boolean exklusiv, FinDslNumber schritt) {
+        int step = schritt != null ? Integer.parseInt(schritt.asText()) : 1;
+        if (step <= 0) {
+            throw new FinDslRuntimeError(
+                "Bereich-Schritt muss positiv sein (SPEC § 4.16).");
+        }
+        E[] all = enumClass.getEnumConstants();
+        List<E> out = new ArrayList<>();
+        int cur = from.ordinal();
+        int end = to.ordinal();
+        while (exklusiv ? cur < end : cur <= end) {
+            out.add(all[cur]);
+            cur += step;
+        }
+        return new FinDslListe<>(out);
+    }
+
     public static FinDslListe<FinDslNumber> bereich(
             FinDslNumber from, FinDslNumber to, boolean exklusiv, FinDslNumber schritt) {
         FinDslNumber step = schritt != null ? schritt : FinDslNumber.ganzzahl("1");

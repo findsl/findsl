@@ -527,10 +527,27 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
     if (isRange(expr)) {
         // (#44 L1) `a bis b` / `a bis unter b` / `a bis b schritt s`
         // → eager materialisierte Liste via FinDslListe.bereich(...).
+        // (#44 Aufzählungs-Bereich) Wenn from/to Enum-Werte sind →
+        // `enumBereich`-Pfad (Java-`ordinal()` als Reihenfolge).
+        const fromIr = lowerExpr(expr.from, reg);
+        const toIr = lowerExpr(expr.to, reg);
+        if (fromIr.kind === 'enumVal' && toIr.kind === 'enumVal') {
+            const qual = fromIr.ownerClass !== undefined
+                ? `${fromIr.ownerClass}.${fromIr.enumName}`
+                : fromIr.enumName;
+            return {
+                kind: 'listEnumRange',
+                enumClassName: qual,
+                from: fromIr,
+                to: toIr,
+                exclusive: expr.exclusive === true,
+                step: expr.step ? lowerExpr(expr.step, reg) : undefined,
+            };
+        }
         return {
             kind: 'listRange',
-            from: lowerExpr(expr.from, reg),
-            to: lowerExpr(expr.to, reg),
+            from: fromIr,
+            to: toIr,
             exclusive: expr.exclusive === true,
             step: expr.step ? lowerExpr(expr.step, reg) : undefined,
         };

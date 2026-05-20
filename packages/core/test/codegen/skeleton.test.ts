@@ -1016,6 +1016,40 @@ describe('Issue #44 — Block-für-jeden + Block-Lambda', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Issue #44 — Aufzählungs-Bereich `I bis VI` (SPEC § 11.3)
+// ---------------------------------------------------------------------------
+describe('Issue #44 — Aufzählungs-Bereich (Enum-Range)', () => {
+    it('I bis VI (Builtin Steuerklasse) → FinDslListe.enumBereich(...)', async () => {
+        const program = await parseSource(
+            'fn AlleStkl(): Liste<Steuerklasse> = I bis VI\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain(
+            'FinDslListe.enumBereich(Steuerklasse.class, Steuerklasse.I, Steuerklasse.VI, false, null)');
+    });
+
+    it('II bis V (Teilbereich, exklusiv)', async () => {
+        const program = await parseSource(
+            'fn TeilStkl(): Liste<Steuerklasse> = II bis unter V\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain(
+            'FinDslListe.enumBereich(Steuerklasse.class, Steuerklasse.II, Steuerklasse.V, true, null)');
+    });
+
+    it('Regression numerischer Bereich: 1 bis 10 bleibt FinDslListe.bereich', async () => {
+        const program = await parseSource(
+            'fn Nums(): Liste<Ganzzahl> = 1 bis 10\n',
+        );
+        const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
+        const { implCode: impl } = emitJavaModuleFiles(ir);
+        expect(impl).toContain('FinDslListe.bereich(FinDslNumber.ganzzahl("1")');
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Issue #44 — Lücke 15: Cross-Modul-Enum-Werte in generierten JUnit-Tests
 // ---------------------------------------------------------------------------
 describe('Issue #44 — Test-Codegen: Cross-Modul-Enum-Werte qualifizieren', () => {

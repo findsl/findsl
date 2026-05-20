@@ -217,8 +217,18 @@ export type IrExpr =
      * (Java-Method-Call auf der Impl-Klasse).
      */
     | { readonly kind: 'lambdaCall'; readonly fn: IrExpr; readonly args: ReadonlyArray<IrExpr> }
-    /** Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1). */
-    | { readonly kind: 'lambda1'; readonly param: string; readonly body: IrExpr }
+    /**
+     * Einstelliges Lambda `{ p -> body }` → `(p) -> body` (FinDslLambda1).
+     * `lets` (optional, #44 Block-Lambda): wenn der Body Block-form ist
+     * (`{ p -> var …; ergebnis }`) — Emitter generiert dann `(p) -> { …;
+     * return body; }`.
+     */
+    | {
+        readonly kind: 'lambda1';
+        readonly param: string;
+        readonly body: IrExpr;
+        readonly lets?: ReadonlyArray<IrLet>;
+      }
     /**
      * String-Literal mit Interpolation → Java-String-Konkatenation.
      * `slotIsText[i] === true` (#44 Lücke 11) markiert Slots, deren

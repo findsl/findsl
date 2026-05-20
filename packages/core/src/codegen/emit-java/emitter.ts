@@ -201,8 +201,18 @@ function emitExpr(e: IrExpr): string {
             // (#44 L5) Aufruf eines first-class Lambda-Werts:
             // `FinDslLambda1.apply(arg)` (kein Java-Method-Call).
             return `${emitExpr(e.fn)}.apply(${e.args.map(emitExpr).join(', ')})`;
-        case 'lambda1':
+        case 'lambda1': {
+            // (#44 Block-Lambda) Mit `lets` → Block-Form:
+            // `(p) -> { final T name = expr; …; return body; }`.
+            // Ohne `lets` → kompakte Ausdrucks-Form: `(p) -> body`.
+            if (e.lets !== undefined && e.lets.length > 0) {
+                const decls = e.lets
+                    .map((l) => `final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`)
+                    .join(' ');
+                return `(${e.param}) -> { ${decls} return ${emitExpr(e.body)}; }`;
+            }
             return `(${e.param}) -> ${emitExpr(e.body)}`;
+        }
         case 'strInterp': {
             const terms: string[] = [];
             for (let k = 0; k < e.slots.length; k++) {

@@ -28,7 +28,7 @@ import {
     isCall, isFieldAccess, isBinaryOp, isWaehleExpr, isFallArm,
     isSonstArm, isCast, isAbbruchExpr, isLetStmt, isFunktionBody,
     isNamedType, isListLiteral, isLambda, isIndex, isPruefeDecl,
-    isBoolLiteral, isUnaryOp, isWennExpr, isRange,
+    isBoolLiteral, isUnaryOp, isWennExpr, isRange, isFuerExpr,
 } from '../../language/generated/ast.js';
 import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrFnBody, IrField,
@@ -460,6 +460,36 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
             to: lowerExpr(expr.to, reg),
             exclusive: expr.exclusive === true,
             step: expr.step ? lowerExpr(expr.step, reg) : undefined,
+        };
+    }
+    if (isFuerExpr(expr)) {
+        // (#44 für-jeden) SPEC § 5.3: `für jeden iter aus source { body }`
+        // ist semantisch äquivalent zu `source.zuordnen { iter -> body }`.
+        // Lowern als `listMap` mit `lambda1` — wiederverwendet bestehenden
+        // Emit-Pfad (kein neuer IR-Knoten nötig).
+        if (!expr.source) throw new Error('für jeden ohne Quelle (Teil-Parse).');
+        if (!expr.iter) throw new Error('für jeden ohne Iter-Variable (Teil-Parse).');
+        if (!expr.body) throw new Error('für jeden ohne Body (Teil-Parse).');
+        if (expr.body.stmts.length > 0) {
+            throw new Error(
+                'für-jeden mit `var`-Statements im Body ist Phase-3-Scope '
+                + '(äquivalent .zuordnen({ x -> { var …; ergebnis } }) — Folge-PR).');
+        }
+        const receiver = lowerExpr(expr.source, reg);
+        // Element-Typ aus dem Quellen-Typ ableiten → in scopeTypes
+        // eintragen (analog `.zuordnen { x -> … }`-Pfad).
+        const recvAtom = namedAtom(exprFinDslType(receiver, reg));
+        const elemT = recvAtom?.name === 'Liste'
+            ? recvAtom.typeArgs?.args?.[0] : undefined;
+        reg.scopeTypes.set(expr.iter, elemT);
+        return {
+            kind: 'listMap',
+            receiver,
+            fn: {
+                kind: 'lambda1',
+                param: expr.iter,
+                body: lowerExpr(expr.body.result, reg),
+            },
         };
     }
     if (isBinaryOp(expr)) {

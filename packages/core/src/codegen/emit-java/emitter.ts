@@ -20,6 +20,7 @@ import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrDoc,
     IrTestModule, IrTestCase,
 } from '../ir/nodes.js';
+import { reflowJava } from './reflow.js';
 
 const IND = '    ';
 
@@ -566,7 +567,14 @@ export function emitJavaModuleFiles(m: IrModule): JavaModuleFiles {
         '',
     ].join('\n');
 
-    return { interfaceName, interfaceCode, implName, implCode };
+    // Issue #86: Zeilen ≤ 120 Zeichen — der Emitter baut flache Strings,
+    // der Reflow bricht überlange Methoden-Ketten/Argument-Listen um.
+    return {
+        interfaceName,
+        interfaceCode: reflowJava(interfaceCode),
+        implName,
+        implCode: reflowJava(implCode),
+    };
 }
 
 /** `var`-Bindungen eines testfall → `final <T> <n> …;` (auch `= wähle`). */
@@ -692,7 +700,7 @@ export function emitJavaTestModule(m: IrTestModule): string {
         ? [`package ${m.javaPackage};`, '']
         : [];
 
-    return [
+    return reflowJava([
         ...pkgHeader,
         'import javax.annotation.processing.Generated;',
         ...junitImports,
@@ -707,5 +715,5 @@ export function emitJavaTestModule(m: IrTestModule): string {
         code,
         '}',
         '',
-    ].join('\n');
+    ].join('\n'));
 }

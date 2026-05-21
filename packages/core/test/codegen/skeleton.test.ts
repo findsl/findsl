@@ -21,6 +21,16 @@ import {
     sanitizePackageSegment, derivePackage, deriveClassName, isTestFile,
 } from '../../src/codegen/index.js';
 
+/**
+ * Whitespace-insensitiver Substring-Vergleich. Der Java-Reflow (Issue #86)
+ * bricht überlange Calls über mehrere Zeilen um — für Lowering-Korrektheit
+ * zählt aber nur die Call-FORM (Bezeichner/Klammern/Kommas/Punkte), nicht
+ * die Formatierung. Beide Seiten von allem Whitespace befreien.
+ */
+const flat = (s: string): string => s.replace(/\s+/g, '');
+const containsFlat = (haystack: string, needle: string): boolean =>
+    flat(haystack).includes(flat(needle));
+
 describe('Doc-Pretty-Printer (deterministisch)', () => {
     it('rendert Einrückung/Zeilen stabil und doppellauf-identisch', () => {
         const doc = concat(
@@ -115,9 +125,9 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         // Konstanten Wrapper-getypt, Kern-Ausdruck geboxt:
         expect(iface).toContain(
             'public static final Prozent SATZ = Prozent.von(FinDslNumber.prozent("0.15"));');
-        expect(iface).toContain(
+        expect(containsFlat(iface,
             'public static final Euro FREIBETRAG = Euro.von(FinDslNumber.ganzzahl("5000")'
-            + '.withMoneyAnnotation(FinDslNumber.Type.Euro,');
+            + '.withMoneyAnnotation(FinDslNumber.Type.Euro,')).toBe(true);
         expect(iface).toContain('public enum Ausschluss {');
         // Sprechende Signaturen (kein `public`, kein Rumpf):
         expect(iface).toContain('    Prozent wahl(Ganzzahl jahr, Ausschluss a);');
@@ -806,8 +816,8 @@ describe('Issue #44 — Range-Literale (L1) lowern nach FinDslListe.bereich', ()
         );
         const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
         const { implCode: impl } = emitJavaModuleFiles(ir);
-        expect(impl).toContain(
-            'return FinDslListe.bereich(FinDslNumber.ganzzahl("0"), FinDslNumber.ganzzahl("20"), false, FinDslNumber.ganzzahl("5"));');
+        expect(containsFlat(impl,
+            'return FinDslListe.bereich(FinDslNumber.ganzzahl("0"), FinDslNumber.ganzzahl("20"), false, FinDslNumber.ganzzahl("5"));')).toBe(true);
     });
 
     it('Bereich + Listen-Methode (.länge): kompiliert sich kombiniert', async () => {
@@ -848,7 +858,7 @@ describe('Issue #44 — für-jeden-Schleife lowert nach .zuordnen', () => {
         );
         const ir = lowerProgram(program, { javaPackage: 'test', className: 'M' });
         const { implCode: impl } = emitJavaModuleFiles(ir);
-        expect(impl).toContain('FinDslListe.bereich(FinDslNumber.ganzzahl("1"), FinDslNumber.ganzzahl("5"), false, null).zuordnen((x) -> x.mul(x))');
+        expect(containsFlat(impl, 'FinDslListe.bereich(FinDslNumber.ganzzahl("1"), FinDslNumber.ganzzahl("5"), false, null).zuordnen((x) -> x.mul(x))')).toBe(true);
     });
 });
 

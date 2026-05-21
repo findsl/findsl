@@ -18,11 +18,51 @@
 
 import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrDoc,
-    IrTestModule, IrTestCase,
+    IrTestModule, IrTestCase, IrType,
 } from '../ir/nodes.js';
 import { reflowJava } from './reflow.js';
 
 const IND = '    ';
+
+/**
+ * {@link IrType} → Java-Kern-Typ (Rechen-Schicht). Numerisch →
+ * `FinDslNumber`; `Liste<T>` → `FinDslListe<Kern-Elem>`; Funktionstyp →
+ * `FinDslLambda1/2<…>` (Generics-Boxing `boolean`→`Boolean`); benannt →
+ * `Owner.Name`/`Name`. Byte-genauer Ersatz des früheren `javaType()`.
+ */
+function irTypeToJavaCore(t: IrType): string {
+    switch (t.kind) {
+        case 'number': return 'FinDslNumber';
+        case 'bool': return 'boolean';
+        case 'text': return 'String';
+        case 'list': return `FinDslListe<${irTypeToJavaCore(t.elem)}>`;
+        case 'lambda': {
+            const boxed = (j: string): string => j === 'boolean' ? 'Boolean' : j;
+            const ps = t.params.map((p) => boxed(irTypeToJavaCore(p)));
+            const r = boxed(irTypeToJavaCore(t.ret));
+            if (ps.length === 1) return `FinDslLambda1<${ps[0]}, ${r}>`;
+            if (ps.length === 2) return `FinDslLambda2<${ps[0]}, ${ps[1]}, ${r}>`;
+            throw new Error(
+                `Funktions-Typ mit ${ps.length} Parametern ist out-of-scope `
+                + `(nur 1- und 2-stellig per FinDslLambda1/2).`);
+        }
+        case 'named': return t.owner !== undefined ? `${t.owner}.${t.name}` : t.name;
+    }
+}
+
+/**
+ * {@link IrType} → Java-API-Typ (Fassade/Deklarationsgrenze). Numerisch-
+ * skalar → sprechender Wrapper (`Euro` …; Teil-Parse ohne Wrapper →
+ * `FinDslNumber`); `Liste<T>` bleibt `FinDslListe<Kern-Elem>`; alles
+ * übrige = {@link irTypeToJavaCore}. Byte-genauer Ersatz von `apiJavaType()`.
+ */
+function irTypeToJavaApi(t: IrType): string {
+    switch (t.kind) {
+        case 'number': return t.wrapper ?? 'FinDslNumber';
+        case 'list': return `FinDslListe<${irTypeToJavaCore(t.elem)}>`;
+        default: return irTypeToJavaCore(t);
+    }
+}
 
 function javaString(s: string): string {
     return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -106,7 +146,7 @@ function emitListExpr(
 ): string {
     if (e.kind === 'listLit') {
         return e.items.length === 0
-            ? `FinDslListe.<${e.elementJavaType}>empty()`
+            ? `FinDslListe.<${irTypeToJavaCore(e.elementType)}>empty()`
             : `FinDslListe.of(java.util.List.of(${e.items.map(emitExpr).join(', ')}))`;
     }
     const step = e.step !== undefined ? emitExpr(e.step) : 'null';
@@ -116,7 +156,7 @@ function emitListExpr(
     // listEnumRange: Java-Enum-`ordinal()` als Reihenfolge; `Enum.class`
     // muss explizit übergeben werden (Type-Erasure → kein Class-Lookup
     // zur Laufzeit).
-    return `FinDslListe.enumBereich(${e.enumClassName}.class, ${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+    return `FinDslListe.enumBereich(${irTypeToJavaCore(e.enumType)}.class, ${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
 }
 
 /**
@@ -127,7 +167,7 @@ function emitListExpr(
 function emitLambda1(e: Extract<IrExpr, { kind: 'lambda1' }>): string {
     if (e.lets !== undefined && e.lets.length > 0) {
         const decls = e.lets
-            .map((l) => `final ${l.javaType} ${l.name} = ${emitExpr(l.expr)};`)
+            .map((l) => `final ${irTypeToJavaCore(l.type)} ${l.name} = ${emitExpr(l.expr)};`)
             .join(' ');
         return `(${e.param}) -> { ${decls} return ${emitExpr(e.body)}; }`;
     }
@@ -280,13 +320,14 @@ const RETURN_SINK: Sink = { kind: 'return' };
  * `final <T> <name> = <expr>;`. (`IrLet.expr` ist ein `IrExpr` — ein
  * `blockResult` kann hier nie stehen; ein `wähle`-`var`-Wert schon.)
  */
-function emitLet(l: { javaType: string; name: string; expr: IrExpr }, indent: string): string {
+function emitLet(l: { type: IrType; name: string; expr: IrExpr }, indent: string): string {
     const e = l.expr;
+    const jt = irTypeToJavaCore(l.type);
     if (e.kind === 'waehle') {
-        return `${indent}final ${l.javaType} ${l.name};\n`
+        return `${indent}final ${jt} ${l.name};\n`
             + emitResult(e, indent, { kind: 'assign', name: l.name });
     }
-    return `${indent}final ${l.javaType} ${l.name} = ${emitExpr(e)};`;
+    return `${indent}final ${jt} ${l.name} = ${emitExpr(e)};`;
 }
 
 function emitResult(
@@ -403,24 +444,24 @@ function emitInterfaceMember(d: IrDecl): string | undefined {
                 + `\n${IND}}`;
         case 'record': {
             const params = d.fields
-                .map((f) => `${IND}${IND}${f.javaType} ${f.name}`)
+                .map((f) => `${IND}${IND}${irTypeToJavaApi(f.type)} ${f.name}`)
                 .join(',\n');
             return head + `${IND}public record ${d.name}(\n${params}\n${IND}) {}`;
         }
         case 'konst': {
             // API-Konstante: numerisch → Wrapper-getypt, Kern-Ausdruck
             // geboxt (`W.von(expr)`); nicht-numerisch (Text/Bool/Liste)
-            // → echter API-Typ aus `d.javaType` (#44 Lücke 10 — vorher
+            // → echter API-Typ aus `d.type` (#44 Lücke 10 — vorher
             // wurde fälschlich auf `FinDslNumber` zurückgefallen).
-            const w = d.wrapper;
+            const w = d.type.kind === 'number' ? d.type.wrapper : undefined;
             const init = w !== undefined ? `${w}.von(${emitExpr(d.expr)})` : emitExpr(d.expr);
-            return head + `${IND}public static final ${d.javaType} ${d.name} = ${init};`;
+            return head + `${IND}public static final ${irTypeToJavaApi(d.type)} ${d.name} = ${init};`;
         }
         case 'fn': {
             if (d.internal) return undefined;        // `_` nur in der Impl
             // Fassaden-Signatur: sprechende API-Typen (Wrapper).
-            const params = d.params.map((p) => `${p.apiType} ${p.name}`).join(', ');
-            return head + `${IND}${d.returnApiType} ${javaMethodName(d.name)}(${params});`;
+            const params = d.params.map((p) => `${irTypeToJavaApi(p.type)} ${p.name}`).join(', ');
+            return head + `${IND}${irTypeToJavaApi(d.returnType)} ${javaMethodName(d.name)}(${params});`;
         }
     }
 }
@@ -439,13 +480,13 @@ function emitImplFn(d: IrDecl): string | undefined {
     if (d.internal) {
         const doc = javadoc(d.info, IND);
         const head = doc.length ? doc.join('\n') + '\n' : '';
-        const kernParams = d.params.map((p) => `${p.javaType} ${p.name}`).join(', ');
-        const sig = `${d.returnJavaType} ${javaMethodName(d.name)}(${kernParams})`;
+        const kernParams = d.params.map((p) => `${irTypeToJavaCore(p.type)} ${p.name}`).join(', ');
+        const sig = `${irTypeToJavaCore(d.returnType)} ${javaMethodName(d.name)}(${kernParams})`;
         return head + `${IND}protected ${sig} {\n` + emitFnBody(d) + `\n${IND}}`;
     }
-    const apiParams = d.params.map((p) => `${p.apiType} ${p.name}`).join(', ');
+    const apiParams = d.params.map((p) => `${irTypeToJavaApi(p.type)} ${p.name}`).join(', ');
     return `${IND}@Override\n`
-        + `${IND}public ${d.returnApiType} ${javaMethodName(d.name)}(${apiParams}) {\n`
+        + `${IND}public ${irTypeToJavaApi(d.returnType)} ${javaMethodName(d.name)}(${apiParams}) {\n`
         + emitFnBody(d) + `\n${IND}}`;
 }
 

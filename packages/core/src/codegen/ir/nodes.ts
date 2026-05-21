@@ -27,6 +27,35 @@ export type ZahlFactory =
 /** Aufgelöstes Rundungs-/Geldziel (= `FinDslNumber.Type`-Konstante). */
 export type ZielTyp = 'Ganzzahl' | 'Dezimal' | 'Prozent' | 'Euro' | 'EuroCent' | 'Cent';
 
+/** Sprechender numerischer Sicht-Wrapper (= FinDSL-Typname). Der Rechen-Kern
+ *  ist sprachübergreifend `FinDslNumber`; der Wrapper ist die API-Sicht. */
+export type IrNumberWrapper = 'Ganzzahl' | 'Dezimal' | 'Prozent' | 'Euro' | 'EuroCent' | 'Cent';
+
+/**
+ * Sprach-neutrale Typ-Repräsentation (ADR11). Ersetzt die früheren
+ * Java-konkreten Typ-Strings (`"FinDslNumber"`, `"String"`, `"boolean"`,
+ * `"FinDslListe<…>"`, `"FinDslLambda1<…>"`, `"OwnerClass.Type"`) in der IR.
+ * Jeder Emitter mapped `IrType` auf seine Zielsprachen-Syntax — der
+ * Java-Emitter via `irTypeToJavaCore`/`irTypeToJavaApi` (byte-genau zum
+ * früheren `javaType`/`apiJavaType`).
+ *
+ * `number` trägt sowohl die Kern-Sicht (`FinDslNumber`) als auch die
+ * API-Sicht (`wrapper`): der Resolver wählt je nach Position. `wrapper`
+ * ist nur im Teil-Parse-Robustheitsfall `undefined` (dann fällt auch die
+ * API-Sicht auf den Kern zurück — wie das frühere Verhalten).
+ */
+export type IrType =
+    | { readonly kind: 'number'; readonly wrapper?: IrNumberWrapper }
+    | { readonly kind: 'bool' }
+    | { readonly kind: 'text' }
+    | { readonly kind: 'list'; readonly elem: IrType }
+    | { readonly kind: 'lambda'; readonly params: ReadonlyArray<IrType>; readonly ret: IrType }
+    /** Benannter Nutzertyp (Datensatz/Aufzählung). `owner` = Modul-Klasse
+     *  bei cross-modul-Referenz, sonst lokal/builtin. record/enum werden
+     *  hier bewusst nicht getrennt — für die Java-Emission irrelevant; eine
+     *  Trennung kann ein TS-Emitter bei Bedarf über die Registry nachziehen. */
+    | { readonly kind: 'named'; readonly name: string; readonly owner?: string };
+
 export type IrExpr =
     /** `FinDslNumber.<factory>("<arg>")` — arg ist der normalisierte Dezimalstring. */
     | { readonly kind: 'numLit'; readonly factory: ZahlFactory; readonly arg: string }
@@ -141,7 +170,7 @@ export type IrExpr =
     /** `als <Ziel>`-Cast → `value.cast(FinDslNumber.Type.X)`. */
     | { readonly kind: 'cast'; readonly value: IrExpr; readonly target: ZielTyp }
     /** Listen-Literal — `[]<T>` → `FinDslListe.<E>empty()`, sonst `FinDslListe.of(List.of(…))`. */
-    | { readonly kind: 'listLit'; readonly elementJavaType: string; readonly items: ReadonlyArray<IrExpr> }
+    | { readonly kind: 'listLit'; readonly elementType: IrType; readonly items: ReadonlyArray<IrExpr> }
     /**
      * Bereich-Literal `a bis b` / `a bis unter b` / `a bis b schritt s`
      * (SPEC § 4.16 / § 11.3) → `FinDslListe.bereich(from, to,
@@ -158,14 +187,14 @@ export type IrExpr =
       }
     /**
      * Aufzählungs-Bereich `I bis VI` (SPEC § 11.3, Aufzählungs-Bereich).
-     * `enumClassName` ist der vollständig qualifizierte Java-Name der
-     * Enum-Klasse (`Steuerklasse` oder `OwnerClass.EnumName`); Reihenfolge
-     * im FinDSL-`aufzählung`-Block = Java-`ordinal()`. Lowert zu
+     * `enumType` ist der benannte Enum-Typ (lokal/builtin `{name}` oder
+     * cross-modul `{name, owner}`); Reihenfolge im FinDSL-`aufzählung`-
+     * Block = Java-`ordinal()`. Lowert zu
      * `FinDslListe.enumBereich(enumClass.class, from, to, exklusiv, schritt)`.
      */
     | {
         readonly kind: 'listEnumRange';
-        readonly enumClassName: string;
+        readonly enumType: IrType;
         readonly from: IrExpr;
         readonly to: IrExpr;
         readonly exclusive: boolean;
@@ -281,26 +310,24 @@ export type IrFnBody =
 
 export interface IrLet {
     readonly name: string;
-    readonly javaType: string;
+    readonly type: IrType;
     readonly expr: IrExpr;
 }
 
 export interface IrParam {
     readonly name: string;
-    /** Kern-Typ (Rechen-Schicht): numerisch → `FinDslNumber`. */
-    readonly javaType: string;
-    /** API-Typ (Fassade): numerisch → sprechender Wrapper (`Euro` …). */
-    readonly apiType: string;
-    /** `true` ⇔ numerisch (apiType ≠ javaType → Box/Unbox in der Fassade). */
-    readonly numeric: boolean;
+    /** Sprach-neutraler Typ. Kern-Sicht (Rechen-Schicht) und API-Sicht
+     *  (Fassade: numerisch → Wrapper) werden vom Emitter aus `type`
+     *  abgeleitet; `type.kind === 'number'` ⇔ Box/Unbox in der Fassade. */
+    readonly type: IrType;
 }
 
 export interface IrField {
     readonly name: string;
-    /** API-Typ: numerisch → sprechender Wrapper (`record`-Felder sind API). */
-    readonly javaType: string;
-    /** `true` ⇔ numerischer Wrapper (ctor-Arg boxen, Feldzugriff unboxen). */
-    readonly numeric: boolean;
+    /** Sprach-neutraler Typ (API-Schicht — `record`-Felder sind API).
+     *  `type.kind === 'number'` ⇔ numerischer Wrapper (ctor-Arg boxen,
+     *  Feldzugriff unboxen). */
+    readonly type: IrType;
     // Java `record` hat keine Feld-Defaults; Defaults werden callsite-
     // seitig in `resolveCtorArgs` (constructRecord-Spiegel) aufgelöst.
 }
@@ -319,17 +346,13 @@ export type IrDecl =
         readonly name: string;
         readonly expr: IrExpr;
         /**
-         * Deklarierter Java-Typ (API-Schicht) — für numerische `konst`
-         * ist das der Sicht-Wrapper (`Euro`/`Cent`/…), für nicht-
-         * numerische der echte API-Typ (`String`/`boolean`/`FinDslListe<…>`).
-         * Designnotiz: Vor dem Wrapper-Refactor wurde im Emitter für
-         * nicht-numerische `konst` fälschlich auf `FinDslNumber`
-         * zurückgefallen (Generat hat nicht kompiliert: `String cannot
-         * be converted to FinDslNumber`).
+         * Sprach-neutraler deklarierter Typ (API-Schicht). Für numerische
+         * `konst` ist das `{kind:'number', wrapper}` → Emitter rendert den
+         * Sicht-Wrapper (`Euro`/…) und boxt den Kern-Ausdruck
+         * (`Wrapper.von(expr)`); nicht-numerisch (Text/Bool/Liste) → kein
+         * Boxing. (Der frühere `wrapper?`-String ist jetzt `type.wrapper`.)
          */
-        readonly javaType: string;
-        /** Numerisch → sprechender Wrapper-Typ (`Euro` …), sonst undefined. */
-        readonly wrapper?: string;
+        readonly type: IrType;
         readonly info: IrDoc;
       }
     | { readonly kind: 'enum'; readonly name: string; readonly values: ReadonlyArray<string>; readonly info: IrDoc }
@@ -340,12 +363,11 @@ export type IrDecl =
         /** Führendes `_` ⇒ paket-private Kern-Methode (kein Interface-Eintrag). */
         readonly internal: boolean;
         readonly params: ReadonlyArray<IrParam>;
-        /** Kern-Rückgabetyp (Rechen-Schicht): numerisch → `FinDslNumber`. */
-        readonly returnJavaType: string;
-        /** API-Rückgabetyp (Fassade): numerisch → Wrapper. */
-        readonly returnApiType: string;
-        /** `true` ⇔ numerischer Rückgabewert (Fassade boxt das Kern-Ergebnis). */
-        readonly returnNumeric: boolean;
+        /** Sprach-neutraler Rückgabetyp. Kern-Sicht (numerisch →
+         *  `FinDslNumber`) und API-Sicht (numerisch → Wrapper) leitet der
+         *  Emitter ab; `type.kind === 'number'` ⇔ Fassade boxt das
+         *  Kern-Ergebnis. */
+        readonly returnType: IrType;
         readonly body: IrFnBody;
         readonly info: IrDoc;
       };

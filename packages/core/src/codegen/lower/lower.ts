@@ -35,7 +35,7 @@ import {
 import type {
     IrModule, IrDecl, IrExpr, IrBlockResult, IrFnBody, IrField,
     IrParam, IrLet, IrDoc, ZahlFactory, ZielTyp, IrComposedModule,
-    IrTestModule, IrTestSuite, IrTestCase,
+    IrTestModule, IrTestSuite, IrTestCase, IrType, IrNumberWrapper,
 } from '../ir/nodes.js';
 import {
     boxReturnExpr,
@@ -105,44 +105,36 @@ function atomName(t: Type | undefined): string | undefined {
 }
 
 /**
- * FinDSL-Typ → Java-Typ. `Liste<T>`→`FinDslListe<E>`; numerisch→
- * FinDslNumber. Cross-modul Datensatz/Aufzählung wird zur nested-static
- * Klasse des Owner-Moduls qualifiziert (`OwnerClass.Typ`); lokal/builtin
- * unqualifiziert.
+ * FinDSL-Typ → sprach-neutraler {@link IrType}. Ersetzt die früheren
+ * `javaType()`/`apiJavaType()` (die Java-Strings lieferten); der
+ * Java-Emitter rendert `IrType` via `irTypeToJavaCore`/`irTypeToJavaApi`
+ * byte-genau zum früheren Verhalten. `Liste<T>`/`Bereich<T>` → `list`;
+ * numerisch → `number{wrapper}` (Kern = FinDslNumber, API = Wrapper);
+ * Datensatz/Aufzählung → `named{name, owner?}` (cross-modul qualifiziert).
  */
-function javaType(t: Type | undefined, reg: Registry): string {
-    // (#44 L5) Funktions-Typ → FinDslLambda1/2 (parametrisch über
-    // Sicht-Java-Typen der Parameter und des Rückgabetyps).
+function irType(t: Type | undefined, reg: Registry): IrType {
+    // (#44 L5) Funktions-Typ → lambda (parametrisch über die IrTypes der
+    // Parameter und des Rückgabetyps; Java-Boxing `boolean`→`Boolean`
+    // erledigt der Emitter-Resolver).
     const atom = t?.atom;
     if (atom && isFunctionType(atom)) {
-        const params = atom.paramTypes ?? [];
-        const ret = javaType(atom.returnType, reg);
-        // Java-Generics brauchen Boxed-Typen — `boolean` → `Boolean`.
-        const boxed = (j: string): string => j === 'boolean' ? 'Boolean' : j;
-        const pTypes = params.map((p) => boxed(javaType(p, reg)));
-        if (pTypes.length === 1) {
-            return `FinDslLambda1<${pTypes[0]}, ${boxed(ret)}>`;
-        }
-        if (pTypes.length === 2) {
-            return `FinDslLambda2<${pTypes[0]}, ${pTypes[1]}, ${boxed(ret)}>`;
-        }
-        throw new Error(
-            `Funktions-Typ mit ${pTypes.length} Parametern ist out-of-scope `
-            + `(nur 1- und 2-stellig per FinDslLambda1/2).`);
+        const params = (atom.paramTypes ?? []).map((p) => irType(p, reg));
+        const ret = irType(atom.returnType, reg);
+        return { kind: 'lambda', params, ret };
     }
     const a = namedAtom(t);
-    if (a === undefined) return 'FinDslNumber';            // Teil-Parse: konservativ
+    if (a === undefined) return { kind: 'number' };        // Teil-Parse: konservativ (Kern FinDslNumber)
     if (a.name === 'Liste' || a.name === 'Bereich') {
         // `Bereich<T>` wird im Lowering eager nach `FinDslListe<T>`
         // materialisiert (#44 L1); Typ-Annotation analog mappen.
         const elem = a.typeArgs?.args?.[0];
-        return `FinDslListe<${javaType(elem, reg)}>`;
+        return { kind: 'list', elem: irType(elem, reg) };
     }
-    if (NUMERIC_NAMES.has(a.name)) return 'FinDslNumber';
-    if (a.name === 'Wahrheitswert') return 'boolean';
-    if (a.name === 'Text') return 'String';
+    if (NUMERIC_NAMES.has(a.name)) return { kind: 'number', wrapper: a.name as IrNumberWrapper };
+    if (a.name === 'Wahrheitswert') return { kind: 'bool' };
+    if (a.name === 'Text') return { kind: 'text' };
     const owner = reg.typeOwner.get(a.name);               // Datensatz/Aufzählung
-    return owner !== undefined ? `${owner}.${a.name}` : a.name;
+    return { kind: 'named', name: a.name, owner };
 }
 
 /** `true` ⇔ skalarer numerischer FinDSL-Typ (kein `Liste<…>`/`Bereich<…>`). */
@@ -159,35 +151,6 @@ function numericAtomName(t: Type | undefined): string | undefined {
         return undefined;
     }
     return a.name;
-}
-
-/**
- * API-/Fassaden-Typ (deklarierte Grenzen: fn-Param/-Rückgabe, `record`-
- * Feld, `konst`): numerisch-skalar → **sprechender Wrapper** (= der
- * FinDSL-Typname `Euro`/`EuroCent`/`Cent`/`Prozent`/`Ganzzahl`/`Dezimal`).
- * `Liste<T>` bleibt `FinDslListe<Kern>` (Listen sind generische Rechen-
- * Container; `.summe()` einer leeren Liste ist orakel-gemäß `Ganzzahl 0`,
- * Boxing erst an der nächsten deklarierten Bindung). Alles übrige =
- * {@link javaType}.
- */
-function apiJavaType(t: Type | undefined, reg: Registry): string {
-    // (#44 L5) Funktions-Typ am API-Rand identisch zum Kern-Typ —
-    // FinDslLambda1/2 wird direkt durchgereicht (kein Wrapper).
-    const atom = t?.atom;
-    if (atom && isFunctionType(atom)) {
-        return javaType(t, reg);
-    }
-    const a = namedAtom(t);
-    if (a === undefined) return 'FinDslNumber';
-    if (a.name === 'Liste' || a.name === 'Bereich') {
-        const elem = a.typeArgs?.args?.[0];
-        return `FinDslListe<${javaType(elem, reg)}>`;
-    }
-    if (NUMERIC_NAMES.has(a.name)) return a.name;          // sprechender Wrapper
-    if (a.name === 'Wahrheitswert') return 'boolean';
-    if (a.name === 'Text') return 'String';
-    const owner = reg.typeOwner.get(a.name);
-    return owner !== undefined ? `${owner}.${a.name}` : a.name;
 }
 
 /** Geld-Annotationsname (`Euro|Cent|EuroCent`) einer Typ-Annotation. */
@@ -382,7 +345,7 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
         const elemType = expr.typeArgs?.args?.[0];
         return {
             kind: 'listLit',
-            elementJavaType: elemType ? javaType(elemType, reg) : 'FinDslNumber',
+            elementType: elemType ? irType(elemType, reg) : { kind: 'number' },
             items: expr.items.map((e) => lowerExpr(e, reg)),
         };
     }
@@ -394,12 +357,9 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
         const fromIr = lowerExpr(expr.from, reg);
         const toIr = lowerExpr(expr.to, reg);
         if (fromIr.kind === 'enumVal' && toIr.kind === 'enumVal') {
-            const qual = fromIr.ownerClass !== undefined
-                ? `${fromIr.ownerClass}.${fromIr.enumName}`
-                : fromIr.enumName;
             return {
                 kind: 'listEnumRange',
-                enumClassName: qual,
+                enumType: { kind: 'named', name: fromIr.enumName, owner: fromIr.ownerClass },
                 from: fromIr,
                 to: toIr,
                 exclusive: expr.exclusive === true,
@@ -436,7 +396,7 @@ function lowerExpr(expr: Expr | undefined, reg: Registry): IrExpr {
             reg.scopeTypes.set(s.name, s.type);
             lets.push({
                 name: s.name,
-                javaType: javaType(s.type, reg),
+                type: irType(s.type, reg),
                 expr: floatValue(
                     maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
                     `var "${s.name}"`),
@@ -806,7 +766,7 @@ function lowerLambdaArg(
         reg.scopeTypes.set(s.name, s.type);
         lets.push({
             name: s.name,
-            javaType: javaType(s.type, reg),
+            type: irType(s.type, reg),
             expr: floatValue(
                 maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
                 `var "${s.name}"`),
@@ -989,7 +949,7 @@ function resolveCtorArgs(
  */
 const waehleDeps: WaehleLowerDeps = {
     lowerExpr: (expr, reg) => lowerExpr(expr, reg as Registry),
-    javaType: (t, reg) => javaType(t, reg as Registry),
+    irType: (t, reg) => irType(t, reg as Registry),
     maybeMoneyAnno: (expr, t, what) => maybeMoneyAnno(expr, t, what),
 };
 
@@ -1009,13 +969,12 @@ function lowerWaehle(w: WaehleExpr, reg: Registry): IrExpr {
 function lowerFn(fd: FunktionDecl, reg: Registry): IrDecl {
     const params: IrParam[] = fd.params.map((p) => ({
         name: p.name,
-        javaType: javaType(p.type, reg),          // Kern (FinDslNumber)
-        apiType: apiJavaType(p.type, reg),        // Fassade (Wrapper)
-        numeric: isNumericType(p.type),
+        type: irType(p.type, reg),                // Kern + API leitet der Emitter ab
     }));
-    const returnJavaType = javaType(fd.returnType, reg);
-    const returnApiType = apiJavaType(fd.returnType, reg);
-    const returnNumeric = isNumericType(fd.returnType);
+    const returnType = irType(fd.returnType, reg);
+    // Sicht-Wrapper-Name (numerisch → `Euro` …, sonst undefined) — steuert
+    // das Rückgabe-Boxing der Fassade.
+    const returnWrapper = numericAtomName(fd.returnType);
 
     // Per-`fn`-Sicht für Record-Feld-Unbox: Param- und `var`-Typen.
     // Param/`var` sind im Kern bereits FinDslNumber — die Sicht dient
@@ -1048,7 +1007,7 @@ function lowerFn(fd: FunktionDecl, reg: Registry): IrDecl {
             .filter(isLetStmt)
             .map((s) => ({
                 name: s.name,
-                javaType: javaType(s.type, reg),
+                type: irType(s.type, reg),
                 expr: maybeMoneyAnno(lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
             }));
         body = { kind: 'block', lets, result: lowerExpr(blk.result, reg) };
@@ -1065,10 +1024,10 @@ function lowerFn(fd: FunktionDecl, reg: Registry): IrDecl {
     // Kern-Ergebnis (FinDslNumber) wird an JEDER Ergebnisposition auf
     // die Sicht geboxt (`Euro.von(…)`). Interne `_`-fn geben den Kern
     // (FinDslNumber) zurück → kein Box.
-    if (!fd.name.startsWith('_') && returnNumeric) {
+    if (!fd.name.startsWith('_') && returnWrapper !== undefined) {
         body = body.kind === 'expr'
-            ? { kind: 'expr', expr: boxReturnExpr(body.expr, returnApiType) }
-            : { kind: 'block', lets: body.lets, result: boxReturnExpr(body.result, returnApiType) };
+            ? { kind: 'expr', expr: boxReturnExpr(body.expr, returnWrapper) }
+            : { kind: 'block', lets: body.lets, result: boxReturnExpr(body.result, returnWrapper) };
     }
 
     return {
@@ -1076,9 +1035,7 @@ function lowerFn(fd: FunktionDecl, reg: Registry): IrDecl {
         name: fd.name,
         internal: fd.name.startsWith('_'),
         params,
-        returnJavaType,
-        returnApiType,
-        returnNumeric,
+        returnType,
         body,
         info: extractDoc(fd.docPrefix),
     };
@@ -1145,15 +1102,14 @@ export function lowerProgram(program: Program, ctx: LowerContext): IrModule {
             // `konst` ist API → numerisch Wrapper-getypt; der Kern-
             // Ausdruck bleibt unverändert (Emitter boxt: `W.von(expr)`).
             // Für nicht-numerische `konst` (Text/Wahrheitswert/Liste)
-            // trägt `javaType` den echten API-Typ (#44 Lücke 10).
+            // trägt `type` den echten API-Typ (#44 Lücke 10).
             decls.push({
                 kind: 'konst',
                 name: d.name,
                 expr: floatValue(
                     maybeMoneyAnno(lowerExpr(d.value, reg), d.type, `Konstante "${d.name}"`),
                     `Konstante "${d.name}"`),
-                javaType: apiJavaType(d.type, reg),
-                wrapper: numericAtomName(d.type),
+                type: irType(d.type, reg),
                 info: extractDoc(d.docPrefix),
             });
         } else if (isAufzaehlungDecl(d)) {
@@ -1162,8 +1118,7 @@ export function lowerProgram(program: Program, ctx: LowerContext): IrModule {
             // Record-Felder sind API → numerisch Wrapper-getypt.
             const fields: IrField[] = d.fields.map((f) => ({
                 name: f.name,
-                javaType: apiJavaType(f.type, reg),
-                numeric: isNumericType(f.type),
+                type: irType(f.type, reg),
             }));
             decls.push({ kind: 'record', name: d.name, fields, info: extractDoc(d.docPrefix) });
         } else if (isFunktionDecl(d)) {
@@ -1215,7 +1170,7 @@ export function lowerTestProgram(program: Program, ctx: LowerContext): IrTestMod
                 }
                 lets.push({
                     name: s.name,
-                    javaType: javaType(s.type, reg),
+                    type: irType(s.type, reg),
                     // `var` darf `wähle`-Wert tragen → floatWaehle (Emitter
                     // statement-lowert), nicht floatValue (wirft).
                     expr: floatWaehle(

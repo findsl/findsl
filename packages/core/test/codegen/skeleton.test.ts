@@ -293,9 +293,9 @@ describe('Cross-Modul-Komposition (Phase 3, Inkrement 2)', () => {
             expr: { kind: 'crossRef', ownerClass: 'Typen', memberName: 'GRENZE' },
         });
         // Cross-Typ-Qualifizierung im Parameter (Enum = nicht numerisch).
-        expect(fn(ir, 'Pick').params[0].javaType).toBe('Typen.Art');
-        expect(fn(ir, 'Pick').params[0].apiType).toBe('Typen.Art');
-        expect(fn(ir, 'Pick').params[0].numeric).toBe(false);
+        // IrType `named{name, owner}` — Java-Resolver rendert beide Sichten
+        // als `Typen.Art`, `kind !== 'number'` ⇒ kein Box/Unbox.
+        expect(fn(ir, 'Pick').params[0].type).toEqual({ kind: 'named', name: 'Art', owner: 'Typen' });
     });
 
     it('emittiert Komposition + qualifizierte Cross-Referenzen + Cross-Package-Import', async () => {
@@ -358,7 +358,7 @@ describe('prüfe → JUnit5 (Phase 3, Inkrement 3)', () => {
         expect(c1.assertion).toEqual({ kind: 'not', value: { kind: 'bool', value: false } });
         expect(c2.erwartetAbbruch).toBe(true);
         expect(c2.lets[0]).toEqual({
-            name: 'n', javaType: 'FinDslNumber',
+            name: 'n', type: { kind: 'number', wrapper: 'Ganzzahl' },
             expr: { kind: 'neg', value: { kind: 'numLit', factory: 'ganzzahl', arg: '1' } },
         });
         // (C): Cross-Aufruf-Arg geboxt (callee-Param `Ganzzahl`); KEIN

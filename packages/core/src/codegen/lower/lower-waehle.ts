@@ -41,6 +41,7 @@ import type {
     IrBlockResult,
     IrExpr,
     IrLet,
+    IrType,
 } from '../ir/nodes.js';
 
 /**
@@ -63,7 +64,7 @@ export interface WaehleLowerRegistry {
  */
 export interface WaehleLowerDeps {
     lowerExpr: (expr: Expr | undefined, reg: WaehleLowerRegistry) => IrExpr;
-    javaType:  (t: Type | undefined, reg: WaehleLowerRegistry) => string;
+    irType:    (t: Type | undefined, reg: WaehleLowerRegistry) => IrType;
     maybeMoneyAnno: (expr: IrExpr, t: Type | undefined, what: string) => IrExpr;
 }
 
@@ -85,7 +86,7 @@ export function lowerBlockLambda(
         .filter(isLetStmt)
         .map((s) => ({
             name: s.name,
-            javaType: deps.javaType(s.type, reg),
+            type: deps.irType(s.type, reg),
             expr: deps.maybeMoneyAnno(deps.lowerExpr(s.value, reg), s.type, `var "${s.name}"`),
         }));
     return { kind: 'blockResult', lets, result: deps.lowerExpr(lam.result, reg) };

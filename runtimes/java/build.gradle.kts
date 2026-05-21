@@ -19,8 +19,17 @@ plugins {
 }
 
 group = "org.findsl"
-// Single Source of Truth: die Projektversion lebt in der Datei `VERSION`.
-version = file("VERSION").readText().trim()
+// Single Source of Truth: die Projektversion lebt an der Repo-Wurzel
+// (`<repo>/VERSION`). `scripts/sync-version.mjs` propagiert sie in alle
+// Workspaces + hierher. `runtimes/java/VERSION` existiert nicht mehr.
+//
+// Diese Runtime wird **nicht** als Maven-Artefakt veröffentlicht — das CLI
+// bündelt die Quellen aus diesem Verzeichnis (via
+// `scripts/embed-runtime-java.mjs`) und emittiert sie bei jedem
+// `findsl codegen --lang java` ins Ausgabeverzeichnis. Generat-Nutzer
+// brauchen damit keine externe Dependency. Der Build hier dient nur der
+// In-Repo-Verifikation (`gradle check` = Codegen-Gate + Runtime-Unit-Tests).
+version = rootDir.parentFile.parentFile.resolve("VERSION").readText().trim()
 
 java {
     toolchain {
@@ -203,6 +212,21 @@ val generateFindslJava by tasks.registering(Exec::class) {
         "-o", genMainProvider.get().asFile.absolutePath,
         "-t", genTestProvider.get().asFile.absolutePath,
     )
+
+    // Das CLI emittiert die Java-Runtime (`org/findsl/runtime/*.java`) bei
+    // JEDEM `codegen`-Lauf in `-o` — externe Nutzer bekommen so ein autonomes
+    // Projekt. Im Monorepo liegt dieselbe Runtime aber bereits in
+    // `src/main/java/` und ist via `sourceSets["generated"].compileClasspath
+    // += mainOut` auf dem Classpath. Beides nebeneinander → `duplicate class`-
+    // Fehler beim Compile. Daher räumen wir das mit-emittierte Runtime-Set
+    // im Generat-Verzeichnis weg — die Hand-Runtime bleibt Quelle der Wahrheit.
+    doLast {
+        val genMainDirFile = genMainProvider.get().asFile
+        val embeddedRuntime = genMainDirFile.resolve("org/findsl/runtime")
+        if (embeddedRuntime.exists()) {
+            embeddedRuntime.walkBottomUp().forEach { it.delete() }
+        }
+    }
 }
 
 tasks.named("compileGeneratedJava") { dependsOn(generateFindslJava) }

@@ -7,7 +7,8 @@
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "langium:generate": "npm -w @findsl/core run langium:generate",
-    "build": "tsc -b tsconfig.json && node scripts/copy-assets.mjs",
+    "embed:runtime": "node scripts/embed-runtime-java.mjs",
+    "build": "node scripts/embed-runtime-java.mjs && tsc -b tsconfig.json && node scripts/copy-assets.mjs",
     "watch": "tsc -b tsconfig.json --watch",
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",
@@ -15,7 +16,9 @@
     "codegen:difftest": "node scripts/codegen-difftest.mjs",
     "dist": "npm run build && npm run bundle",
     "binary": "npm run bundle && node scripts/build-binary.mjs",
-    "all": "npm run langium:generate && npm run build && npm run bundle && npm test"
+    "all": "npm run langium:generate && npm run build && npm run bundle && npm test",
+    "version:sync": "node scripts/sync-version.mjs",
+    "version:check": "node scripts/sync-version.mjs --check"
   },
   "devDependencies": {
     "@types/katex": "0.16.8",

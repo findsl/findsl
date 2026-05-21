@@ -4,9 +4,11 @@
   "description": "FinDSL Kommandozeilen-Werkzeug (parse, pruefe, doku)",
   "type": "module",
   "license": "EUPL-1.2",
-  "bin": { "findsl": "./out/main.js" },
+  "bin": {
+    "findsl": "./out/main.js"
+  },
   "dependencies": {
-    "@findsl/core": "*",
+    "@findsl/core": "0.1.0",
     "commander": "14.0.3",
     "langium": "4.2.4"
   }

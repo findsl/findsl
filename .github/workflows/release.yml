@@ -1,0 +1,418 @@
+# ---------------------------------------------------------------------------
+# Release — Lockstep-Veröffentlichung aller FinDSL-Artefakte
+#
+# Ein Tag = eine Version = sechs Spuren parallel:
+#   • @findsl/core, @findsl/cli, @findsl/lsp        → npm (Sigstore-Provenance)
+#   • findsl-<version>.vsix                          → VS Code Marketplace + Open VSX
+#   • findsl-<version>-<plattform>.{tar.gz,zip}      → GitHub Release (Node-SEA-Binary)
+#
+# Die Java-Runtime wird **nicht** als Maven-Artefakt veröffentlicht — das CLI
+# emittiert die Runtime-Quellen bei jedem `findsl codegen --lang java` ins
+# Ausgabeverzeichnis. Generat-Output ist damit ein autonomes Java-Projekt
+# ohne externe Dependency.
+#
+# **Trigger:** Push eines Tags `v*` (z. B. `git tag v1.2.0 && git push origin v1.2.0`).
+# Vor dem Tag MUSS `scripts/sync-version.mjs --set X.Y.Z` gelaufen und committet
+# sein — der `prepare`-Job exit-1t sonst (Tag-Version ≠ VERSION-Datei).
+#
+# **Dry-Run:** `workflow_dispatch` mit `dry_run: true` — baut alles, lädt
+# Artefakte als Workflow-Artefakte hoch, aber **keine** externe Veröffentlichung.
+# Nutzt **keine** Secrets — ideal um Build-Pfade ohne Konten zu prüfen.
+#
+# **Benötigte Repo-Secrets** (Settings → Secrets → Actions):
+#   NPM_TOKEN                    npm Publish-Token (Automation, scope: @findsl)
+#   VSCE_PAT                     Azure-DevOps-PAT für VS Marketplace
+#   OVSX_PAT                     Open-VSX-Token
+#   GPG_PRIVATE_KEY              ASCII-armored GPG-Privater-Key (Linux-Sig + SHA256SUMS)
+#   GPG_PASSPHRASE               Passphrase des Keys
+#
+# **Signaturen:** npm via Sigstore (OIDC, kostenfrei). Linux-Tar per detached
+# GPG-Signatur. Aggregiertes SHA256SUMS GPG-signiert. **macOS- und Windows-
+# Binaries werden bewusst NICHT signiert** (Entscheidung: keine
+# kostenpflichtigen Zertifikate). Nutzer-Doku zur Gatekeeper/SmartScreen-
+# Umgehung: `docs/install.md`.
+#
+# **Sicherheit:** sämtliche Werte aus `${{ … }}` (inputs, needs, matrix) werden
+# über `env:` in Shell-Variablen exportiert und nirgends direkt in `run:`-
+# Skripte interpoliert (Workflow-Injection-Härtung).
+#
+# Actions sind per Commit-SHA gepinnt (Renovate hält das aktuell).
+# ---------------------------------------------------------------------------
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-Run (bauen, aber NICHT veröffentlichen)'
+        required: false
+        default: true
+        type: boolean
+      version:
+        description: 'Dry-Run-Version (z. B. 0.1.0); ignoriert bei Tag-Trigger'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write   # GH-Release erzeugen + Assets hochladen
+  id-token: write   # npm Sigstore-Provenance via OIDC
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  # -------------------------------------------------------------------------
+  # `prepare` — Tag → Version + Validierung
+  #
+  # Garantiert Lockstep: die Version aus dem Tag (`v1.2.3` → `1.2.3`) muss
+  # exakt mit der committeten `VERSION`-Datei + allen `package.json` über-
+  # einstimmen. Ist sie das nicht, exit mit Fehler — kein Artefakt wird gebaut.
+  # -------------------------------------------------------------------------
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      dry_run: ${{ steps.v.outputs.dry_run }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Resolve version + dry-run
+        id: v
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            DRY="false"
+          else
+            VERSION="${DISPATCH_VERSION:-$(cat VERSION)}"
+            DRY="${DISPATCH_DRY_RUN:-true}"
+          fi
+          FILE_VERSION="$(cat VERSION)"
+          if [ "$VERSION" != "$FILE_VERSION" ]; then
+            echo "::error::Tag-Version ($VERSION) != VERSION-Datei ($FILE_VERSION)."
+            echo "::error::Erst 'node scripts/sync-version.mjs --set <ver>' laufen lassen, committen, dann taggen."
+            exit 1
+          fi
+          # Pre-Release == SemVer mit Bindestrich (z. B. 1.0.0-rc.1). Steuert
+          # npm-dist-tag (`next` statt `latest`) und das Überspringen des
+          # VS-Code-Marketplace (akzeptiert keine SemVer-Pre-Releases).
+          if [[ "$VERSION" == *-* ]]; then PRE="true"; else PRE="false"; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRE" >> "$GITHUB_OUTPUT"
+          echo "::notice::Release-Version: $VERSION (dry-run: $DRY, prerelease: $PRE)"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Lockstep (alle Versionen synchron)
+        run: npm run version:check
+
+  # -------------------------------------------------------------------------
+  # `npm` — @findsl/core, @findsl/cli, @findsl/lsp
+  #
+  # Veröffentlicht mit Sigstore-Provenance (OIDC). Reihenfolge: core zuerst,
+  # dann cli + lsp (beide hängen an core).
+  #
+  # Pre-Releases (Version mit Bindestrich) landen unter dem dist-tag `next`
+  # statt `latest` — sonst würde `npm install @findsl/cli` die Vorabversion
+  # ziehen (npm setzt sonst IMMER `latest`, auch bei `-rc.1`).
+  # -------------------------------------------------------------------------
+  npm:
+    needs: prepare
+    runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (langium:generate + tsc + assets)
+        run: |
+          npm run langium:generate
+          npm run build
+
+      - name: Publish @findsl/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG_FLAG=""
+          [ "$PRERELEASE" = "true" ] && TAG_FLAG="--tag next"
+          if [ "$DRY_RUN" = "true" ]; then
+            npm publish -w @findsl/core --dry-run --access public $TAG_FLAG
+          else
+            npm publish -w @findsl/core --provenance --access public $TAG_FLAG
+          fi
+
+      - name: Publish @findsl/cli + @findsl/lsp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG_FLAG=""
+          [ "$PRERELEASE" = "true" ] && TAG_FLAG="--tag next"
+          if [ "$DRY_RUN" = "true" ]; then
+            npm publish -w @findsl/cli --dry-run --access public $TAG_FLAG
+            npm publish -w @findsl/lsp --dry-run --access public $TAG_FLAG
+          else
+            npm publish -w @findsl/cli --provenance --access public $TAG_FLAG
+            npm publish -w @findsl/lsp --provenance --access public $TAG_FLAG
+          fi
+
+  # -------------------------------------------------------------------------
+  # `vsix` — VS Code Marketplace + Open VSX
+  #
+  # Marketplace signiert intern (PAT-Auth genügt). Bei Dry-Run wird das
+  # `.vsix` nur gebaut und als Workflow-Artefakt hochgeladen.
+  #
+  # Pre-Releases (Version mit Bindestrich) überspringen Marketplace + Open VSX:
+  # beide akzeptieren NUR `major.minor.patch` (keine SemVer-Pre-Releases wie
+  # `1.0.0-rc.1`). Das `.vsix` wird trotzdem gebaut und hängt über die
+  # `release`-Spur am GitHub-Release — Tester laden es dort herunter.
+  # -------------------------------------------------------------------------
+  vsix:
+    needs: prepare
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension (langium:generate + build + bundle)
+        run: npm run all
+
+      - name: Package .vsix
+        working-directory: apps/vscode
+        run: |
+          set -euo pipefail
+          npx --yes @vscode/vsce package --no-dependencies --out "../../findsl-${VERSION}.vsix"
+
+      - name: Upload .vsix as workflow artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vsix
+          path: findsl-${{ needs.prepare.outputs.version }}.vsix
+          retention-days: 14
+
+      - name: Pre-Release — Marketplace/Open VSX übersprungen
+        if: needs.prepare.outputs.prerelease == 'true'
+        run: |
+          echo "::notice::Pre-Release ($VERSION) — VS Marketplace + Open VSX uebersprungen (akzeptieren keine SemVer-Pre-Releases). Das .vsix haengt am GitHub-Release."
+
+      - name: Publish to VS Code Marketplace
+        if: needs.prepare.outputs.dry_run == 'false' && needs.prepare.outputs.prerelease == 'false'
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        working-directory: apps/vscode
+        run: |
+          set -euo pipefail
+          npx --yes @vscode/vsce publish --no-dependencies --packagePath "../../findsl-${VERSION}.vsix"
+
+      - name: Publish to Open VSX
+        if: needs.prepare.outputs.dry_run == 'false' && needs.prepare.outputs.prerelease == 'false'
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          set -euo pipefail
+          npx --yes ovsx publish "findsl-${VERSION}.vsix" -p "$OVSX_PAT"
+
+  # -------------------------------------------------------------------------
+  # `binaries` — Node-SEA pro Host-Plattform
+  #
+  # Matrix: macOS-Intel, macOS-Apple-Silicon, Linux-x64, Windows-x64. Node
+  # SEA cross-kompiliert NICHT — jedes Binary entsteht auf seinem nativen
+  # Runner. Anschließend werden Tar/Zip + SHA256 erzeugt; Linux-Tar
+  # zusätzlich GPG-signiert (detached). macOS/Windows bleiben UNSIGNIERT
+  # (Entscheidung: keine kostenpflichtigen Zertifikate, Doku in install.md).
+  # -------------------------------------------------------------------------
+  binaries:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-13
+            target: darwin-x64
+            archive: tar.gz
+          - os: macos-14
+            target: darwin-arm64
+            archive: tar.gz
+          - os: ubuntu-22.04
+            target: linux-x64
+            archive: tar.gz
+          - os: windows-latest
+            target: windows-x64
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TARGET: ${{ matrix.target }}
+      DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build + Bundle + Binary
+        run: |
+          npm run langium:generate
+          npm run build
+          npm run binary
+
+      - name: Pack archive (POSIX)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="findsl-${VERSION}-${TARGET}"
+          mkdir -p "$STAGE"
+          cp packages/cli/dist/findsl "$STAGE/"
+          if [ -d packages/cli/dist/data ]; then cp -R packages/cli/dist/data "$STAGE/"; fi
+          if [ -f README.md ]; then cp README.md "$STAGE/"; fi
+          if [ -f LICENSE-COMMERCIAL.md ]; then cp LICENSE-COMMERCIAL.md "$STAGE/"; fi
+          tar -czf "$STAGE.tar.gz" "$STAGE"
+          shasum -a 256 "$STAGE.tar.gz" > "$STAGE.tar.gz.sha256"
+
+      - name: Pack archive (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = "findsl-$env:VERSION-$env:TARGET"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item packages/cli/dist/findsl.exe $stage/
+          if (Test-Path packages/cli/dist/data) { Copy-Item -Recurse packages/cli/dist/data $stage/ }
+          if (Test-Path README.md) { Copy-Item README.md $stage/ }
+          if (Test-Path LICENSE-COMMERCIAL.md) { Copy-Item LICENSE-COMMERCIAL.md $stage/ }
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip"
+          $hash = (Get-FileHash -Algorithm SHA256 "$stage.zip").Hash.ToLower()
+          "$hash  $stage.zip" | Out-File -FilePath "$stage.zip.sha256" -Encoding ascii
+
+      - name: GPG-sign Linux tarball
+        if: matrix.target == 'linux-x64' && needs.prepare.outputs.dry_run == 'false'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --armor --detach-sign "findsl-${VERSION}-${TARGET}.tar.gz"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: binary-${{ matrix.target }}
+          path: |
+            findsl-${{ needs.prepare.outputs.version }}-${{ matrix.target }}.*
+          retention-days: 14
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # `release` — GitHub Release mit allen Artefakten
+  #
+  # Sammelt vsix + alle Binaries, generiert eine aggregierte SHA256SUMS-
+  # Datei (GPG-signiert) und legt das GitHub Release an. Bei Dry-Run wird
+  # nur eine Zusammenfassung geloggt — kein Release erzeugt.
+  # -------------------------------------------------------------------------
+  release:
+    needs: [prepare, npm, vsix, binaries]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts
+
+      - name: Stage release files
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.tar.gz.asc' \
+            -o -name '*.zip' -o -name '*.vsix' \) -exec cp {} release/ \;
+          cd release
+          shasum -a 256 *.tar.gz *.zip *.vsix 2>/dev/null | sort > SHA256SUMS
+          ls -la
+
+      - name: GPG-sign SHA256SUMS
+        if: needs.prepare.outputs.dry_run == 'false'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --armor --detach-sign release/SHA256SUMS
+
+      - name: Create GitHub Release
+        if: needs.prepare.outputs.dry_run == 'false'
+        uses: ncipollo/release-action@bcfe5470707e8832e12347755757cec0eb3c22af # v1.18.0
+        with:
+          tag: v${{ needs.prepare.outputs.version }}
+          name: FinDSL v${{ needs.prepare.outputs.version }}
+          artifacts: 'release/*'
+          generateReleaseNotes: true
+          draft: false
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+
+      - name: Dry-Run summary
+        if: needs.prepare.outputs.dry_run == 'true'
+        run: |
+          echo "::notice::Dry-Run abgeschlossen — folgende Artefakte waeren veroeffentlicht worden:"
+          ls -la release/

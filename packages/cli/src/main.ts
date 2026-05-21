@@ -523,6 +523,7 @@ Beispiele:
             istUnterstuetzteSprache, GEPLANTE_SPRACHEN,
             lowerProgram, lowerTestProgram, emitJavaModuleFiles, emitJavaTestModule,
             derivePackage, deriveClassName, isTestFile,
+            JAVA_RUNTIME_FILES,
         } = await import('@findsl/core/codegen/index.js');
 
         const lang = options.lang.toLowerCase();
@@ -813,9 +814,30 @@ Beispiele:
             writtenTests.push(target);
         }
 
+        // Runtime-Quellen mit-emittieren: Generat-Output ist damit ein
+        // vollständig autonomes Java-Projekt — keine externe Maven-
+        // Dependency auf `org.findsl:findsl-runtime` nötig (ADR-Refit).
+        // Idempotent: bei wiederholtem Lauf werden die Dateien überschrieben,
+        // Lockstep zwischen CLI-Version und ausgelieferter Runtime ist
+        // automatisch (beides aus demselben CLI-Bundle).
+        const writtenRuntime: string[] = [];
+        if (written.length > 0 && lang === 'java') {
+            for (const rf of JAVA_RUNTIME_FILES) {
+                const target = path.join(outDir, ...rf.relPath.split('/'));
+                await fs.mkdir(path.dirname(target), { recursive: true });
+                await fs.writeFile(target, rf.content, 'utf-8');
+                writtenRuntime.push(target);
+            }
+        }
+
         if (written.length > 0) {
             console.log(`✓ ${written.length} Modul(e) → ${lang} `
                 + `(${disp(outDir)}/) — bit-genau (Interpreter-Orakel).`);
+        }
+        if (writtenRuntime.length > 0) {
+            console.log(`✓ ${writtenRuntime.length} Runtime-Datei(en) → `
+                + `${disp(path.join(outDir, 'org', 'findsl', 'runtime'))}/ — `
+                + 'autonomer Java-Output, keine externe Dependency.');
         }
         if (writtenTests.length > 0) {
             console.log(`✓ ${writtenTests.length} JUnit5-Testklasse(n) → `

@@ -36,3 +36,11 @@ export type { IrModule, IrDecl, IrTestModule } from './ir/nodes.js';
 export {
     sanitizePackageSegment, derivePackage, deriveClassName, isTestFile,
 } from './path-naming.js';
+
+// Java-Runtime ist Teil des Generat-Outputs (kein externes Maven-Artefakt
+// mehr): das CLI schreibt sie bei jedem `findsl codegen --lang java` ins
+// Ausgabeverzeichnis. Lockstep gratis — CLI-Bundle und mit-geliefertes
+// `org/findsl/runtime/*.java` stammen aus derselben Build-Phase.
+export {
+    JAVA_RUNTIME_FILES, type EmbeddedRuntimeFile,
+} from './emit-java/runtime-files.generated.js';

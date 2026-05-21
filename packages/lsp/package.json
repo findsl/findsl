@@ -6,7 +6,7 @@
   "license": "EUPL-1.2",
   "main": "./out/main.js",
   "dependencies": {
-    "@findsl/core": "*",
+    "@findsl/core": "0.1.0",
     "langium": "4.2.4",
     "vscode-languageserver": "9.0.1"
   }

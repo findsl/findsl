@@ -69,3 +69,6 @@ desktop.ini
 
 # Heruntergeladenes JUnit-Console-Standalone (codegen:difftest, gepinnt+SHA-verifiziert)
 scripts/lib/
+
+# Java-Runtime einbettung (regeneriert via scripts/embed-runtime-java.mjs)
+packages/core/src/codegen/emit-java/runtime-files.generated.ts

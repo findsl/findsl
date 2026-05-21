@@ -10,14 +10,21 @@
     "vscode": "^1.85.0",
     "node": ">=20.10.0"
   },
-  "categories": ["Programming Languages"],
+  "categories": [
+    "Programming Languages"
+  ],
   "main": "./out/extension/main.cjs",
   "contributes": {
     "languages": [
       {
         "id": "findsl",
-        "aliases": ["FinDSL", "findsl"],
-        "extensions": [".findsl"],
+        "aliases": [
+          "FinDSL",
+          "findsl"
+        ],
+        "extensions": [
+          ".findsl"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -31,16 +38,22 @@
     "configurationDefaults": {
       "editor.semanticTokenColorCustomizations": {
         "enabled": true,
-        "rules": { "*.internal": { "fontStyle": "italic" } }
+        "rules": {
+          "*.internal": {
+            "fontStyle": "italic"
+          }
+        }
       }
     }
   },
-  "activationEvents": ["onLanguage:findsl"],
+  "activationEvents": [
+    "onLanguage:findsl"
+  ],
   "scripts": {
     "vscode:prepublish": "npm -w @findsl/core run langium:generate && npm run -w findsl-workspace build && npm run -w findsl-workspace bundle"
   },
   "dependencies": {
-    "@findsl/core": "*",
+    "@findsl/core": "0.1.0",
     "vscode-languageclient": "9.0.1"
   },
   "devDependencies": {

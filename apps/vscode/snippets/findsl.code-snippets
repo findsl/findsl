@@ -1,0 +1,48 @@
+{
+  "FinDSL function": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:Name}(${2:parameter}: ${3:Euro}): ${4:Euro} = {",
+      "    ${5:0 als Euro}",
+      "}"
+    ],
+    "description": "FinDSL Funktion mit Block-Rumpf"
+  },
+  "FinDSL record": {
+    "prefix": "datensatz",
+    "body": [
+      "datensatz ${1:Name}(",
+      "    ${2:feld}: ${3:Euro}",
+      ")"
+    ],
+    "description": "FinDSL Datensatz mit einem Feld"
+  },
+  "FinDSL enum": {
+    "prefix": "aufzählung",
+    "body": [
+      "aufzählung ${1:Name} { ${2:WertA}, ${3:WertB} }"
+    ],
+    "description": "FinDSL Aufzählung"
+  },
+  "FinDSL test block": {
+    "prefix": "prüfe",
+    "body": [
+      "prüfe \"${1:Beschreibung}\" {",
+      "    testfall \"${2:Testfall}\" {",
+      "        ${3:Ausdruck} == ${4:Erwartung}",
+      "    }",
+      "}"
+    ],
+    "description": "FinDSL Prüfe-Block mit Testfall"
+  },
+  "FinDSL choose expression": {
+    "prefix": "wähle",
+    "body": [
+      "wähle (${1:wert}) {",
+      "    falls ${2:Fall} -> ${3:Ergebnis}",
+      "    sonst -> ${4:Standard}",
+      "}"
+    ],
+    "description": "FinDSL Wähle-Ausdruck"
+  }
+}

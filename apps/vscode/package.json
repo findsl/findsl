@@ -35,6 +35,12 @@
         "path": "./syntaxes/findsl.tmLanguage.json"
       }
     ],
+    "snippets": [
+      {
+        "language": "findsl",
+        "path": "./snippets/findsl.code-snippets"
+      }
+    ],
     "configurationDefaults": {
       "editor.semanticTokenColorCustomizations": {
         "enabled": true,

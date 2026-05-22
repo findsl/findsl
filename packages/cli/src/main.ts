@@ -505,7 +505,7 @@ program
         'Wurzelverzeichnis; rekursiv nach *.findsl durchsucht. Eine '
         + 'Datei direkt darin → unbenanntes (Default-)Package; '
         + 'Unterverzeichnisse → Package-Segmente. Kein -p/--package.')
-    .option('-l, --lang <sprache>', 'Zielsprache (java)', 'java')
+    .option('-l, --lang <sprache>', 'Zielsprache (java|ts)', 'java')
     .option('-o, --out <verzeichnis>', 'Ausgabeverzeichnis (Hauptklassen)', 'out/java')
     .option('-t, --test-out <verzeichnis>',
         'Ausgabeverzeichnis für generierte JUnit-Tests aus prüfe-Blöcken '
@@ -522,8 +522,9 @@ Beispiele:
         const {
             istUnterstuetzteSprache, GEPLANTE_SPRACHEN,
             lowerProgram, lowerTestProgram, emitJavaModuleFiles, emitJavaTestModule,
+            emitTsModule, emitTsTestModule,
             derivePackage, deriveClassName, isTestFile,
-            JAVA_RUNTIME_FILES,
+            JAVA_RUNTIME_FILES, TS_RUNTIME_FILES,
         } = await import('@findsl/core/codegen/index.js');
 
         const lang = options.lang.toLowerCase();
@@ -532,7 +533,7 @@ Beispiele:
                 ? ` "${lang}" ist als Folge-Ticket geplant, aber noch nicht implementiert.`
                 : '';
             console.error(`✗ Zielsprache "${options.lang}" nicht unterstützt `
-                + `(verfügbar: java).${geplant}`);
+                + `(verfügbar: java, ts).${geplant}`);
             process.exit(1);
         }
 
@@ -681,16 +682,26 @@ Beispiele:
             // Lowering/Emission pro Modul kapseln: ein noch nicht
             // unterstütztes Konstrukt (Phase-4-Scope) darf NUR diese
             // Datei überspringen, nicht den ganzen Batch abbrechen
-            // (analog zur Parse-Fehler-Behandlung). Pro Modul ZWEI
-            // Dateien: `<Name>.java` (Interface) + `<Name>Impl.java`.
-            let files;
+            // (analog zur Parse-Fehler-Behandlung). Java: ZWEI Dateien
+            // (`<Name>.java` Interface + `<Name>Impl.java`); TS: EINE
+            // Datei (`<Name>.ts`, Top-Level-Deklarationen).
+            let outFiles: ReadonlyArray<{ name: string; content: string }>;
             try {
                 const ir = lowerProgram(mod.program, {
                     javaPackage: mod.javaPackage,
                     className: mod.className,
                     imports: [...byPath.values()],
                 });
-                files = emitJavaModuleFiles(ir);
+                if (lang === 'ts') {
+                    const f = emitTsModule(ir);
+                    outFiles = [{ name: f.fileName, content: f.code }];
+                } else {
+                    const f = emitJavaModuleFiles(ir);
+                    outFiles = [
+                        { name: `${f.interfaceName}.java`, content: f.interfaceCode },
+                        { name: `${f.implName}.java`, content: f.implCode },
+                    ];
+                }
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.error(`✗ ${disp(mod.absFile)}: ${msg}`);
@@ -698,16 +709,16 @@ Beispiele:
                 continue;
             }
             // Ausgabeverzeichnis spiegelt die Package-Struktur (javac/JVM-
-            // konform); Wurzeldatei → direkt ins Ausgabeverzeichnis.
+            // bzw. ESM-konform); Wurzeldatei → direkt ins Ausgabeverzeichnis.
             const targetDir = mod.javaPackage === undefined
                 ? outDir
                 : path.join(outDir, ...mod.javaPackage.split('.'));
             await fs.mkdir(targetDir, { recursive: true });
-            const ifaceTarget = path.join(targetDir, `${files.interfaceName}.java`);
-            const implTarget = path.join(targetDir, `${files.implName}.java`);
-            await fs.writeFile(ifaceTarget, files.interfaceCode, 'utf-8');
-            await fs.writeFile(implTarget, files.implCode, 'utf-8');
-            written.push(ifaceTarget, implTarget);
+            for (const of of outFiles) {
+                const target = path.join(targetDir, of.name);
+                await fs.writeFile(target, of.content, 'utf-8');
+                written.push(target);
+            }
         }
 
         // Durchgang 2b: `*.test.findsl` → JUnit5-Testklassen. Das SUT
@@ -791,14 +802,22 @@ Beispiele:
                 }
             }
 
-            let java: string;
+            let testFileName: string;
+            let testCode: string;
             try {
                 const ir = lowerTestProgram(tm.program, {
                     javaPackage: tm.javaPackage,
                     className: tm.className,
                     imports: [...byPath.values()],
                 });
-                java = emitJavaTestModule(ir);
+                if (lang === 'ts') {
+                    const f = emitTsTestModule(ir);
+                    testFileName = f.fileName;
+                    testCode = f.code;
+                } else {
+                    testFileName = `${tm.className}.java`;
+                    testCode = emitJavaTestModule(ir);
+                }
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 console.error(`✗ ${disp(tm.absFile)}: ${msg}`);
@@ -809,8 +828,8 @@ Beispiele:
                 ? testOutDir
                 : path.join(testOutDir, ...tm.javaPackage.split('.'));
             await fs.mkdir(targetDir, { recursive: true });
-            const target = path.join(targetDir, `${tm.className}.java`);
-            await fs.writeFile(target, java, 'utf-8');
+            const target = path.join(targetDir, testFileName);
+            await fs.writeFile(target, testCode, 'utf-8');
             writtenTests.push(target);
         }
 
@@ -821,12 +840,22 @@ Beispiele:
         // Lockstep zwischen CLI-Version und ausgelieferter Runtime ist
         // automatisch (beides aus demselben CLI-Bundle).
         const writtenRuntime: string[] = [];
-        if (written.length > 0 && lang === 'java') {
-            for (const rf of JAVA_RUNTIME_FILES) {
-                const target = path.join(outDir, ...rf.relPath.split('/'));
-                await fs.mkdir(path.dirname(target), { recursive: true });
-                await fs.writeFile(target, rf.content, 'utf-8');
-                writtenRuntime.push(target);
+        if (written.length > 0) {
+            const runtimeFiles = lang === 'ts' ? TS_RUNTIME_FILES : JAVA_RUNTIME_FILES;
+            try {
+                for (const rf of runtimeFiles) {
+                    const target = path.join(outDir, ...rf.relPath.split('/'));
+                    await fs.mkdir(path.dirname(target), { recursive: true });
+                    await fs.writeFile(target, rf.content, 'utf-8');
+                    writtenRuntime.push(target);
+                }
+            } catch (err) {
+                // fs-Fehler nach erfolgreichem Codegen darf nicht still als
+                // Erfolg (Exit 0) durchgehen — als Fehlschlag werten.
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`✗ Runtime-Auslieferung nach ${disp(outDir)} `
+                    + `fehlgeschlagen: ${msg}`);
+                failures++;
             }
         }
 
@@ -835,12 +864,18 @@ Beispiele:
                 + `(${disp(outDir)}/) — bit-genau (Interpreter-Orakel).`);
         }
         if (writtenRuntime.length > 0) {
+            const runtimeDir = lang === 'ts'
+                ? path.join(outDir, 'runtime')
+                : path.join(outDir, 'org', 'findsl', 'runtime');
+            const dep = lang === 'ts'
+                ? 'einzige Dependency: decimal.js'
+                : 'keine externe Dependency';
             console.log(`✓ ${writtenRuntime.length} Runtime-Datei(en) → `
-                + `${disp(path.join(outDir, 'org', 'findsl', 'runtime'))}/ — `
-                + 'autonomer Java-Output, keine externe Dependency.');
+                + `${disp(runtimeDir)}/ — autonomer ${lang.toUpperCase()}-Output, ${dep}.`);
         }
         if (writtenTests.length > 0) {
-            console.log(`✓ ${writtenTests.length} JUnit5-Testklasse(n) → `
+            const testKind = lang === 'ts' ? 'Vitest-Spec(s)' : 'JUnit5-Testklasse(n)';
+            console.log(`✓ ${writtenTests.length} ${testKind} → `
                 + `(${disp(testOutDir)}/) — prüfe-Spiegel (runPruefeDecl).`);
         }
         if (written.length === 0 && writtenTests.length === 0 && failures === 0) {

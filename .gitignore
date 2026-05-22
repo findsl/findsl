@@ -72,3 +72,10 @@ scripts/lib/
 
 # Java-Runtime einbettung (regeneriert via scripts/embed-runtime-java.mjs)
 packages/core/src/codegen/emit-java/runtime-files.generated.ts
+
+# TS-Runtime einbettung (regeneriert via scripts/embed-runtime-ts.mjs)
+packages/core/src/codegen/emit-ts/runtime-files-ts.generated.ts
+
+# TS-Codegen-Gate: repo-interne Temp-Verzeichnisse (werden im finally
+# aufgeräumt; Eintrag schützt vor Resten nach hartem Abbruch)
+.ts-gate-*/

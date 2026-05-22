@@ -15,13 +15,13 @@
  * Name — TS/JS-Targets kommen später ohne neues Subkommando dazu.
  */
 
-/** v1.0-Stand: nur `java` ist eine Zielsprache. */
-export type ZielSprache = 'java';
+/** Zielsprachen: `java` (Issue #7) und `ts` (Walking-Skeleton #99). */
+export type ZielSprache = 'java' | 'ts';
 
-/** Künftige Targets (Folge-Tickets): `ts`, `js` — noch nicht implementiert. */
-export const GEPLANTE_SPRACHEN = ['ts', 'js'] as const;
+/** Künftige Targets (Folge-Tickets): `js` — noch nicht implementiert. */
+export const GEPLANTE_SPRACHEN = ['js'] as const;
 
-export const UNTERSTUETZTE_SPRACHEN: ReadonlyArray<ZielSprache> = ['java'];
+export const UNTERSTUETZTE_SPRACHEN: ReadonlyArray<ZielSprache> = ['java', 'ts'];
 
 export function istUnterstuetzteSprache(s: string): s is ZielSprache {
     return (UNTERSTUETZTE_SPRACHEN as ReadonlyArray<string>).includes(s);
@@ -31,6 +31,9 @@ export { lowerProgram, lowerTestProgram, type LowerContext } from './lower/lower
 export {
     emitJavaModuleFiles, emitJavaTestModule, type JavaModuleFiles,
 } from './emit-java/emitter.js';
+export {
+    emitTsModule, emitTsTestModule, irTypeToTs, type TsModuleFile,
+} from './emit-ts/emitter.js';
 export { render, type Doc } from './emit/doc.js';
 export type { IrModule, IrDecl, IrTestModule } from './ir/nodes.js';
 export {
@@ -44,3 +47,10 @@ export {
 export {
     JAVA_RUNTIME_FILES, type EmbeddedRuntimeFile,
 } from './emit-java/runtime-files.generated.js';
+
+// TS-Runtime (decimal.js-Port) — analog zur Java-Runtime Teil des Generat-
+// Outputs: das CLI schreibt sie bei jedem `findsl codegen --lang ts` unter
+// `<out>/runtime/`. Lockstep gratis (CLI-Bundle + Runtime aus einer Build-Phase).
+export {
+    TS_RUNTIME_FILES,
+} from './emit-ts/runtime-files-ts.generated.js';

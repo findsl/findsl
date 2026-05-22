@@ -7,8 +7,8 @@
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "langium:generate": "npm -w @findsl/core run langium:generate",
-    "embed:runtime": "node scripts/embed-runtime-java.mjs",
-    "build": "node scripts/embed-runtime-java.mjs && tsc -b tsconfig.json && node scripts/copy-assets.mjs",
+    "embed:runtime": "node scripts/embed-runtime-java.mjs && node scripts/embed-runtime-ts.mjs",
+    "build": "node scripts/embed-runtime-java.mjs && node scripts/embed-runtime-ts.mjs && tsc -b tsconfig.json && node scripts/copy-assets.mjs",
     "watch": "tsc -b tsconfig.json --watch",
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",

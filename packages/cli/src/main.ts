@@ -13,6 +13,7 @@
  *   test        — Akzeptanztests aus prüfe-Blöcken ausführen
  *   codegen     — Zielsprachencode erzeugen (--lang; Basisverz. rekursiv)
  *   docgen      — Dokumentation generieren
+ *   papgen      — Programmablaufpläne erzeugen (Mermaid-Markdown oder HTML)
  */
 
 import { Command } from 'commander';
@@ -882,6 +883,88 @@ Beispiele:
             console.error('✗ Nichts erzeugt (keine passenden .findsl-Dateien).');
         }
         process.exit(failures > 0 ? 1 : 0);
+    });
+
+program
+    .command('papgen')
+    .description('Erzeugt Programmablaufpläne (DIN-66001-nah) als Mermaid-'
+        + 'Markdown oder self-contained HTML über alle .findsl der Ziele. '
+        + 'Eine fn = ein Diagramm.')
+    .argument('<pfade...>',
+        'beliebig viele Ziele: einzelne Dateien, Verzeichnisse (rekursiv) '
+        + 'oder Glob-Muster wie "examples/**/*.findsl" — Muster in '
+        + 'Anführungszeichen setzen, sonst expandiert die Shell sie selbst')
+    .option('-f, --format <fmt>', 'mermaid | html (self-contained, klickbare Links)', 'mermaid')
+    .option('--detail <stufe>', 'struktur | voll', 'struktur')
+    .option('--params <modus>', 'symbole (Parameter als Eingabe-Symbole, Default) | inline', 'symbole')
+    .option('--theme <name>', 'default | neutral | dark | forest (nur -f mermaid; '
+        + 'HTML folgt dem OS-Hell/Dunkel)', 'default')
+    .option('--no-farben', 'semantische Knoten-Färbung abschalten')
+    .option('--ohne-intern', 'interne (_-)Funktionen weglassen — nur öffentliche API')
+    .option('-o, --out <ziel>', 'Ausgabe-Basisname (ohne Endung)', 'papgen')
+    .addHelpText('after', `
+Beispiele:
+  $ findsl papgen examples/kst/kst.findsl -o examples/kst/out/kst-pap
+  $ findsl papgen examples --detail voll --params symbole --theme neutral -o /tmp/findsl-pap`)
+    .action(async (
+        pfade: string[],
+        options: {
+            format: string; detail: string; params: string;
+            theme: string; farben: boolean; ohneIntern?: boolean; out: string;
+        },
+    ) => {
+        const fmt = options.format.toLowerCase();
+        if (fmt !== 'mermaid' && fmt !== 'html') {
+            console.error(`✗ Unbekanntes Format "${options.format}" (mermaid | html).`);
+            process.exit(1);
+        }
+        const detail: 'struktur' | 'voll' = options.detail === 'voll' ? 'voll' : 'struktur';
+        const params: 'inline' | 'symbole' = options.params === 'inline' ? 'inline' : 'symbole';
+        const THEMES = ['default', 'neutral', 'dark', 'forest'] as const;
+        type Theme = (typeof THEMES)[number];
+        const theme: Theme = (THEMES as ReadonlyArray<string>).includes(options.theme)
+            ? options.theme as Theme : 'default';
+        const { buildPapModel } = await import('@findsl/core/papgen/model.js');
+        const { files, missing } = await resolveTargets(pfade);
+        for (const m of missing) {
+            console.error(`✗ Kein Treffer / keine Datei: ${m}`);
+        }
+        if (files.length === 0) {
+            console.error(`✗ Keine .findsl-Dateien gefunden (${pfade.join(', ')}).`);
+            process.exit(1);
+        }
+        try {
+            const model = await buildPapModel(files, {
+                detail, params, publicOnly: !!options.ohneIntern,
+            });
+            const base = path.resolve(options.out);
+            await fs.mkdir(path.dirname(base), { recursive: true });
+            const mermaidOpts = { theme, farben: options.farben };
+            let outPath: string;
+            if (fmt === 'html') {
+                // Self-contained HTML (mermaid inline) — klickbare Links, Hover.
+                const { renderHtml } = await import('@findsl/core/papgen/html.js');
+                outPath = `${base}.html`;
+                await fs.writeFile(outPath, renderHtml(model, mermaidOpts), 'utf-8');
+            } else {
+                const { renderModuleMarkdown } = await import('@findsl/core/papgen/mermaid.js');
+                outPath = `${base}.md`;
+                await fs.writeFile(outPath,
+                    model.map((m) => renderModuleMarkdown(m, mermaidOpts)).join('\n\n'), 'utf-8');
+            }
+            const graphs = model.reduce((n, m) => n + m.graphs.length, 0);
+            // `--theme` wirkt nur auf Mermaid; bei HTML steuert das OS die
+            // Helligkeit — daher dort nicht melden (sonst irreführend).
+            const stil = fmt === 'html' ? detail : `${detail}, ${theme}`;
+            console.log(`✓ ${model.length} Modul(e), ${graphs} Ablaufpläne (${stil}) → `
+                + `${path.basename(outPath)}`);
+        } catch (err) {
+            console.error('✗ PAP-Erzeugung fehlgeschlagen: '
+                + (err instanceof Error ? err.message : String(err)));
+            process.exit(1);
+        }
+        // Exit-Code spiegelt fehlende Ziele (skript-tauglich, wie `check`).
+        process.exit(missing.length > 0 ? 1 : 0);
     });
 
 program.parseAsync(process.argv);

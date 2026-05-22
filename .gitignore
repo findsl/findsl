@@ -73,6 +73,9 @@ scripts/lib/
 # Java-Runtime einbettung (regeneriert via scripts/embed-runtime-java.mjs)
 packages/core/src/codegen/emit-java/runtime-files.generated.ts
 
+# mermaid-Bundle für PAP-HTML (regeneriert via scripts/gen-mermaid-asset.mjs)
+packages/core/src/papgen/mermaid-asset.generated.ts
+
 # TS-Runtime einbettung (regeneriert via scripts/embed-runtime-ts.mjs)
 packages/core/src/codegen/emit-ts/runtime-files-ts.generated.ts
 

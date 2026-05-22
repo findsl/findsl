@@ -2,6 +2,36 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-22 — **PAP-Generator: neues CLI-Subkommando
+`papgen` (Programmablaufpläne aus FinDSL, DIN-66001-nah). PR #106 / Issue
+#102.** FinDSL-Funktionen → Flussdiagramme; eine `fn` = ein Diagramm.
+Architektur `packages/core/src/papgen/{model,mermaid,html}.ts` (Modell →
+Emitter getrennt, wie docgen): `model.ts` läuft den AST ab und baut einen
+emitter-neutralen `FlowGraph` (Knotenarten start/ende/abbruch/operation/
+decision/case/subprogram/ausgabe/eingabe); `mermaid.ts` und `html.ts`
+emittieren. **Zwei Ausgabeformate:** `-f mermaid` (Markdown, überall
+renderbar) und `-f html` (**self-contained** — mermaid via esbuild
+re-gebündelt und inline eingebettet, `scripts/gen-mermaid-asset.mjs` →
+gitignored `mermaid-asset.generated.ts`; neue devDependency `mermaid`).
+Die HTML rendert offline und liefert, was rohes Mermaid nicht kann:
+klickbare Gesetzes-§-Links (`securityLevel:'loose'`, Tiefenlinks via
+`docgen/quelle.ts`), **eigene Hover-Tooltips mit serverseitig gerendertem
+KaTeX** (`docgen/math.ts`; Doc-Prosa + `@param` aus dem Doc-Kommentar),
+Zoom (Buttons + ⌘·Strg+Mausrad, `useMaxWidth:false`), hervorgehobene
+Titel, hell/dunkel-Tooltips (`prefers-color-scheme`). **Optionen:**
+`--detail struktur|voll` (voll schreibt Aufruf-Argumente aus),
+`--params symbole|inline` (Default symbole = DIN-Ein-/Ausgabe-Parallelo-
+gramme → Start), `--theme default|neutral|dark|forest`, `--no-farben`,
+`--ohne-intern` (nur öffentliche fn). Reine `prüfe`-Testdateien (0 fn)
+erzeugen kein leeres Modul. **Design:** Monospace 13px, dezente
+entsättigte Palette, geschwungene Kanten (`curve:basis`), zarte 1px-Ränder.
+Im Headless-Browser (Playwright) verifiziert: Diagramme rendern, Tooltips/
+Links/Zoom aktiv, kein Text-Clipping (Top-Level-`fontFamily` für korrekte
+Breitenmessung). Vitest grün inkl. papgen-Suite (`test/papgen/{model,
+mermaid,html}.test.ts`).*
+
+
+
 *Letzte Aktualisierung: 2026-05-20 — **`examples/simple/` → `examples/korpus/`
 umbenannt + Korpus auf SPEC-Vollabdeckung erweitert (Issue #43,
 Folge zu Issue #44).** Verzeichnis `examples/simple/` →

@@ -8,7 +8,8 @@
   "scripts": {
     "langium:generate": "npm -w @findsl/core run langium:generate",
     "embed:runtime": "node scripts/embed-runtime-java.mjs && node scripts/embed-runtime-ts.mjs",
-    "build": "node scripts/embed-runtime-java.mjs && node scripts/embed-runtime-ts.mjs && tsc -b tsconfig.json && node scripts/copy-assets.mjs",
+    "embed:mermaid": "node scripts/gen-mermaid-asset.mjs",
+    "build": "node scripts/embed-runtime-java.mjs && node scripts/embed-runtime-ts.mjs && node scripts/gen-mermaid-asset.mjs && tsc -b tsconfig.json && node scripts/copy-assets.mjs",
     "watch": "tsc -b tsconfig.json --watch",
     "bundle": "node esbuild.mjs",
     "bundle:watch": "node esbuild.mjs --watch",
@@ -28,6 +29,7 @@
     "@types/vscode": "1.120.0",
     "esbuild": "0.28.0",
     "langium-cli": "4.2.1",
+    "mermaid": "11.15.0",
     "postject": "1.0.0-alpha.6",
     "typescript": "5.9.3",
     "vitest": "4.1.7"

@@ -9,12 +9,14 @@
  * #41/#99). Bit-genauer decimal.js-Port der Java-Runtime
  * (`runtimes/java/src/main/java/org/findsl/runtime/`).
  *
- * Phase-2-Skelett (kst-Umfang): Geldmodell + Sicht-Wrapper + Abbruch +
- * Builtin-Enums. Listen/Lambda/Output folgen mit dem vollen Korpus
- * (Issue #100).
+ * Voller Korpus (Issue #100): Geldmodell + Sicht-Wrapper + Abbruch +
+ * Builtin-Enums + Listen (`FinDslListe`, § 11.2). Lambdas sind native
+ * TS-Funktionstypen (keine eigene Klasse). `ausgabe`/`Output` bleibt
+ * codegen-seitig Phase-4-Scope.
  */
 export { FinDslNumber, FinDslRuntimeError, germanFormat, type FinDslNumberType } from './findsl-number.js';
 export { Euro, EuroCent, Cent, Prozent, Ganzzahl, Dezimal } from './wrappers.js';
 export { FinDslAbort } from './findsl-abort.js';
+export { FinDslListe } from './findsl-liste.js';
 export { Steuerklasse } from './steuerklasse.js';
 export { Tarifart } from './tarifart.js';

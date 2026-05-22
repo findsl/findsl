@@ -38,7 +38,7 @@ const IND = '    ';
 /** Alle vom Runtime-`index.ts` exportierten Wert-Symbole (für bedarfs-
  *  gesteuerte Imports). Reihenfolge = deterministische Import-Reihenfolge. */
 const RUNTIME_SYMBOLS = [
-    'FinDslNumber', 'FinDslRuntimeError', 'FinDslAbort',
+    'FinDslNumber', 'FinDslRuntimeError', 'FinDslAbort', 'FinDslListe',
     'Euro', 'EuroCent', 'Cent', 'Prozent', 'Ganzzahl', 'Dezimal',
     'Steuerklasse', 'Tarifart',
 ] as const;
@@ -62,36 +62,46 @@ function buildFieldToClass(
 // --- Typ-Mapping --------------------------------------------------------
 
 /**
- * Out-of-Scope-Marker (#100): Listen/Lambda/Interpolation/Nullable sind im
- * TS-Walking-Skeleton (#99) noch nicht abgedeckt. Klar benennen statt still
- * Falsches zu erzeugen — der CLI-Batch überspringt nur dieses Modul.
+ * Out-of-Scope-Marker: noch nicht im TS-Target abgedeckte Konstrukte
+ * (aktuell: Nullable-Operatoren `?.`/`!!`/Elvis). Klar benennen statt
+ * still Falsches zu erzeugen — der CLI-Batch überspringt nur dieses Modul.
  */
 function outOfScope(was: string): never {
     throw new Error(
-        `${was} ist im TS-Target-Skelett (#99) noch nicht unterstützt `
-        + '— folgt mit dem vollen Korpus (Issue #100).');
+        `${was} ist im TS-Target noch nicht unterstützt `
+        + '(Nullable folgt bedarfsgetrieben).');
 }
 
-/** {@link IrType} → TS-Kern-Typ (Rechen-Schicht): numerisch → `FinDslNumber`. */
+/**
+ * {@link IrType} → TS-Kern-Typ (Rechen-Schicht): numerisch → `FinDslNumber`;
+ * `Liste<T>` → `FinDslListe<Kern-Elem>`; Funktionstyp → native Pfeil-
+ * signatur `(a0: P0, …) => R` (TS-Funktionstypen sind strukturell, keine
+ * `FinDslLambda`-Klasse nötig); benannt → `Owner.Name`/`Name`.
+ */
 function irTypeToTsCore(t: IrType): string {
     switch (t.kind) {
         case 'number': return 'FinDslNumber';
         case 'bool': return 'boolean';
         case 'text': return 'string';
-        case 'list': return outOfScope('Listen-Typ');
-        case 'lambda': return outOfScope('Funktions-Typ');
+        case 'list': return `FinDslListe<${irTypeToTsCore(t.elem)}>`;
+        case 'lambda': {
+            const params = t.params
+                .map((p, i) => `a${i}: ${irTypeToTsCore(p)}`).join(', ');
+            return `(${params}) => ${irTypeToTsCore(t.ret)}`;
+        }
         case 'named': return t.owner !== undefined ? `${t.owner}.${t.name}` : t.name;
     }
 }
 
 /**
  * {@link IrType} → TS-API-Typ (Deklarationsgrenze): numerisch-skalar →
- * sprechender Wrapper (`Euro` …; Teil-Parse ohne Wrapper → `FinDslNumber`).
+ * sprechender Wrapper (`Euro` …; Teil-Parse ohne Wrapper → `FinDslNumber`);
+ * `Liste<T>` bleibt `FinDslListe<Kern-Elem>`; alles übrige = Kern-Typ.
  */
 function irTypeToTsApi(t: IrType): string {
     switch (t.kind) {
         case 'number': return t.wrapper ?? 'FinDslNumber';
-        case 'list': return outOfScope('Listen-Typ');
+        case 'list': return `FinDslListe<${irTypeToTsCore(t.elem)}>`;
         default: return irTypeToTsCore(t);
     }
 }
@@ -172,6 +182,60 @@ function emitCmp(e: Extract<IrExpr, { kind: 'cmp' }>): string {
     }
 }
 
+/**
+ * Listen-Literale + Bereich-Konstruktoren. Leeres Literal → typisiertes
+ * `FinDslListe.empty<E>()`; sonst `FinDslListe.of([…])`. Bereich/Enum-
+ * Bereich → `FinDslListe.bereich/enumBereich(…)` (Schritt fehlend → `null`).
+ * Bei `enumBereich` entfällt das Java-`Enum.class`-Argument: generierte
+ * `enum`-Werte sind ihre Ordinalzahl (numerische Iteration genügt).
+ */
+function emitListExpr(
+    e: Extract<IrExpr, { kind: 'listLit' | 'listRange' | 'listEnumRange' }>,
+): string {
+    if (e.kind === 'listLit') {
+        return e.items.length === 0
+            ? `FinDslListe.empty<${irTypeToTsCore(e.elementType)}>()`
+            : `FinDslListe.of([${e.items.map(emitExpr).join(', ')}])`;
+    }
+    const step = e.step !== undefined ? emitExpr(e.step) : 'null';
+    if (e.kind === 'listRange') {
+        return `FinDslListe.bereich(${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+    }
+    return `FinDslListe.enumBereich(${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+}
+
+/**
+ * Einstelliges Lambda → native Pfeilfunktion. Mit `lets` (Block-Lambda)
+ * → `(p) => { const n: T = e; …; return body; }`; sonst kompakt
+ * `(p) => body`. Parameter sind kontextuell getypt (Listen-Methoden-
+ * Signatur), daher keine Param-Annotation.
+ */
+function emitLambda1(e: Extract<IrExpr, { kind: 'lambda1' }>): string {
+    if (e.lets !== undefined && e.lets.length > 0) {
+        const decls = e.lets
+            .map((l) => `const ${l.name}: ${irTypeToTsCore(l.type)} = ${emitExpr(l.expr)};`)
+            .join(' ');
+        return `(${e.param}) => { ${decls} return ${emitExpr(e.body)}; }`;
+    }
+    return `(${e.param}) => ${emitExpr(e.body)}`;
+}
+
+/**
+ * String-Interpolation `"…${slot}…"` → TS-String-Konkatenation. Text-Slots
+ * direkt; numerische Slots über `.asText()` (bit-genaue Zahl→Text-Konversion
+ * via Runtime, identisch zum Java-Emitter).
+ */
+function emitStrInterp(e: Extract<IrExpr, { kind: 'strInterp' }>): string {
+    const terms: string[] = [];
+    for (let k = 0; k < e.slots.length; k++) {
+        terms.push(tsString(e.parts[k]));
+        const isText = e.slotIsText?.[k] ?? false;
+        terms.push(isText ? emitExpr(e.slots[k]) : `${emitExpr(e.slots[k])}.asText()`);
+    }
+    terms.push(tsString(e.parts[e.parts.length - 1]));
+    return terms.join(' + ');
+}
+
 /** Ausdruck → TS-Ausdrucks-String (seiteneffektfrei, P2). Dispatch-Switch. */
 function emitExpr(e: IrExpr): string {
     switch (e.kind) {
@@ -233,17 +297,28 @@ function emitExpr(e: IrExpr): string {
         case 'moneyAnno':
             return `${emitExpr(e.expr)}.withMoneyAnnotation(`
                 + `${tsString(e.target)}, ${tsString(e.what)})`;
-        // --- Phase 2 (#100): noch nicht im TS-Target ---
+        // --- Listen (§ 11.2) ---
+        case 'listLit':         return emitListExpr(e);
+        case 'listRange':       return emitListExpr(e);
+        case 'listEnumRange':   return emitListExpr(e);
+        case 'listMethod':      return `${emitExpr(e.receiver)}.${e.method}()`;
+        case 'listMap':         return `${emitExpr(e.receiver)}.zuordnen(${emitExpr(e.fn)})`;
+        case 'listFilter':      return `${emitExpr(e.receiver)}.filtern(${emitExpr(e.fn)})`;
+        case 'listCountWhere':  return `${emitExpr(e.receiver)}.zaehleMit(${emitExpr(e.fn)})`;
+        case 'listContains':    return `${emitExpr(e.receiver)}.enthaelt(${emitExpr(e.value)})`;
+        case 'listAt':          return `${emitExpr(e.receiver)}.bei(${emitExpr(e.index)})`;
+        case 'listFold':        return `${emitExpr(e.receiver)}.zusammenfassen(${emitExpr(e.start)}, ${emitExpr(e.fn)})`;
+        // --- Lambdas (native Pfeilfunktionen) ---
+        case 'lambda1':         return emitLambda1(e);
+        case 'lambda2':         return `(${e.param1}, ${e.param2}) => ${emitExpr(e.body)}`;
+        case 'lambdaCall':
+            // First-class Lambda-Wert: direkter Aufruf (kein Java `.apply`).
+            return `${emitExpr(e.fn)}(${e.args.map(emitExpr).join(', ')})`;
+        // --- String-Interpolation ---
+        case 'strInterp':       return emitStrInterp(e);
+        // --- Nullable: bedarfsgetrieben (von keinem Beispielmodul genutzt) ---
         case 'elvis': case 'forceUnwrap': case 'safeFieldAccess':
             return outOfScope('Nullable-Operator');
-        case 'listLit': case 'listRange': case 'listEnumRange':
-        case 'listMethod': case 'listMap': case 'listFilter':
-        case 'listCountWhere': case 'listContains': case 'listAt': case 'listFold':
-            return outOfScope('Listen-Ausdruck');
-        case 'lambda1': case 'lambda2': case 'lambdaCall':
-            return outOfScope('Lambda');
-        case 'strInterp':
-            return outOfScope('String-Interpolation');
         case 'abort':
             throw new Error('abbruch nur in Ergebnis-Position (emitResult), nicht als Sub-Ausdruck.');
         case 'waehle':
@@ -420,23 +495,57 @@ function emitFnDecl(d: Extract<IrDecl, { kind: 'fn' }>): string {
 }
 
 /**
+ * Sammelt alle cross-modul referenzierten Owner-Klassennamen via
+ * generischen IR-Walk: `ownerClass` (enumVal/ctor/crossRef) und der
+ * `owner` benannter Typen. In ESM braucht JEDE cross-Datei-Referenz
+ * einen Import — anders als in Java, wo gleiches-Package-Referenzen
+ * ohne Import auflösen. Die IR ist ein Baum (kein Zyklus → terminiert).
+ */
+function collectOwners(node: unknown, into: Set<string>): void {
+    if (node === null || typeof node !== 'object') return;
+    const obj = node as Record<string, unknown>;
+    if (typeof obj.ownerClass === 'string') into.add(obj.ownerClass);
+    if (obj.kind === 'named' && typeof obj.owner === 'string') into.add(obj.owner);
+    for (const v of Object.values(obj)) {
+        if (Array.isArray(v)) {
+            for (const x of v) collectOwners(x, into);
+        } else if (v !== null && typeof v === 'object') {
+            collectOwners(v, into);
+        }
+    }
+}
+
+/**
  * Bedarfsgesteuerte Runtime-Importe + Cross-Modul-Namespace-Importe für
- * einen emittierten Code-Block. Reihenfolge deterministisch.
+ * ein emittiertes Modul. Importiert ALLE referenzierten Fremd-Module
+ * (Funktionen UND Typen/Enums/Konstanten) — `composedModules` deckt nur
+ * die per `fn` aufgerufenen ab. Paket aus `composedModules`, sonst
+ * gleiches Paket (Default für reine Typ-Importe). Reihenfolge sortiert
+ * → deterministisch.
  */
 function importHeader(
     code: string,
-    pkg: string | undefined,
-    composed: ReadonlyArray<IrComposedModule>,
+    m: IrModule | IrTestModule,
     extraImports: ReadonlyArray<string> = [],
 ): string[] {
+    const pkg = m.javaPackage;
     const used = RUNTIME_SYMBOLS.filter((s) => new RegExp(`\\b${s}\\b`).test(code));
     const lines: string[] = [...extraImports];
     if (used.length > 0) {
         lines.push(`import { ${used.join(', ')} } from '${relRuntimeImport(pkg)}';`);
     }
-    for (const c of composed) {
-        lines.push(`import * as ${c.className} from `
-            + `'${relModuleImport(pkg, c.javaPackage, c.className)}';`);
+    const owners = new Set<string>();
+    collectOwners(m, owners);
+    const pkgOf = new Map<string, string | undefined>();
+    for (const c of m.composedModules) {
+        owners.add(c.className);
+        pkgOf.set(c.className, c.javaPackage);
+    }
+    owners.delete(m.className);                       // nie sich selbst importieren
+    for (const owner of [...owners].sort()) {
+        const ownerPkg = pkgOf.has(owner) ? pkgOf.get(owner) : pkg;
+        lines.push(`import * as ${owner} from `
+            + `'${relModuleImport(pkg, ownerPkg, owner)}';`);
     }
     return lines;
 }
@@ -500,7 +609,7 @@ export function emitTsModule(m: IrModule): TsModuleFile {
         .map(({ d }) => emitDecl(d))
         .join('\n\n');
 
-    const header = importHeader(members, m.javaPackage, m.composedModules);
+    const header = importHeader(members, m);
     const code = [
         ...header,
         '',
@@ -580,7 +689,7 @@ export function emitTsTestModule(m: IrTestModule): TsModuleFile {
     const body = suites.join('\n\n');
 
     const header = importHeader(
-        body, m.javaPackage, m.composedModules,
+        body, m,
         ["import { describe, it, expect } from 'vitest';"],
     );
     const code = [

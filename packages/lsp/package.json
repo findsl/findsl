@@ -4,6 +4,11 @@
   "description": "FinDSL Language-Server (LSP) — Server-Entry, von der VS-Code-Extension gebündelt",
   "type": "module",
   "license": "EUPL-1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/findsl/findsl.git",
+    "directory": "packages/lsp"
+  },
   "main": "./out/main.js",
   "dependencies": {
     "@findsl/core": "1.0.0-rc.1",

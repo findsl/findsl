@@ -6,6 +6,11 @@
   "publisher": "findsl",
   "license": "EUPL-1.2",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/findsl/findsl.git",
+    "directory": "apps/vscode"
+  },
   "engines": {
     "vscode": "^1.85.0",
     "node": ">=20.10.0"

@@ -272,9 +272,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-13
-            target: darwin-x64
-            archive: tar.gz
           - os: macos-14
             target: darwin-arm64
             archive: tar.gz
@@ -354,6 +351,67 @@ jobs:
           name: binary-${{ matrix.target }}
           path: |
             findsl-${{ needs.prepare.outputs.version }}-${{ matrix.target }}.*
+          retention-days: 14
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # `binary-intel-mac` — Intel-macOS (darwin-x64), BEST-EFFORT
+  #
+  # GitHub-hosted `macos-13`-Runner (Intel) sind für dieses Repo faktisch
+  # nicht verfügbar (queuen endlos), während `macos-14`/arm64 zuverlässig
+  # läuft. Daher als EIGENER, NICHT blockierender Job: der `release`-Job
+  # hat ihn NICHT in `needs`. Bekommt ein Intel-Runner einen Slot, lädt er
+  # das Binary als Artefakt hoch und `release` nimmt es mit; sonst wird das
+  # Release davon NICHT aufgehalten (`continue-on-error`). Kein Secret-
+  # Schritt (GPG-Signatur nur für Linux). Wieder in die `binaries`-Matrix
+  # ziehen, sobald Intel-Runner verlässlich verfügbar sind.
+  # -------------------------------------------------------------------------
+  binary-intel-mac:
+    needs: prepare
+    runs-on: macos-13
+    continue-on-error: true
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TARGET: darwin-x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build + Bundle + Binary
+        run: |
+          npm run langium:generate
+          npm run build
+          npm run binary
+
+      - name: Pack archive (POSIX)
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE="findsl-${VERSION}-${TARGET}"
+          mkdir -p "$STAGE"
+          cp packages/cli/dist/findsl "$STAGE/"
+          if [ -d packages/cli/dist/data ]; then cp -R packages/cli/dist/data "$STAGE/"; fi
+          if [ -f README.md ]; then cp README.md "$STAGE/"; fi
+          if [ -f LICENSE-COMMERCIAL.md ]; then cp LICENSE-COMMERCIAL.md "$STAGE/"; fi
+          tar -czf "$STAGE.tar.gz" "$STAGE"
+          shasum -a 256 "$STAGE.tar.gz" > "$STAGE.tar.gz.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: binary-darwin-x64
+          path: |
+            findsl-${{ needs.prepare.outputs.version }}-darwin-x64.*
           retention-days: 14
           if-no-files-found: error
 

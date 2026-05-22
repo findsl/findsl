@@ -4,6 +4,11 @@
   "description": "FinDSL Sprachkern: Grammatik/AST/Validator/Typen, Interpreter, Doku-Generator, Codegen",
   "type": "module",
   "license": "EUPL-1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/findsl/findsl.git",
+    "directory": "packages/core"
+  },
   "exports": {
     "./*.js": {
       "source": "./src/*.ts",

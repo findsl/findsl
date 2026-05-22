@@ -4,6 +4,11 @@
   "description": "FinDSL Kommandozeilen-Werkzeug (parse, pruefe, doku)",
   "type": "module",
   "license": "EUPL-1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/findsl/findsl.git",
+    "directory": "packages/cli"
+  },
   "bin": {
     "findsl": "./out/main.js"
   },

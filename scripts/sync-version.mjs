@@ -3,6 +3,10 @@
  * Single Source of Truth: `VERSION` an der Repo-Wurzel.
  * Propagiert in alle versionsführenden Stellen:
  *   • root `package.json` + alle Workspaces (`packages/*`, `apps/*`)
+ *   • die hartcodierte CLI-Version (`commander .version('…')` in
+ *     `packages/cli/src/main.ts`) — sonst meldete `findsl --version` nach
+ *     einem Release weiter die alte Nummer (das gebündelte Binary kann die
+ *     package.json zur Laufzeit nicht zuverlässig lesen).
  *
  * `runtimes/java/build.gradle.kts` liest direkt aus dieser Datei via
  * `rootDir.parentFile.parentFile.resolve("VERSION")` — kein zweiter Schreibort.
@@ -78,6 +82,10 @@ for (const file of targets) {
     console.log(`[sync-version] ${rel(file)} → ${version}`);
 }
 
+// Hartcodierte CLI-Version (kein package.json, aber dieselbe Lockstep-Quelle).
+mismatches += syncCliVersion(
+    path.join(repoRoot, 'packages', 'cli', 'src', 'main.ts'), version, checkOnly);
+
 if (checkOnly && mismatches > 0) {
     console.error(`\n✗ ${mismatches} Version(en) divergieren von ${version}. ` +
         `Lauf \`node scripts/sync-version.mjs\` ohne --check.`);
@@ -104,6 +112,32 @@ function collectInternalDeps(pkg, version) {
         }
     }
     return out;
+}
+
+/**
+ * Synchronisiert die hartcodierte `commander`-`.version('X')` einer
+ * TS-Quelldatei mit der Lockstep-Version. Liefert die Anzahl der Drifts
+ * (0 oder 1) für den `--check`-Summenzähler. Fehlt das Muster (z. B. weil
+ * die CLI später aus der package.json liest), wird mit Hinweis übersprungen
+ * — kein harter Fehler, damit ein künftiges Refactoring nicht bricht.
+ */
+function syncCliVersion(file, version, checkOnly) {
+    if (!fs.existsSync(file)) return 0;
+    const src = fs.readFileSync(file, 'utf8');
+    const re = /\.version\((['"])(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\1\)/;
+    const m = src.match(re);
+    if (!m) {
+        console.log(`[sync-version] Hinweis: kein \`.version('…')\` in ${rel(file)} — übersprungen.`);
+        return 0;
+    }
+    if (m[2] === version) return 0;
+    if (checkOnly) {
+        console.error(`✗ ${rel(file)}: .version() ${m[2]} ≠ ${version}`);
+        return 1;
+    }
+    fs.writeFileSync(file, src.replace(re, (_full, q) => `.version(${q}${version}${q})`));
+    console.log(`[sync-version] ${rel(file)} (.version) → ${version}`);
+    return 0;
 }
 
 function listPackageJsons(dir) {

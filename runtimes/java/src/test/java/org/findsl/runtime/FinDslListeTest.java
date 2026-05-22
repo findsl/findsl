@@ -114,4 +114,25 @@ class FinDslListeTest {
             assertTrue(q.elements().get(2).equalsValue(FinDslNumber.ganzzahl("30")));
         }
     }
+
+    @Nested
+    @DisplayName("rest (§ 11.2 — total, orakel-treu)")
+    class Rest {
+        @Test
+        @DisplayName("leere Liste → leere Liste (kein Wurf, Issue #110)")
+        void restLeerGibtLeer() {
+            FinDslListe<FinDslNumber> r = FinDslListe.<FinDslNumber>empty().rest();
+            assertValue(r.laenge(), "0", FinDslNumber.Type.Ganzzahl);
+        }
+
+        @Test
+        @DisplayName("nicht-leer → ohne erstes Element, Reihenfolge erhalten")
+        void restNichtLeer() {
+            FinDslListe<FinDslNumber> l = FinDslListe.of(List.of(
+                FinDslNumber.ganzzahl("1"), FinDslNumber.ganzzahl("2"), FinDslNumber.ganzzahl("3")));
+            FinDslListe<FinDslNumber> r = l.rest();
+            assertValue(r.laenge(), "2", FinDslNumber.Type.Ganzzahl);
+            assertTrue(r.kopf().equalsValue(FinDslNumber.ganzzahl("2")));
+        }
+    }
 }

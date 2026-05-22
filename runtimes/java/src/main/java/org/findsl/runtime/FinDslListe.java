@@ -298,15 +298,15 @@ public record FinDslListe<E>(List<E> elements) {
 
     /**
      * {@code .rest} (SPEC § 11.2): neue Liste ohne das erste Element.
-     * Wirft bei leerer Liste (wie das Orakel).
+     * Total — auf leerer Liste die leere Liste (orakel-treu: der
+     * Interpreter liefert {@code [].slice(1) === []}, kein Wurf; § 11.2
+     * nennt für {@code .rest} — anders als {@code .kopf} — keinen Fehlerfall).
      *
-     * @return Liste ohne erstes Element.
-     * @throws FinDslRuntimeError bei leerer Liste.
+     * @return Liste ohne erstes Element (leer → leer).
      */
     public FinDslListe<E> rest() {
         if (elements.isEmpty()) {
-            throw new FinDslRuntimeError(
-                "Liste.rest auf leerer Liste (SPEC § 11.2).");
+            return new FinDslListe<>(new ArrayList<>());
         }
         return new FinDslListe<>(new ArrayList<>(elements.subList(1, elements.size())));
     }

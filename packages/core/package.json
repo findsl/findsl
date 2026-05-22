@@ -1,6 +1,6 @@
 {
   "name": "@findsl/core",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "description": "FinDSL Sprachkern: Grammatik/AST/Validator/Typen, Interpreter, Doku-Generator, Codegen",
   "type": "module",
   "license": "EUPL-1.2",

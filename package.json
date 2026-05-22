@@ -1,10 +1,13 @@
 {
   "name": "findsl-workspace",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "license": "EUPL-1.2",
   "type": "module",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "langium:generate": "npm -w @findsl/core run langium:generate",
     "embed:runtime": "node scripts/embed-runtime-java.mjs && node scripts/embed-runtime-ts.mjs",
@@ -26,7 +29,7 @@
     "@types/markdown-it": "14.1.2",
     "@types/node": "20.19.41",
     "@types/pdfmake": "0.3.3",
-    "@types/vscode": "1.120.0",
+    "@types/vscode": "1.85.0",
     "esbuild": "0.28.0",
     "langium-cli": "4.2.1",
     "mermaid": "11.15.0",

@@ -64,9 +64,10 @@ gpg --verify findsl.tar.gz.asc findsl.tar.gz
 ### macOS — unsigniert, manueller Erstausführung-Schritt
 
 > ⚠️ Die macOS-Binaries sind **nicht** von Apple notarisiert. Beim ersten
-> Ausführen erscheint die Warnung **„… kann nicht geöffnet werden, da Apple
-> es nicht auf Schadsoftware überprüfen kann."** Das ist erwartet — der
-> Workaround ist einmalig pro Binary nötig.
+> Ausführen meldet macOS **„Apple konnte nicht verifizieren, dass „findsl"
+> frei von Schadsoftware ist, die deinen Mac beschädigen oder deine
+> Privatsphäre gefährden könnte."** Das ist erwartet — der Workaround ist
+> einmalig pro Binary nötig.
 
 1. Tarball entpacken:
    ```bash
@@ -79,8 +80,15 @@ gpg --verify findsl.tar.gz.asc findsl.tar.gz
    ```bash
    xattr -d com.apple.quarantine /usr/local/bin/findsl
    ```
-   _Alternative ohne Terminal:_ im Finder mit Rechtsklick → „Öffnen" →
-   im Dialog erneut „Öffnen" wählen. macOS merkt sich die Freigabe.
+   _Alternative ohne Terminal (aktuelles macOS):_ Binary einmal starten
+   (wird blockiert), dann **Systemeinstellungen → Datenschutz & Sicherheit**
+   öffnen — ganz unten erscheint „findsl wurde blockiert…" →
+   **„Trotzdem öffnen"**; beim erneuten Start „Öffnen" bestätigen. macOS
+   merkt sich die Freigabe.
+
+   > Hinweis: Der frühere Finder-Trick „Rechtsklick → Öffnen" wurde ab
+   > macOS 15 (Sequoia) entfernt — dort führt nur noch der Weg über die
+   > Systemeinstellungen (oder `xattr` oben).
 
 3. Verifizieren:
    ```bash

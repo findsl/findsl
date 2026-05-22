@@ -392,10 +392,10 @@ describe('prüfe → JUnit5 (Phase 3, Inkrement 3)', () => {
 });
 
 describe('Zielsprachen-Validierung', () => {
-    it('akzeptiert java + ts, lehnt geplante/unbekannte Sprachen ab', () => {
+    it('akzeptiert java + ts + js, lehnt unbekannte Sprachen ab', () => {
         expect(istUnterstuetzteSprache('java')).toBe(true);
         expect(istUnterstuetzteSprache('ts')).toBe(true);     // Issue #99
-        expect(istUnterstuetzteSprache('js')).toBe(false);    // geplant (#…)
+        expect(istUnterstuetzteSprache('js')).toBe(true);     // Issue #101
         expect(istUnterstuetzteSprache('go')).toBe(false);
     });
 });

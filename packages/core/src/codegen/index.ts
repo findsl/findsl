@@ -15,13 +15,13 @@
  * Name — TS/JS-Targets kommen später ohne neues Subkommando dazu.
  */
 
-/** Zielsprachen: `java` (Issue #7) und `ts` (Walking-Skeleton #99). */
-export type ZielSprache = 'java' | 'ts';
+/** Zielsprachen: `java` (#7), `ts` (#99), `js` (#101, Typ-Strip des TS). */
+export type ZielSprache = 'java' | 'ts' | 'js';
 
-/** Künftige Targets (Folge-Tickets): `js` — noch nicht implementiert. */
-export const GEPLANTE_SPRACHEN = ['js'] as const;
+/** Keine weiteren Targets geplant (TS/JS-Initiative #41 abgeschlossen). */
+export const GEPLANTE_SPRACHEN = [] as const;
 
-export const UNTERSTUETZTE_SPRACHEN: ReadonlyArray<ZielSprache> = ['java', 'ts'];
+export const UNTERSTUETZTE_SPRACHEN: ReadonlyArray<ZielSprache> = ['java', 'ts', 'js'];
 
 export function istUnterstuetzteSprache(s: string): s is ZielSprache {
     return (UNTERSTUETZTE_SPRACHEN as ReadonlyArray<string>).includes(s);
@@ -34,6 +34,9 @@ export {
 export {
     emitTsModule, emitTsTestModule, irTypeToTs, type TsModuleFile,
 } from './emit-ts/emitter.js';
+export {
+    emitJsModule, emitJsTestModule, tsZuJs, stripRuntimeToJs,
+} from './emit-js/strip.js';
 export { render, type Doc } from './emit/doc.js';
 export type { IrModule, IrDecl, IrTestModule } from './ir/nodes.js';
 export {

@@ -506,7 +506,7 @@ program
         'Wurzelverzeichnis; rekursiv nach *.findsl durchsucht. Eine '
         + 'Datei direkt darin → unbenanntes (Default-)Package; '
         + 'Unterverzeichnisse → Package-Segmente. Kein -p/--package.')
-    .option('-l, --lang <sprache>', 'Zielsprache (java|ts)', 'java')
+    .option('-l, --lang <sprache>', 'Zielsprache (java|ts|js)', 'java')
     .option('-o, --out <verzeichnis>', 'Ausgabeverzeichnis (Hauptklassen)', 'out/java')
     .option('-t, --test-out <verzeichnis>',
         'Ausgabeverzeichnis für generierte JUnit-Tests aus prüfe-Blöcken '
@@ -523,7 +523,7 @@ Beispiele:
         const {
             istUnterstuetzteSprache, GEPLANTE_SPRACHEN,
             lowerProgram, lowerTestProgram, emitJavaModuleFiles, emitJavaTestModule,
-            emitTsModule, emitTsTestModule,
+            emitTsModule, emitTsTestModule, emitJsModule, emitJsTestModule, stripRuntimeToJs,
             derivePackage, deriveClassName, isTestFile,
             JAVA_RUNTIME_FILES, TS_RUNTIME_FILES,
         } = await import('@findsl/core/codegen/index.js');
@@ -534,7 +534,7 @@ Beispiele:
                 ? ` "${lang}" ist als Folge-Ticket geplant, aber noch nicht implementiert.`
                 : '';
             console.error(`✗ Zielsprache "${options.lang}" nicht unterstützt `
-                + `(verfügbar: java, ts).${geplant}`);
+                + `(verfügbar: java, ts, js).${geplant}`);
             process.exit(1);
         }
 
@@ -693,8 +693,8 @@ Beispiele:
                     className: mod.className,
                     imports: [...byPath.values()],
                 });
-                if (lang === 'ts') {
-                    const f = emitTsModule(ir);
+                if (lang === 'ts' || lang === 'js') {
+                    const f = lang === 'js' ? emitJsModule(ir) : emitTsModule(ir);
                     outFiles = [{ name: f.fileName, content: f.code }];
                 } else {
                     const f = emitJavaModuleFiles(ir);
@@ -811,8 +811,8 @@ Beispiele:
                     className: tm.className,
                     imports: [...byPath.values()],
                 });
-                if (lang === 'ts') {
-                    const f = emitTsTestModule(ir);
+                if (lang === 'ts' || lang === 'js') {
+                    const f = lang === 'js' ? emitJsTestModule(ir) : emitTsTestModule(ir);
                     testFileName = f.fileName;
                     testCode = f.code;
                 } else {
@@ -842,13 +842,26 @@ Beispiele:
         // automatisch (beides aus demselben CLI-Bundle).
         const writtenRuntime: string[] = [];
         if (written.length > 0) {
-            const runtimeFiles = lang === 'ts' ? TS_RUNTIME_FILES : JAVA_RUNTIME_FILES;
+            const runtimeFiles = lang === 'ts' ? TS_RUNTIME_FILES
+                : lang === 'js' ? stripRuntimeToJs(TS_RUNTIME_FILES)
+                : JAVA_RUNTIME_FILES;
             try {
                 for (const rf of runtimeFiles) {
                     const target = path.join(outDir, ...rf.relPath.split('/'));
                     await fs.mkdir(path.dirname(target), { recursive: true });
                     await fs.writeFile(target, rf.content, 'utf-8');
                     writtenRuntime.push(target);
+                }
+                // JS-Output: `package.json` mit `type: module` macht das
+                // Generat zu echtem Node-ESM (`.js` = ESM); decimal.js als
+                // einzige Laufzeit-Abhängigkeit deklariert.
+                if (lang === 'js') {
+                    const pkgJson = path.join(outDir, 'package.json');
+                    await fs.writeFile(pkgJson, JSON.stringify({
+                        type: 'module',
+                        dependencies: { 'decimal.js': '^10.4.3' },
+                    }, null, 2) + '\n', 'utf-8');
+                    writtenRuntime.push(pkgJson);
                 }
             } catch (err) {
                 // fs-Fehler nach erfolgreichem Codegen darf nicht still als
@@ -865,17 +878,17 @@ Beispiele:
                 + `(${disp(outDir)}/) — bit-genau (Interpreter-Orakel).`);
         }
         if (writtenRuntime.length > 0) {
-            const runtimeDir = lang === 'ts'
-                ? path.join(outDir, 'runtime')
-                : path.join(outDir, 'org', 'findsl', 'runtime');
-            const dep = lang === 'ts'
-                ? 'einzige Dependency: decimal.js'
-                : 'keine externe Dependency';
+            const runtimeDir = lang === 'java'
+                ? path.join(outDir, 'org', 'findsl', 'runtime')
+                : path.join(outDir, 'runtime');
+            const dep = lang === 'java'
+                ? 'keine externe Dependency'
+                : 'einzige Dependency: decimal.js';
             console.log(`✓ ${writtenRuntime.length} Runtime-Datei(en) → `
                 + `${disp(runtimeDir)}/ — autonomer ${lang.toUpperCase()}-Output, ${dep}.`);
         }
         if (writtenTests.length > 0) {
-            const testKind = lang === 'ts' ? 'Vitest-Spec(s)' : 'JUnit5-Testklasse(n)';
+            const testKind = lang === 'java' ? 'JUnit5-Testklasse(n)' : 'Vitest-Spec(s)';
             console.log(`✓ ${writtenTests.length} ${testKind} → `
                 + `(${disp(testOutDir)}/) — prüfe-Spiegel (runPruefeDecl).`);
         }

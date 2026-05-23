@@ -67,6 +67,7 @@ const MODULES: ReadonlyArray<{ dir: string; minTests: number; note: string }> = 
     { dir: 'kraftst', minTests: 34, note: 'mehrdateilig: Intra-Package-ESM-Imports' },
     { dir: 'gewst',   minTests: 43, note: 'String-Interpolation' },
     { dir: 'est',     minTests: 22, note: 'Listen + Lambda (.zuordnen/.summe)' },
+    { dir: 'korpus',  minTests: 116, note: 'SPEC-Vollbreite inkl. Nullable (?./!!/Elvis), #117' },
 ];
 
 /** Die beiden Script-Targets; `tsc=true` → AK1-Typecheck (nur TS). */

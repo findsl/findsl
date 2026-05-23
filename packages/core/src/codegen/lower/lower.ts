@@ -113,6 +113,18 @@ function atomName(t: Type | undefined): string | undefined {
  * Datensatz/Aufzählung → `named{name, owner?}` (cross-modul qualifiziert).
  */
 function irType(t: Type | undefined, reg: Registry): IrType {
+    // Nullability (`?`, `Type.optional`) als orthogonales Flag auf den
+    // Basistyp legen — nur wo im Quelltext ein `?` steht (sonst kein
+    // Generat-Drift). Für Java irrelevant (Referenztypen nullable); der
+    // TS-Emitter macht daraus ` | null`. Verschachtelte Typen (Listen-
+    // Element, Lambda-Param/Ret) tragen ihre eigene Nullability, da die
+    // rekursiven Aufrufe in `irTypeBase` über diesen Wrapper laufen.
+    const base = irTypeBase(t, reg);
+    return t?.optional === true ? { ...base, nullable: true } : base;
+}
+
+/** Basistyp ohne Nullability — siehe {@link irType}. */
+function irTypeBase(t: Type | undefined, reg: Registry): IrType {
     // (#44 L5) Funktions-Typ → lambda (parametrisch über die IrTypes der
     // Parameter und des Rückgabetyps; Java-Boxing `boolean`→`Boolean`
     // erledigt der Emitter-Resolver).

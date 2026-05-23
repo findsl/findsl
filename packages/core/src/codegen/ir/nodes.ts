@@ -43,18 +43,25 @@ export type IrNumberWrapper = 'Ganzzahl' | 'Dezimal' | 'Prozent' | 'Euro' | 'Eur
  * API-Sicht (`wrapper`): der Resolver wählt je nach Position. `wrapper`
  * ist nur im Teil-Parse-Robustheitsfall `undefined` (dann fällt auch die
  * API-Sicht auf den Kern zurück — wie das frühere Verhalten).
+ *
+ * `nullable` (`Text?`/`Ganzzahl?`/`Person?`, SPEC § 4.x) wird beim Lowering
+ * aus `Type.optional` gesetzt. Für Java irrelevant (Referenztypen sind
+ * implizit nullable → der Java-Emitter ignoriert das Feld, Output
+ * byte-identisch); der TS-Emitter hängt bei `nullable` ` | null` an, damit
+ * das Generat typecheckt (`nichts` ist nur dann zuweisbar). Nur gesetzt,
+ * wo im Quelltext ein `?` steht — sonst `undefined` (kein Generat-Drift).
  */
 export type IrType =
-    | { readonly kind: 'number'; readonly wrapper?: IrNumberWrapper }
-    | { readonly kind: 'bool' }
-    | { readonly kind: 'text' }
-    | { readonly kind: 'list'; readonly elem: IrType }
-    | { readonly kind: 'lambda'; readonly params: ReadonlyArray<IrType>; readonly ret: IrType }
+    | { readonly kind: 'number'; readonly wrapper?: IrNumberWrapper; readonly nullable?: boolean }
+    | { readonly kind: 'bool'; readonly nullable?: boolean }
+    | { readonly kind: 'text'; readonly nullable?: boolean }
+    | { readonly kind: 'list'; readonly elem: IrType; readonly nullable?: boolean }
+    | { readonly kind: 'lambda'; readonly params: ReadonlyArray<IrType>; readonly ret: IrType; readonly nullable?: boolean }
     /** Benannter Nutzertyp (Datensatz/Aufzählung). `owner` = Modul-Klasse
      *  bei cross-modul-Referenz, sonst lokal/builtin. record/enum werden
      *  hier bewusst nicht getrennt — für die Java-Emission irrelevant; eine
      *  Trennung kann ein TS-Emitter bei Bedarf über die Registry nachziehen. */
-    | { readonly kind: 'named'; readonly name: string; readonly owner?: string };
+    | { readonly kind: 'named'; readonly name: string; readonly owner?: string; readonly nullable?: boolean };
 
 export type IrExpr =
     /** `FinDslNumber.<factory>("<arg>")` — arg ist der normalisierte Dezimalstring. */

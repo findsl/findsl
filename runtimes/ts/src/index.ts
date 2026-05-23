@@ -18,5 +18,6 @@ export { FinDslNumber, FinDslRuntimeError, germanFormat, type FinDslNumberType }
 export { Euro, EuroCent, Cent, Prozent, Ganzzahl, Dezimal } from './wrappers.js';
 export { FinDslAbort } from './findsl-abort.js';
 export { FinDslListe } from './findsl-liste.js';
+export { nichtNull } from './findsl-nullable.js';
 export { Steuerklasse } from './steuerklasse.js';
 export { Tarifart } from './tarifart.js';

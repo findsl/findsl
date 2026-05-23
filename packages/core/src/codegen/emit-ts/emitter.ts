@@ -38,7 +38,7 @@ const IND = '    ';
 /** Alle vom Runtime-`index.ts` exportierten Wert-Symbole (für bedarfs-
  *  gesteuerte Imports). Reihenfolge = deterministische Import-Reihenfolge. */
 const RUNTIME_SYMBOLS = [
-    'FinDslNumber', 'FinDslRuntimeError', 'FinDslAbort', 'FinDslListe',
+    'FinDslNumber', 'FinDslRuntimeError', 'FinDslAbort', 'FinDslListe', 'nichtNull',
     'Euro', 'EuroCent', 'Cent', 'Prozent', 'Ganzzahl', 'Dezimal',
     'Steuerklasse', 'Tarifart',
 ] as const;
@@ -62,23 +62,27 @@ function buildFieldToClass(
 // --- Typ-Mapping --------------------------------------------------------
 
 /**
- * Out-of-Scope-Marker: noch nicht im TS-Target abgedeckte Konstrukte
- * (aktuell: Nullable-Operatoren `?.`/`!!`/Elvis). Klar benennen statt
- * still Falsches zu erzeugen — der CLI-Batch überspringt nur dieses Modul.
+ * Hängt ` | null` an, wenn der Typ nullable ist (`Text?`/`Person?`, #117);
+ * Funktionstypen werden geklammert (`(…=>R) | null`), damit nicht der
+ * Rückgabetyp nullable wird. Sonst kein Drift (nullable nur wo `?` steht).
  */
-function outOfScope(was: string): never {
-    throw new Error(
-        `${was} ist im TS-Target noch nicht unterstützt `
-        + '(Nullable folgt bedarfsgetrieben).');
+function withNull(t: IrType, base: string): string {
+    if (t.nullable !== true) return base;
+    return t.kind === 'lambda' ? `(${base}) | null` : `${base} | null`;
 }
 
 /**
  * {@link IrType} → TS-Kern-Typ (Rechen-Schicht): numerisch → `FinDslNumber`;
  * `Liste<T>` → `FinDslListe<Kern-Elem>`; Funktionstyp → native Pfeil-
  * signatur `(a0: P0, …) => R` (TS-Funktionstypen sind strukturell, keine
- * `FinDslLambda`-Klasse nötig); benannt → `Owner.Name`/`Name`.
+ * `FinDslLambda`-Klasse nötig); benannt → `Owner.Name`/`Name`. Nullable →
+ * ` | null` (verschachtelte Typen über die Wrapper, eigene Nullability).
  */
 function irTypeToTsCore(t: IrType): string {
+    return withNull(t, coreBase(t));
+}
+
+function coreBase(t: IrType): string {
     switch (t.kind) {
         case 'number': return 'FinDslNumber';
         case 'bool': return 'boolean';
@@ -97,12 +101,17 @@ function irTypeToTsCore(t: IrType): string {
  * {@link IrType} → TS-API-Typ (Deklarationsgrenze): numerisch-skalar →
  * sprechender Wrapper (`Euro` …; Teil-Parse ohne Wrapper → `FinDslNumber`);
  * `Liste<T>` bleibt `FinDslListe<Kern-Elem>`; alles übrige = Kern-Typ.
+ * Nullable → ` | null`.
  */
 function irTypeToTsApi(t: IrType): string {
+    return withNull(t, apiBase(t));
+}
+
+function apiBase(t: IrType): string {
     switch (t.kind) {
         case 'number': return t.wrapper ?? 'FinDslNumber';
         case 'list': return `FinDslListe<${irTypeToTsCore(t.elem)}>`;
-        default: return irTypeToTsCore(t);
+        default: return coreBase(t);           // Basistyp (kein doppeltes ` | null`)
     }
 }
 
@@ -278,7 +287,20 @@ function emitExpr(e: IrExpr): string {
         case 'crossRef':
             return `${e.ownerClass}.${e.memberName}`;
         case 'enumCmp': {
-            const l = emitExpr(e.left), r = emitExpr(e.right);
+            // TS verengt Enum-Member zu Literal-Typen → ein direkter
+            // `Rot !== Grün` triggert sonst TS2367 ("no overlap", als
+            // vermeintlicher Fehler). Linken Operanden auf den Enum-Typ
+            // weiten (sicherer Upcast); Identitäts-Semantik unverändert.
+            // Nur einen Enum-LITERAL-Operanden (enumVal) weiten — bei einem
+            // `ref` (bereits voller Enum-Typ) wäre der Cast ein No-op, und
+            // TS2367 entsteht ohnehin nur bei Literal-Beteiligung links.
+            const et = e.left.kind === 'enumVal'
+                ? (e.left.ownerClass !== undefined
+                    ? `${e.left.ownerClass}.${e.left.enumName}` : e.left.enumName)
+                : undefined;
+            const lRaw = emitExpr(e.left);
+            const l = et !== undefined ? `(${lRaw} as ${et})` : lRaw;
+            const r = emitExpr(e.right);
             return e.op === '==' ? `${l} === ${r}` : `${l} !== ${r}`;
         }
         case 'arith':           return emitArith(e);
@@ -316,9 +338,20 @@ function emitExpr(e: IrExpr): string {
             return `${emitExpr(e.fn)}(${e.args.map(emitExpr).join(', ')})`;
         // --- String-Interpolation ---
         case 'strInterp':       return emitStrInterp(e);
-        // --- Nullable: bedarfsgetrieben (von keinem Beispielmodul genutzt) ---
-        case 'elvis': case 'forceUnwrap': case 'safeFieldAccess':
-            return outOfScope('Nullable-Operator');
+        // --- Nullable (#117): Java-Pendant `emitNullable`. `nichts` → null;
+        //     P2 (seiteneffektfrei) → Doppel-Evaluation in Elvis/Safe-Access
+        //     unkritisch. Force-Unwrap wirft `FinDslRuntimeError` (kein
+        //     Abbruch), spiegelt `interpreter.ts` (InterpretError auf null). ---
+        case 'elvis': {
+            const l = emitExpr(e.left);
+            return `(${l} !== null) ? ${l} : ${emitExpr(e.right)}`;
+        }
+        case 'forceUnwrap':
+            return `nichtNull(${emitExpr(e.value)}, ${tsString(e.hint)})`;
+        case 'safeFieldAccess': {
+            const r = emitExpr(e.receiver);
+            return `(${r} !== null) ? ${r}.${e.name} : null`;
+        }
         case 'abort':
             throw new Error('abbruch nur in Ergebnis-Position (emitResult), nicht als Sub-Ausdruck.');
         case 'waehle':

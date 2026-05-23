@@ -39,6 +39,13 @@ const result = await esbuild.build({
         'node:fs/promises': shim('fs-promises.ts'),
         'node:module': shim('module.ts'),
         'langium/node': shim('langium-node.ts'),
+        // Node-pdfmake-Printer (pdfkit) — von docgen/pdf.ts importiert, aber
+        // im Browser ungenutzt (wir nehmen nur buildPdfDoc). Stub statt
+        // pdfkit + ~9 Polyfills.
+        'pdfmake/js/Printer.js': shim('empty.ts'),
+        'pdfmake/js/virtual-fs.js': shim('empty.ts'),
+        'pdfmake/js/URLResolver.js': shim('empty.ts'),
+        'pdfkit': shim('empty.ts'),
     },
 });
 

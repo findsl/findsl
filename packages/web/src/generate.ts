@@ -106,8 +106,17 @@ export async function runGenerate(
                     mime: 'text/javascript', text: tsToJs(f.code),
                 });
             }
-            case 'pdf':
-                return { ok: false, error: 'Target "pdf" folgt in der nächsten Phase (#130).' };
+            case 'pdf': {
+                // Path B: Worker liefert die pdfmake-Doc-Definition (Mathe als
+                // SVG); die Website rendert daraus die PDF-Bytes (pdfmake
+                // statisch geladen). Vermeidet pdfkit/Polyfills im Worker.
+                const model = buildDocModelFromProgram(program, document.textDocument.getText(), className);
+                const { pdfDocDefinition } = await import('./pdf-browser.js');
+                return ok({
+                    target, filename: `${className}.pdfmake.json`, mime: 'application/json',
+                    text: await pdfDocDefinition(model),
+                });
+            }
             default:
                 return { ok: false, error: `Unbekanntes Target: ${String(target)}` };
         }

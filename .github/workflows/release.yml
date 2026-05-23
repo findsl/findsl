@@ -313,7 +313,7 @@ jobs:
           STAGE="findsl-${VERSION}-${TARGET}"
           mkdir -p "$STAGE"
           cp packages/cli/dist/findsl "$STAGE/"
-          if [ -d packages/cli/dist/data ]; then cp -R packages/cli/dist/data "$STAGE/"; fi
+          # AFM-Metriken sind seit #121 ins Binary eingebettet — kein dist/data mehr.
           if [ -f README.md ]; then cp README.md "$STAGE/"; fi
           if [ -f LICENSE-COMMERCIAL.md ]; then cp LICENSE-COMMERCIAL.md "$STAGE/"; fi
           tar -czf "$STAGE.tar.gz" "$STAGE"
@@ -327,7 +327,7 @@ jobs:
           $stage = "findsl-$env:VERSION-$env:TARGET"
           New-Item -ItemType Directory -Path $stage | Out-Null
           Copy-Item packages/cli/dist/findsl.exe $stage/
-          if (Test-Path packages/cli/dist/data) { Copy-Item -Recurse packages/cli/dist/data $stage/ }
+          # AFM-Metriken sind seit #121 ins Binary eingebettet — kein dist/data mehr.
           if (Test-Path README.md) { Copy-Item README.md $stage/ }
           if (Test-Path LICENSE-COMMERCIAL.md) { Copy-Item LICENSE-COMMERCIAL.md $stage/ }
           Compress-Archive -Path $stage -DestinationPath "$stage.zip"
@@ -400,7 +400,7 @@ jobs:
           STAGE="findsl-${VERSION}-${TARGET}"
           mkdir -p "$STAGE"
           cp packages/cli/dist/findsl "$STAGE/"
-          if [ -d packages/cli/dist/data ]; then cp -R packages/cli/dist/data "$STAGE/"; fi
+          # AFM-Metriken sind seit #121 ins Binary eingebettet — kein dist/data mehr.
           if [ -f README.md ]; then cp README.md "$STAGE/"; fi
           if [ -f LICENSE-COMMERCIAL.md ]; then cp LICENSE-COMMERCIAL.md "$STAGE/"; fi
           tar -czf "$STAGE.tar.gz" "$STAGE"

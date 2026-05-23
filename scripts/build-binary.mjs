@@ -3,8 +3,10 @@
  * self-contained CLI-Bundle via **Node SEA** (Single Executable
  * Applications) + `postject`.
  *
- * Voraussetzung: `npm run bundle` (erzeugt `packages/cli/dist/findsl.cjs`
- * + `dist/data/` mit den pdfkit-AFM-Metriken).
+ * Voraussetzung: `npm run bundle` (erzeugt `packages/cli/dist/findsl.cjs`).
+ * Die 14 pdfkit-AFM-Metriken sind seit Issue #121 ins Bundle eingebettet
+ * → das Binary ist echt self-contained, KEIN sibling `data/` mehr nötig
+ * (auch nicht für `docgen -f pdf`).
  *
  * Node SEA kann NICHT cross-kompilieren — es entsteht ein Binary für
  * die **Host-Plattform** (hier macOS/Linux/Windows des Build-Rechners).
@@ -12,9 +14,7 @@
  *
  * Ablauf: sea-config → `node --experimental-sea-config` → Blob →
  * Node-Binär kopieren → (macOS: Signatur entfernen) → `postject`
- * injiziert den Blob → (macOS: ad-hoc neu signieren). PDF (`doku -f
- * pdf`) braucht das `data/`-Verzeichnis NEBEN dem Binary — wird
- * mitkopiert.
+ * injiziert den Blob → (macOS: ad-hoc neu signieren).
  */
 
 import { execFileSync } from 'node:child_process';
@@ -97,4 +97,4 @@ fs.rmSync(seaConfig, { force: true });
 
 const mb = (fs.statSync(exe).size / 1024 / 1024).toFixed(1);
 console.log(`[sea] fertig: ${path.relative(root, exe)} (${mb} MB, ${process.platform}-${process.arch})`);
-console.log('[sea] PDF benötigt das mitgelieferte `dist/data/` neben dem Binary.');
+console.log('[sea] self-contained — AFM-Metriken eingebettet, kein sibling `data/` nötig (Issue #121).');

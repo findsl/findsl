@@ -87,23 +87,27 @@ describe('Bundle-Smoke (CI-Gate)', () => {
 });
 
 /**
- * Self-contained CLI-Bundle (`packages/cli/dist/findsl.cjs` + `data/`):
+ * Self-contained CLI-Bundle (`packages/cli/dist/findsl.cjs`, EIN File):
  * exakt der Runtime, in dem die `pdfmake`/`createRequire`-§7-Divergenz
- * und die pdfkit-AFM-Daten zuschlagen — von vitest/tsc NICHT abgedeckt.
- * (Das native SEA-Binary ist ein separater Release-Schritt, `npm run
- * binary`; hier wird das Bundle als dessen Grundlage geprüft.)
+ * und die pdfkit-AFM-Metriken zuschlagen — von vitest/tsc NICHT abgedeckt.
+ * Seit Issue #121 sind die 14 AFM-Metriken ins Bundle eingebettet (kein
+ * sibling `data/` mehr). (Das native SEA-Binary ist ein separater
+ * Release-Schritt, `npm run binary`; hier wird das Bundle als dessen
+ * Grundlage geprüft.)
  */
 describe('CLI-Bundle-Smoke (self-contained)', () => {
     const cliBundle = path.join(repoRoot, 'packages', 'cli', 'dist', 'findsl.cjs');
     const ex = (args: string[]): string =>
         execFileSync('node', [cliBundle, ...args], { cwd: os.tmpdir() }).toString();
 
-    it('Bundle existiert + pdfkit-data daneben', () => {
+    it('Bundle existiert + KEIN sibling data/ (AFM eingebettet, Issue #121)', () => {
         expect(fs.existsSync(cliBundle)).toBe(true);
         expect(fs.statSync(cliBundle).size).toBeGreaterThan(1_000_000);
+        // #121: AFM-Metriken sind ins Bundle inlined → das früher daneben
+        // kopierte `dist/data/` darf NICHT mehr existieren.
         expect(fs.existsSync(
-            path.join(repoRoot, 'packages', 'cli', 'dist', 'data', 'Helvetica.afm'),
-        )).toBe(true);
+            path.join(repoRoot, 'packages', 'cli', 'dist', 'data'),
+        )).toBe(false);
     });
 
     it('test läuft self-contained (aus os.tmpdir, kein node_modules)', () => {

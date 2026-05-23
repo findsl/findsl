@@ -92,15 +92,21 @@ API-Fläche wird kleiner und damit auditierbarer, die Logik bleibt über
 die öffentliche API und die zugehörige `.test.findsl` nachvollziehbar
 (siehe [§ 8.4](#84-sichtbarkeit)).
 
-> **Folgerung aus P2/P7 — kein Exception-Mechanismus.** FinDSL kennt
-> bewusst kein `throw`/`catch`. Nicht-lokaler, abfangbarer Kontrollfluss
-> wäre ein versteckter zweiter Rückgabekanal (verletzt P2) und macht das
-> Audit-Versprechen „Ergebnis X *wegen* § Y" unmöglich (verletzt P7).
-> Erwartetes Fehlen/Fehlschlagen wird explizit im Typsystem modelliert
-> (`T?`, `nichts`, `oder`, `?.`). Für den begründeten, *nicht
-> abfangbaren* Fachabbruch gibt es den `abbruch`-Ausdruck (§ 4.19);
+> **Folgerung aus P2/P7 — kein *abfangbarer* Exception-Mechanismus.**
+> FinDSL kennt bewusst kein `throw`/`catch`. *Abfangbarer*, nicht-lokaler
+> Kontrollfluss wäre ein versteckter zweiter Rückgabekanal (verletzt P2)
+> und macht das Audit-Versprechen „Ergebnis X *wegen* § Y" unmöglich
+> (verletzt P7). Erwartetes Fehlen/Fehlschlagen wird stattdessen explizit
+> im Typsystem modelliert (`T?`, `nichts`, `oder`, `?.`). Für den
+> begründeten Fachabbruch gibt es den `abbruch`-Ausdruck (§ 4.19);
 > unbeabsichtigte Programmierfehler brechen über `!!` (§ 4.7) ab. Beide
-> sind Fail-Fast und im Audit sichtbar — nicht abfangbar.
+> **beenden** das Programm sofort (Fail-Fast) und sind im Audit sichtbar —
+> implementierungsseitig zwar als Ausnahme/Panik realisiert (in der
+> Java-Runtime z. B. `FinDslAbort`), aber bewusst **nicht abfangbar**: Es
+> gibt kein `catch`, mit dem sich ein Abbruch zu einem regulären Ergebnis
+> „umbiegen" ließe. `abbruch` ist damit eine Abbruch-*Grenzstelle*, kein
+> Kontrollfluss-Werkzeug — der Unterschied zu klassischen Exceptions ist
+> die fehlende Fangbarkeit, nicht das Fehlen ausnahmeartiger Terminierung.
 
 > **Bewusste, einzige Ausnahme von P2 — `ausgabe`.** Die
 > `ausgabe`-Anweisung (§ 5.4) gibt Text auf die Konsole aus und ist ein
@@ -545,11 +551,7 @@ Geld mit Nichtgeld:
 | `Geld * Ganzzahl`      | gleicher Geldtyp   |
 | `Geld * Dezimal`       | `EuroCent`         |
 | `Geld * Prozent`       | `EuroCent`         |
-| `Geld / Ganzzahl`      | `Dezimal`*         |
-
-\* PAP-Konvention: Division eines Geldwertes durch eine dimensionslose
-Ganzzahl normalisiert die Einheit weg. Wer einen Geldwert braucht,
-rundet danach explizit.
+| `Geld / Ganzzahl`      | `Dezimal`          |
 
 ### 3.3 Zahltypen
 
@@ -595,13 +597,25 @@ Arithmetik:
 in einzeiliger und mehrzeiliger Form unterstützen Interpolation mit
 `${ausdruck}` (siehe [§ 2.7.6](#276-text-literale)).
 
-Wichtige Methoden (vollständige Liste in [§ 11.5](#115-text-methoden)):
+Wichtige Member (vollständige Liste in [§ 11.5](#115-text-methoden)).
+FinDSL unterscheidet — wie das Grammatik-Modell (`FieldAccess` vs. `Call`)
+— zwischen **Eigenschaften** (parameterlos, reiner Wert, **ohne** `()`) und
+**Methoden** (eine Operation, ggf. mit Argumenten, **mit** `()`):
 
-- `.länge` — Anzahl der Unicode-Zeichen
-- `.leer` — `wahr`, wenn die Länge `0` ist
-- `.einrückungEntfernen()` — entfernt gemeinsamen Leerzeichen-Prefix von allen Zeilen
+Eigenschaften (ohne `()`):
+
+- `.länge` — Anzahl der Unicode-Zeichen (`Ganzzahl`)
+- `.leer` — `wahr`, wenn die Länge `0` ist (`Wahrheitswert`)
 - `.alsText` — Identitäts-Konversion (für andere Typen die Default-Konversion)
-- `+` (Operator) — Konkatenation: `"abc" + "def" == "abcdef"`
+
+Methoden (mit `()`):
+
+- `.einrückungEntfernen()` — entfernt gemeinsamen Leerzeichen-Prefix von allen Zeilen
+- `.beginntMit(prefix)`, `.endetMit(suffix)`, `.enthält(teil)`, … (siehe § 11.5)
+
+Operator:
+
+- `+` — Konkatenation: `"abc" + "def" == "abcdef"`
 
 ### 3.7 Aufzählungen
 
@@ -670,8 +684,8 @@ Jeder Typ `T` hat einen Nullable-Begleittyp `T?`, dessen Werte entweder
 ein Wert von `T` oder `nichts` sind.
 
 ```findsl
-var werbungskosten: Euro?         = 2.500           // ein Wert
-var entlastungsbetrag: Euro?       = nichts         // kein Wert
+var werbungskosten: Euro?     = 2.500          // ein Wert
+var entlastungsbetrag: Euro?  = nichts         // kein Wert
 ```
 
 `T?` ist *nicht* mit `T` zuweisungskompatibel:
@@ -730,25 +744,50 @@ materialisieren muss.
 
 ### 3.12 Funktionstypen
 
-Funktionstypen werden mit `(T1, T2, …) -> R` notiert:
+Ein **Funktionstyp** beschreibt den Typ eines *Funktionswerts* — also
+einer Funktion oder eines Lambdas, das wie ein Wert weitergereicht wird.
+Notation: die Parametertypen in Klammern, dann `->`, dann der Rückgabetyp
+(`->` ausschließlich *innerhalb* des Typs; die Rückgabe einer `fn`-Deklaration
+wird dagegen mit `:` eingeführt, siehe [§ 6.2](#62-fn)):
 
 ```findsl
-(Euro) -> Euro
-(Euro, Euro) -> Euro
-() -> Euro
-(Steuerklasse) -> Tarifart
+(Euro) -> Euro              // ein Parameter
+(Euro, Euro) -> Euro        // zwei Parameter
+() -> Euro                  // kein Parameter
+(Steuerklasse) -> Tarifart  // beliebige Quell-/Zieltypen
 ```
 
-Funktionstypen sind **first-class** — können als Parameter, Variablen
-und Rückgabewerte verwendet werden.
+Der Rückgabetyp darf selbst ein Funktionstyp sein — so entstehen
+**Funktionen höherer Ordnung**, die Funktionen zurückgeben:
+
+```findsl
+(Euro) -> (Euro) -> Euro    // nimmt Euro, liefert eine Funktion (Euro) -> Euro
+```
+
+Funktionstypen sind **first-class**: sie dürfen als Parametertyp, als Typ
+einer Variablen/Konstante und als Rückgabetyp auftreten.
+
+**Funktionswerte entstehen auf zwei Wegen:**
+
+1. **Referenz auf eine benannte Funktion** über ihren Namen — *ohne* sie
+   aufzurufen (kein `()`).
+2. **Lambda** `{ p -> ausdruck }` (siehe [§ 4.12](#412-lambda-ausdruck)).
 
 ```findsl
 fn AufVolleEuro(x: EuroCent): Euro = x.abrunden()
-fn anwenden(f: (EuroCent) -> Euro, x: EuroCent): Euro = f(x)
+fn Anwenden(f: (EuroCent) -> Euro, x: EuroCent): Euro = f(x)
 
-anwenden(123,45, AufVolleEuro)                                // benannte Funktion
-anwenden(123,45, { x -> x.aufrunden() })                      // Lambda (Ziel Euro aus f-Typ)
+Anwenden(123,45, AufVolleEuro)                // benannte Funktion als Wert
+Anwenden(123,45, { x -> x.aufrunden() })      // Lambda
 ```
+
+**Ziel-Typisierung (target typing).** Übergibt man ein Lambda dort, wo ein
+Funktionstyp erwartet wird, leitet der Compiler dessen Parameter- und
+Rückgabetypen aus dem erwarteten Typ ab: oben ist `x` vom Typ `EuroCent`
+und das Lambda-Ergebnis `Euro`, beides aus dem Typ `(EuroCent) -> Euro`
+des Parameters `f` (siehe [§ 3.13](#313-bidirektionale-typinferenz)).
+Funktionen, die Funktionen *erzeugen* und dabei Variablen erfassen
+(Closures), siehe [§ 6.2.4](#624-closures).
 
 ### 3.13 Bidirektionale Typinferenz
 
@@ -795,7 +834,7 @@ nicht erreichbare Zweige.
 Regeln:
 
 - `never` ist zu **jedem** erwarteten Typ zuweisungskompatibel (Subtyp
-  von allem). Damit darf `fn f(...): Euro = abbruch("...")` und ein
+  von allem). Damit darf `fn F(...): Euro = abbruch("...")` und ein
   `abbruch`-Zweig in `wähle`/`wenn` neben `Euro`-Zweigen stehen.
 - `never` ist **kein** Supertyp: beim Vereinen der Zweigtypen eines
   `wähle`/`wenn` werden `never`-Zweige übersprungen; den Ergebnistyp
@@ -979,7 +1018,7 @@ Für nullable Subjekte:
 ```findsl
 wähle (werbungskosten) {
     falls nichts -> ARBEITNEHMER_PAUSCHBETRAG
-    sonst -> werbungskosten     // hier automatisch Euro (Smart-Cast)
+    sonst        -> werbungskosten     // hier automatisch Euro (Smart-Cast)
 }
 ```
 
@@ -992,9 +1031,9 @@ dass das Subjekt nicht null ist — der Typ wird automatisch zu `T`
 Standardform mit positionalen oder benannten Argumenten:
 
 ```findsl
-foo(1, 2, 3)                                  // positional
-foo(x = 1, y = 2, z = 3)                     // benannt
-foo(1, z = 3)                                 // gemischt: positional zuerst
+Foo(1, 2, 3)                                  // positional
+Foo(x = 1, y = 2, z = 3)                     // benannt
+Foo(1, z = 3)                                 // gemischt: positional zuerst
 ```
 
 Methoden-Aufruf-Notation auf Listen, Bereichen und Datensätzen:
@@ -1130,7 +1169,7 @@ erwartet wird:
 
 ```findsl
 @Quelle("§ 32a EStG")
-fn estGrundtarif(zve: Euro): Euro = wähle {
+fn EstGrundtarif(zve: Euro): Euro = wähle {
     falls zve < 0 als Euro       -> abbruch("§ 32a: negatives zvE unzulässig: ${zve}")
     falls zve <= 12.096 als Euro -> 0 als Euro
     sonst                        -> /* … Tarifformel … */
@@ -1234,7 +1273,7 @@ stehen (`{ … }` von Funktions-Body oder Lambda), neben `var`-Bindungen
 und vor dem Ergebnis­ausdruck:
 
 ```findsl
-fn estGrundtarif(zve: Euro): Euro {
+fn EstGrundtarif(zve: Euro): Euro {
     ausgabe("Tarifberechnung für zvE=${zve}")
     var t: Euro = /* … */
     t
@@ -1242,7 +1281,7 @@ fn estGrundtarif(zve: Euro): Euro {
 ```
 
 `ausgabe` ist **nicht** in `atom` — in Ausdrucksposition ist es ein
-Syntaxfehler (kein `var x = ausgabe(...)`, kein `fn f() = ausgabe(...)`,
+Syntaxfehler (kein `var x = ausgabe(...)`, kein `fn F() = ausgabe(...)`,
 kein `falls … -> ausgabe(...)`).
 
 **`ausgabe` ist ein echter Seiteneffekt** und damit eine **bewusste,
@@ -1283,13 +1322,13 @@ Der Initialisierungsausdruck *muss* zur Compilezeit auswertbar sein
 
 ### 6.2 fn
 
-Der Rückgabetyp wird mit `:` eingeführt (`fn name(…): RückgabeTyp`),
+Der Rückgabetyp wird mit `:` eingeführt (`fn Name(…): RückgabeTyp`),
 **nicht** mit `->`. `:` bedeutet in FinDSL durchgängig „Name/Ausdruck
 hat Typ" (Parameter, `konst`, `var`, Feld, Rückgabe); `->` ist
 ausschließlich Funktionstypen (`(Euro) -> Euro`), Lambda-Rümpfen
 (`{ x -> … }`) und `wähle`-Armen vorbehalten. Diese Trennung hält
 funktionstypwertige Rückgaben eindeutig lesbar — vgl.
-`fn ableiten(f: (Euro) -> Euro): (Euro) -> Euro`, wo `:` sauber „hat
+`fn Ableiten(f: (Euro) -> Euro): (Euro) -> Euro`, wo `:` sauber „hat
 Typ" vom `->` *innerhalb* des Typs trennt. (Bewusste, mehrfach
 bestätigte Entscheidung.)
 
@@ -1298,7 +1337,7 @@ bestätigte Entscheidung.)
 ```findsl
 [doc-comment]
 [annotations]
-fn name(p1: T1, p2: T2 = default, …): RückgabeTyp {
+fn Name(p1: T1, p2: T2 = default, …): RückgabeTyp {
     var lokal1 = ...
     var lokal2 = ...
     schluss-ausdruck                         // implizite Rückgabe
@@ -1313,10 +1352,10 @@ explizites `return`-Schlüsselwort.
 Wenn der ganze Funktionsrumpf ein Ausdruck ist:
 
 ```findsl
-fn name(p: T): R = ausdruck
+fn Name(p: T): R = ausdruck
 
-fn estSplitting(zve: Euro): Euro =
-    2 * estGrundtarif((zve / 2).abrunden())
+fn EstSplitting(zve: Euro): Euro =
+    2 * EstGrundtarif((zve / 2).abrunden())
 ```
 
 #### 6.2.3 Default-Parameter
@@ -1324,7 +1363,7 @@ fn estSplitting(zve: Euro): Euro =
 Parameter können Default-Werte haben:
 
 ```findsl
-fn einkünfteAusNichtselbständigerArbeit(
+fn EinkünfteAusNichtselbständigerArbeit(
     bruttoArbeitslohn:           Euro,
     tatsächlicheWerbungskosten:  Euro? = nichts,
 ): Euro = ...
@@ -1338,10 +1377,10 @@ Lambdas und benannte Funktionen, die innerhalb anderer Funktionen
 deklariert werden, *erfassen* Variablen aus dem umgebenden Scope:
 
 ```findsl
-fn erzeugeRabattRechner(rabattSatz: Prozent): (Euro) -> Euro =
+fn ErzeugeRabattRechner(rabattSatz: Prozent): (Euro) -> Euro =
     { preis -> preis * (100% - rabattSatz) }    // erfasst rabattSatz
 
-var zehnProzent = erzeugeRabattRechner(10%)
+var zehnProzent = ErzeugeRabattRechner(10%)
 zehnProzent(100 als Euro)                       // → 90 EuroCent
 ```
 
@@ -1458,10 +1497,10 @@ Importiert selektiv benannte Deklarationen aus einer anderen Datei über
 einen **relativen Dateipfad**:
 
 ```findsl
-verwende { estEinkommensteuer, Tarifart } aus "../tarif/tarif2025"
+verwende { EstEinkommensteuer, Tarifart } aus "../tarif/tarif2025"
 
 // Verwendung unqualifiziert:
-estEinkommensteuer(zve, art)
+EstEinkommensteuer(zve, art)
 Splitting                                       // Aufzählungswert direkt
 ```
 
@@ -1480,20 +1519,20 @@ Pro importiertem Symbol optionaler Alias:
 
 ```findsl
 verwende {
-    foo als xfoo,
-    bar als yfoo,
+    Foo als XFoo,
+    Bar als YFoo,
 } aus "./pfad/foobar"
 ```
 
 #### Mehrjahres-Import
 
 ```findsl
-verwende { estGrundtarif als grundtarif2024 } aus "../tarif/tarif2024"
-verwende { estGrundtarif als grundtarif2025 } aus "../tarif/tarif2025"
+verwende { EstGrundtarif als Grundtarif2024 } aus "../tarif/tarif2024"
+verwende { EstGrundtarif als Grundtarif2025 } aus "../tarif/tarif2025"
 
-fn vergleich(zve: Euro): Liste<Euro> = [
-    grundtarif2024(zve),
-    grundtarif2025(zve),
+fn Vergleich(zve: Euro): Liste<Euro> = [
+    Grundtarif2024(zve),
+    Grundtarif2025(zve),
 ]
 ```
 
@@ -1606,7 +1645,7 @@ Beschreibung der Funktion.
 
 @param p1   Beschreibung des ersten Parameters.
 @param p2   Beschreibung des zweiten Parameters.
-@rückgabe     Beschreibung des Rückgabewerts.
+@rückgabe   Beschreibung des Rückgabewerts.
 
 ## Anmerkungen
 …
@@ -1647,11 +1686,11 @@ geprüft:
 ## Beispiel
 
 ```findsl
-estGrundtarif(50.000) == 10.691
-estGrundtarif(100.000) == 31.088
+EstGrundtarif(50.000) == 10.691
+EstGrundtarif(100.000) == 31.088
 ```
 --
-fn estGrundtarif(...) ...
+fn EstGrundtarif(...) ...
 ```
 
 Schlägt eine Zeile fehl, ist der Doc veraltet — der Build bricht ab.
@@ -1702,12 +1741,29 @@ erstere nur vom Doc-Generator gerendert.
 
 ## 10. Tests
 
+FinDSL-Tests sind **ausführbare Beispielrechnungen**: Sie halten fest, dass
+eine Regel für konkrete Eingaben ein bestimmtes Ergebnis liefert. Der
+Sollwert wird **von Hand aus dem Gesetzeswortlaut** ermittelt und im Test
+festgeschrieben — nicht aus der Implementierung übernommen. Das dient drei
+Zwecken:
+
+- **Auditierbarkeit** — der Test belegt nachvollziehbar „§ X ergibt für
+  Eingabe Y den Wert Z"; der Normbezug steht als Label/Kommentar dabei.
+- **Regressionsschutz** — weicht die Implementierung später ab, schlägt das
+  abweichende Ergebnis sofort an.
+- **Lebende Dokumentation** — die Testfälle sind zugleich Anwendungs-
+  beispiele für die Regel.
+
+Tests werden über `prüfe`-Blöcke (§ 10.1) deklariert. Eine zweite,
+leichtgewichtige Form sind **Doc-Tests** ([§ 9.4](#94-doc-tests)):
+Vergleichszeilen direkt im Doc-Kommentar. Faustregel: ein, zwei kompakte
+Beispiele am Funktions-Doc als Doc-Test; umfangreichere Akzeptanz-Suiten
+als `prüfe`-Block in einer eigenen `.test.findsl`-Datei.
+
 ### 10.1 prüfe-Block
 
-Ein `prüfe`-Block enthält benannte Beispielrechnungen. Jeder
-`testfall` ist ein **Block** `{ … }`: optionale `var`-Setup-
-Anweisungen und ein abschließender boolescher Ausdruck, der zur
-Wahrheit auswerten muss.
+Ein `prüfe`-Block bündelt unter einer Bezeichnung **eine oder mehrere**
+benannte Beispielrechnungen (`testfall`):
 
 ```findsl
 prüfe "Bezeichnung des Test-Sets" {
@@ -1720,48 +1776,92 @@ prüfe "Bezeichnung des Test-Sets" {
 }
 ```
 
-Beispiel:
+**Wo Tests liegen.** `prüfe`-Blöcke dürfen in jeder `.findsl`-Datei stehen,
+gehören per Konvention aber in eine **eigene Testdatei** mit der Endung
+`.test.findsl` neben dem Modul. Die zu testenden Deklarationen werden mit
+`verwende` ([§ 8.3](#83-verwende-direktive)) importiert; eine reine
+Testdatei enthält selbst keine Regel-Logik:
 
 ```findsl
+verwende { EstGrundtarif, EstSplitting } aus "./est"
+
 prüfe "§ 32a EStG 2025 — Knotenpunkte der Tarifzonen" {
     testfall "Zone 1 — Existenzminimum" {
-        estGrundtarif(12.096) == 0
+        EstGrundtarif(12.096) == 0
     }
-
     testfall "Zone 4 — 100.000 EUR zvE" {
-        estGrundtarif(100.000) == 31.088
+        EstGrundtarif(100.000) == 31.088
     }
 }
 ```
 
 ### 10.2 testfall-Items
 
-`testfall` als Schlüsselwort wurde bewusst gewählt, weil das
-deutsche Steuervokabular `fall` (Steuerfall, Sachfall, Erbfall,
-Einzelfall, …) intensiv als Identifier verwendet — eine
-Reservierung würde diese natürliche Benennung blockieren. `testfall`
-ist im Test-Kontext ohnehin semantisch präziser: ein `prüfe`-Eintrag
-ist eine *Beispielrechnung* mit erwartetem Output, kein juristischer
-"Fall".
+Jeder `testfall` trägt ein **Beschreibungs-Label** (Pflicht-String, taucht
+im Testbericht auf) und einen **Block** `{ … }`. Der Block ist dieselbe
+Form wie ein `fn`-Rumpf ([§ 6.2](#62-fn)) — kein Sonderkonstrukt — und
+folgt dem Arrange-Act-Assert-Muster:
 
-Der Block enthält null oder mehr `var`-Anweisungen (Test-Setup,
-„Arrange") und als letzten Ausdruck die boolesche Assertion. Das ist
-dieselbe Blockform wie ein `fn`-Rumpf `{ … }` (SPEC § 6.2) — kein
-Sonderkonstrukt. Whitespace ist nicht signifikant.
-
-**Erwarteter Abbruch.** Mit der Variante
+- **Arrange** — null oder mehr `var`-Anweisungen als Setup.
+- **Act + Assert** — der **letzte Ausdruck** ist eine **boolesche
+  Assertion**, die zu `wahr` auswerten muss. Wertet sie zu `falsch` aus,
+  **scheitert** der Testfall (der Bericht zeigt das Label).
 
 ```findsl
-testfall "negatives zvE wird abgelehnt" erwartet abbruch {
-    estGrundtarif(-100 als Euro)
+testfall "Zone 2 — Zwischenwert nachgerechnet" {
+    var zve: Euro = 15.000
+    // y = (15.000 − 12.348) / 10.000 = 0,2652
+    // (914,51·y + 1.400)·y = 435,59… → abgerundet 435
+    EstGrundtarif(zve) == 435
 }
 ```
 
-wird der Ablehnungspfad positiv getestet: der Testfall **besteht**
-genau dann, wenn die Auswertung des Ausdrucks einen `abbruch` (§ 4.19)
-auslöst. Wertet er stattdessen normal zu einem Wert aus, **scheitert**
-der Testfall. Ohne `erwartet abbruch` gilt umgekehrt: löst ein Testfall
-einen `abbruch` aus, scheitert er (mit Anzeige der Begründung).
+**Genau eine Assertion pro Testfall.** Der Block hat *einen* Schluss-
+Ausdruck. Mehrere Bedingungen werden mit `und` verknüpft — oder, besser für
+aussagekräftige Fehlerberichte, auf mehrere `testfall`-Items aufgeteilt:
+
+```findsl
+testfall "Grund- und Splittingtarif beide 0 bei zvE = 0" {
+    EstGrundtarif(0) == 0 und EstSplitting(0) == 0
+}
+```
+
+**Erwarteter Abbruch.** Mit der Variante `erwartet abbruch` wird der
+*Ablehnungspfad* positiv getestet:
+
+```findsl
+testfall "negatives zvE wird abgelehnt" erwartet abbruch {
+    EstGrundtarif(-100 als Euro)
+}
+```
+
+Der Testfall **besteht** genau dann, wenn die Auswertung des Ausdrucks
+einen `abbruch` ([§ 4.19](#419-abbruch-ausdruck)) auslöst. Wertet er stattdessen
+normal zu einem Wert aus, **scheitert** er. Ohne `erwartet abbruch` gilt
+umgekehrt: löst ein Testfall einen `abbruch` aus, scheitert er (mit Anzeige
+der Begründung).
+
+> **Warum `testfall` und nicht `fall`?** Das deutsche Steuervokabular nutzt
+> `fall` (Steuerfall, Sachfall, Erbfall, Einzelfall, …) intensiv als
+> Identifier; eine Reservierung würde diese natürliche Benennung blockieren.
+> `testfall` ist im Test-Kontext zudem präziser: ein `prüfe`-Eintrag ist
+> eine *Beispielrechnung* mit erwartetem Output, kein juristischer „Fall".
+
+### 10.3 Tests ausführen
+
+`prüfe`-Blöcke werden mit dem `test`-Kommando der CLI ausgewertet
+(Ziele: Datei, Verzeichnis rekursiv oder Glob-Muster):
+
+```bash
+findsl test pfad/zum/modul.test.findsl   # eine Datei
+findsl test examples/est                 # Verzeichnis (rekursiv)
+findsl test "examples/**/*.findsl"       # Glob-Muster (quoten!)
+```
+
+Gemeldet wird pro Datei **Pass / Fail / Error**; `-v` listet auch
+bestandene Testfälle. Dateien ohne `prüfe`-Block werden übersprungen. In
+der VS-Code-Erweiterung erscheinen zusätzlich Play-Schaltflächen am
+`prüfe`-Block sowie an jedem einzelnen `testfall` (Einzelausführung).
 
 ---
 
@@ -1870,44 +1970,62 @@ FinDSL ist als Quelle für die Übersetzung in mehrere Zielsprachen
 konzipiert. Die folgenden Zuordnungen sind verbindlich für
 Implementierungen.
 
-### 12.1 Java/Kotlin
+### 12.1 Java / Kotlin
 
-| FinDSL-Konzept            | Java/Kotlin-Mapping                         |
-| ------------------------- | ------------------------------------------- |
-| `Ganzzahl`                | `BigInteger`                                |
-| `Dezimal`, `Prozent`      | `BigDecimal` mit `MathContext.DECIMAL128`   |
-| `Euro`, `Cent`, `EuroCent`| `BigDecimal` (in EUR-Einheit)               |
-| `Wahrheitswert`           | `boolean`                                   |
-| `Text`                    | `String`                                    |
-| `Liste<T>`                | `List<T>` (immutable)                       |
-| `Bereich<T>`              | `List<T>` (materialisiert oder Stream)      |
-| `T?`                      | `@Nullable T` oder `Optional<T>` (konfigurierbar) |
-| `aufzählung Name { … }`   | `enum class Name { … }`                     |
-| `datensatz Name(…)`       | `data class Name(…)`                        |
-| `fn …`              | `fun …` (Top-Level oder Object-Methode)    |
-| `konst NAME`              | `const val NAME` oder `@JvmField val NAME`  |
-| `Lambda { x -> … }`       | Kotlin-Lambda                               |
-| `oder` (Elvis)            | `?:`                                        |
-| `?.` (Sicher-Zugriff)     | `?.`                                        |
-| `!!`                      | `!!`                                        |
-| `als`                     | `as` mit Konvertierungs-Helfer              |
+**Java ist implementiert** (`codegen --lang java`, Runtime
+`org.findsl.runtime.*`) — die Java-Spalte spiegelt die tatsächliche
+Emission. **Kotlin ist noch nicht implementiert**; die Kotlin-Spalte nennt
+das idiomatische Ziel (es würde dieselbe JVM-Runtime wiederverwenden).
+
+| FinDSL-Konzept                    | Java (implementiert)                                                   | Kotlin (idiomatisches Ziel, n. impl.) |
+| --------------------------------- | ---------------------------------------------------------------------- | ------------------------------------- |
+| `Ganzzahl`, `Dezimal`, `Prozent`  | Kern `FinDslNumber`; an Deklarationsgrenzen Sicht-Wrapper `Ganzzahl`/`Dezimal`/`Prozent` (Subtypen von `FinDslNumber`, intern `BigDecimal`) | dito (gemeinsame Runtime)            |
+| `Euro`, `Cent`, `EuroCent`        | Kern `FinDslNumber`; Sicht-Wrapper `Euro`/`Cent`/`EuroCent`            | dito                                  |
+| `Wahrheitswert`                   | `boolean`                                                              | `Boolean`                             |
+| `Text`                            | `String`                                                              | `String`                              |
+| `Liste<T>`                        | `FinDslListe<Kern-Elem>` (immutable)                                  | `FinDslListe<Kern-Elem>`              |
+| `Bereich<T>`                      | materialisiert als `FinDslListe` (`FinDslListe.bereich(…)`)           | dito                                  |
+| `T?`                              | nullbare Referenz; `nichts` → `null`                                  | `T?`                                  |
+| `(A) -> R` / `(A, B) -> R`        | `FinDslLambda1<A, R>` / `FinDslLambda2<A, B, R>` (nur 1-/2-stellig)    | Funktionstyp `(A) -> R`               |
+| `aufzählung Name { … }`           | `enum Name { … }` (Wert = `ordinal()`)                                | `enum class Name { … }`               |
+| `datensatz Name(…)`               | `record Name(…)`                                                      | `data class Name(…)`                  |
+| Modul (Datei)                     | `interface <Name>` + `class <Name>Impl implements <Name>`             | `interface` + Impl-`class`/`object`   |
+| `fn Name(…)`                      | Methode auf `<Name>Impl` (Name lowerCamel; interne `_`-fn → `protected`) | `fun name(…)`                       |
+| `konst NAME`                      | `public static final <Wrapper> NAME`                                  | `const val` / `val`                   |
+| Lambda `{ x -> … }`               | `FinDslLambda1`/`2`-Instanz                                           | Kotlin-Lambda                         |
+| `oder` (Elvis)                    | `(l != null) ? l : r`                                                 | `?:`                                  |
+| `?.` (Sicher-Zugriff)             | `(r != null) ? r.feld() : null`                                       | `?.`                                  |
+| `!!` (Force-Unwrap)               | `Objects.requireNonNull(v, hinweis)`                                  | `!!`                                  |
+| `==` / `!=` / `<` … (Werte)       | `.equalsValue(…)` / `.compareValue(…) … 0`                            | dito                                  |
+| `als` (Cast)                      | `.cast(…)` bzw. `.withMoneyAnnotation(…)`                             | dito (`as` + Helfer)                  |
+| `abbruch(…)`                      | `throw new FinDslAbort(…)` (nicht abfangbar)                          | dito                                  |
 
 ### 12.2 TypeScript
 
-| FinDSL-Konzept            | TypeScript-Mapping                          |
-| ------------------------- | ------------------------------------------- |
-| `Ganzzahl`                | `bigint`                                    |
-| `Dezimal`, `Prozent`      | `Decimal` aus `decimal.js`                  |
-| `Euro`, `Cent`, `EuroCent`| `Decimal` mit Type-Brand                    |
-| `Wahrheitswert`           | `boolean`                                   |
-| `Text`                    | `string`                                    |
-| `Liste<T>`                | `readonly T[]`                              |
-| `T?`                      | `T \| null`                                 |
-| `aufzählung Name { … }`   | `enum Name { … }` oder discriminated union  |
-| `datensatz Name(…)`       | `interface Name` mit Konstruktor-Funktion   |
-| `Lambda { x -> … }`       | `(x) => …`                                  |
-| `oder` (Elvis)            | `??`                                        |
-| `?.`                      | `?.`                                        |
+**TypeScript ist implementiert** (`codegen --lang ts`); die Runtime ist ein
+1:1-Port der Java-Runtime auf demselben `decimal.js`-Stack wie der
+Interpreter (bit-genau, kein Drift).
+
+| FinDSL-Konzept                    | TypeScript (implementiert)                                            |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `Ganzzahl`, `Dezimal`, `Prozent`  | Kern `FinDslNumber`; Sicht-Wrapper `Ganzzahl`/`Dezimal`/`Prozent` (Subklassen, intern `Decimal` aus `decimal.js`) |
+| `Euro`, `Cent`, `EuroCent`        | Kern `FinDslNumber`; Sicht-Wrapper `Euro`/`Cent`/`EuroCent`          |
+| `Wahrheitswert`                   | `boolean`                                                            |
+| `Text`                            | `string`                                                            |
+| `Liste<T>`                        | `FinDslListe<Kern-Elem>` (immutable)                                |
+| `Bereich<T>`                      | materialisiert als `FinDslListe` (`FinDslListe.bereich(…)`)         |
+| `T?`                              | `T \| null`; `nichts` → `null`                                      |
+| `(A) -> R`                        | **nativer** Funktionstyp `(a: A) => R` (strukturell, kein Wrapper)  |
+| `aufzählung Name { … }`           | `enum Name { … }` (Wert = Ordinalzahl)                              |
+| `datensatz Name(…)`               | `class Name` mit Konstruktor (immutable Felder)                     |
+| `konst NAME`                      | Modul-Konstante                                                     |
+| Lambda `{ x -> … }`               | Pfeilfunktion `(x) => …`                                            |
+| `oder` (Elvis)                    | `??` (mit Null-Guard)                                               |
+| `?.` (Sicher-Zugriff)             | `?.`                                                                |
+| `!!` (Force-Unwrap)               | Null-Check + Wurf (`FinDslRuntimeError`)                            |
+| `==` / `!=` / `<` … (Werte)       | `.equalsValue(…)` / `.compareValue(…) … 0`                          |
+| `als` (Cast)                      | `.cast(…)` bzw. `.withMoneyAnnotation(…)`                           |
+| `abbruch(…)`                      | `throw new FinDslAbort(…)` (nicht abfangbar)                        |
 
 ### 12.3 JavaScript
 

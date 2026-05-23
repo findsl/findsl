@@ -96,9 +96,18 @@ export async function runGenerate(
                     text: renderDocHtml(model),
                 });
             }
-            case 'js':
+            case 'js': {
+                const f = emitTsModule(lowerProgram(program, ctx));
+                // typescript lazy laden (eigener Chunk) — string→string,
+                // deterministisch, kein fs.
+                const { tsToJs } = await import('./strip-browser.js');
+                return ok({
+                    target, filename: f.fileName.replace(/\.ts$/, '.js'),
+                    mime: 'text/javascript', text: tsToJs(f.code),
+                });
+            }
             case 'pdf':
-                return { ok: false, error: `Target "${target}" folgt in der nächsten Phase (#130).` };
+                return { ok: false, error: 'Target "pdf" folgt in der nächsten Phase (#130).' };
             default:
                 return { ok: false, error: `Unbekanntes Target: ${String(target)}` };
         }

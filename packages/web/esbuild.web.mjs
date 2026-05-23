@@ -27,6 +27,10 @@ const result = await esbuild.build({
     platform: 'browser',
     target: 'es2022',
     outdir: 'dist',
+    // Code-Splitting: lazy `import()` (z. B. typescript für js, später
+    // pdfmake/mathjax für pdf) landet in eigenen Chunks statt im Worker.
+    splitting: true,
+    chunkNames: 'chunks/[name]-[hash]',
     metafile: true,
     logLevel: 'warning',
     alias: {

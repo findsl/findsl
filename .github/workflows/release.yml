@@ -469,6 +469,34 @@ jobs:
           draft: false
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
 
+      # Issue #125: nach erfolgreichem Release die Website-Sprachreferenz
+      # benachrichtigen. Pull-basiert — das Event signalisiert nur; das
+      # Repo findsl/website holt `SPEC.md` selbst am Release-Tag (byte-genau,
+      # versionsgestempelt; Empfangs-Workflow ist ein eigener Task dort).
+      # Bei JEDEM Release inkl. pre-release/rc (kein prerelease-Gate).
+      - name: Website über neue SPEC informieren (repository_dispatch)
+        if: needs.prepare.outputs.dry_run == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Graceful skip, solange das Secret (noch) nicht gesetzt ist: das
+          # Token + der Website-Empfänger sind separate Schritte; das Release
+          # darf daran NICHT scheitern. Sobald WEBSITE_DISPATCH_TOKEN existiert
+          # (fine-grained PAT, Contents:write auf findsl/website), greift es
+          # automatisch. (secrets.* ist in step-`if` nicht zuverlässig nutzbar
+          # → Prüfung hier im Skript.)
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::WEBSITE_DISPATCH_TOKEN nicht gesetzt — SPEC-Sync zu findsl/website übersprungen (Issue #125)."
+            exit 0
+          fi
+          gh api repos/findsl/website/dispatches \
+            -f event_type=spec-updated \
+            -F "client_payload[version]=$VERSION" \
+            -F "client_payload[tag]=v$VERSION"
+          echo "::notice::repository_dispatch 'spec-updated' an findsl/website (v$VERSION) gesendet."
+
       - name: Dry-Run summary
         if: needs.prepare.outputs.dry_run == 'true'
         run: |

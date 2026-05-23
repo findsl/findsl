@@ -15,5 +15,9 @@ function nichtImBrowser(): Promise<never> {
 export const readFile = nichtImBrowser;
 export const writeFile = nichtImBrowser;
 export const mkdir = nichtImBrowser;
+// `stat`/`readdir` nutzt nur der Verzeichnis-Walker (findFinFiles) — im
+// Browser nie aufgerufen; Stubs nur, damit esbuild keine Warnung wirft.
+export const stat = nichtImBrowser;
+export const readdir = nichtImBrowser;
 
-export default { readFile, writeFile, mkdir };
+export default { readFile, writeFile, mkdir, stat, readdir };

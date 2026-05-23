@@ -17,13 +17,19 @@ import { emitJavaModuleFiles } from '@findsl/core/codegen/emit-java/emitter.js';
 import { emitTsModule } from '@findsl/core/codegen/emit-ts/emitter.js';
 import { buildModuleGraphs } from '@findsl/core/papgen/model.js';
 import { renderMermaid, renderModuleMarkdown } from '@findsl/core/papgen/mermaid.js';
+import { buildDocModelFromProgram } from '@findsl/core/docgen/model.js';
+import { renderMarkdown } from '@findsl/core/docgen/markdown.js';
+import { renderHtml as renderDocHtml } from '@findsl/core/docgen/html.js';
 import type { Program } from '@findsl/core/language/generated/ast.js';
 import type { Artifact, GenerateResult, Target } from './types.js';
 
 interface SharedLike {
     workspace: {
         LangiumDocuments: {
-            getDocument(uri: URI): { parseResult: { value: unknown } } | undefined;
+            getDocument(uri: URI): {
+                parseResult: { value: unknown };
+                textDocument: { getText(): string };
+            } | undefined;
         };
         DocumentBuilder: {
             build(docs: unknown[], opts?: { validation?: boolean }): Promise<void>;
@@ -76,9 +82,21 @@ export async function runGenerate(
                     target, filename: `${className}.pap.md`, mime: 'text/markdown', text, mermaid,
                 });
             }
+            case 'markdown': {
+                const model = buildDocModelFromProgram(program, document.textDocument.getText(), className);
+                return ok({
+                    target, filename: `${className}.doku.md`, mime: 'text/markdown',
+                    text: renderMarkdown(model),
+                });
+            }
+            case 'html': {
+                const model = buildDocModelFromProgram(program, document.textDocument.getText(), className);
+                return ok({
+                    target, filename: `${className}.doku.html`, mime: 'text/html',
+                    text: renderDocHtml(model),
+                });
+            }
             case 'js':
-            case 'markdown':
-            case 'html':
             case 'pdf':
                 return { ok: false, error: `Target "${target}" folgt in der nächsten Phase (#130).` };
             default:

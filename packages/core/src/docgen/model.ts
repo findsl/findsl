@@ -137,23 +137,39 @@ export async function buildDocModel(files: ReadonlyArray<string>): Promise<DocMo
             : path.basename(abs)
         ).split(path.sep).join('/');
 
-        modules.push({
-            name: displayId(abs, base),
-            pfad,
-            doc: linkifyQuelleProsa(stripDocMarkers(program.fileDoc?.doc)),
-            // `_`-Interne (SPEC § 4.16) sind nicht Teil der öffentlichen
-            // API → nicht in der generierten Doku. Der abbruch-Anhang
-            // bleibt vollständig (Audit-Katalog ausgeschlossener
-            // Konstellationen — auch aus internen Helfern).
-            decls: program.decls
-                .filter((d) => !isInternalName(d.name ?? ''))
-                .map((d) => declDoc(d, src)),
-            abbruchSites: collectAbbruchSites(program),
-        });
+        modules.push(buildModuleDoc(program, src, displayId(abs, base), pfad));
     }
 
     modules.sort((a, b) => a.name.localeCompare(b.name));
     return { modules };
+}
+
+/**
+ * Reiner Modul-Doc-Aufbau aus bereits geparstem Programm + Quelltext (ohne
+ * Datei-I/O) — für In-Browser-Nutzung (@findsl/web) und Tests. `_`-Interne
+ * (SPEC § 4.16) sind nicht Teil der öffentlichen API → nicht in der Doku;
+ * der abbruch-Anhang bleibt vollständig (Audit-Katalog, auch aus Helfern).
+ */
+export function buildModuleDoc(
+    program: Program,
+    src: string,
+    name: string,
+    pfad: string,
+): ModuleDoc {
+    return {
+        name,
+        pfad,
+        doc: linkifyQuelleProsa(stripDocMarkers(program.fileDoc?.doc)),
+        decls: program.decls
+            .filter((d) => !isInternalName(d.name ?? ''))
+            .map((d) => declDoc(d, src)),
+        abbruchSites: collectAbbruchSites(program),
+    };
+}
+
+/** Reines `DocModel` aus einem Einzelmodul (Program + Quelltext), ohne fs. */
+export function buildDocModelFromProgram(program: Program, src: string, name: string): DocModel {
+    return { modules: [buildModuleDoc(program, src, name, `${name}.findsl`)] };
 }
 
 /** Quelltext-Slice eines CST-Knotens. */

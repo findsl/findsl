@@ -22,6 +22,8 @@ import {
     createConnection,
 } from 'vscode-languageserver/browser';
 import { createFindslServices } from '@findsl/core/language/findsl-module.js';
+import { runCheck } from './check.js';
+import type { CheckResult } from './types.js';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -31,5 +33,12 @@ const connection = createConnection(
 );
 
 const { shared } = createFindslServices({ connection, ...EmptyFileSystem });
+
+// Custom Requests auf derselben Connection (vor dem Listen via
+// startLanguageServer registrieren).
+connection.onRequest(
+    'findsl/check',
+    (params: { uri: string }): Promise<CheckResult> => runCheck(shared, params.uri),
+);
 
 startLanguageServer(shared);

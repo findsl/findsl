@@ -58,4 +58,26 @@ describe('@findsl/web — Worker-API (Node-Smoke)', () => {
         expect(r.ok).toBe(true);
         expect(r.artifact?.text ?? r.artifact?.mermaid).toBeTruthy();
     });
+
+    it('generate: führende Ziffer im Dateinamen → gültiger Identifier', async () => {
+        const { shared } = createFindslServices(EmptyFileSystem);
+        const u = 'inmemory://playground/2024-reform.findsl';
+        const doc = shared.workspace.LangiumDocumentFactory.fromString(
+            'fn F(x: Ganzzahl): Ganzzahl = x\n', URI.parse(u),
+        );
+        shared.workspace.LangiumDocuments.addDocument(doc);
+        await shared.workspace.DocumentBuilder.build([doc], { validation: false });
+
+        const r = await runGenerate(shared, u, 'ts');
+        expect(r.ok).toBe(true);
+        expect(r.artifact?.filename).toMatch(/^M2024/);   // Präfix gegen Leading-Digit
+        expect(/\b(class|function|const)\s+[0-9]/.test(r.artifact?.text ?? '')).toBe(false);
+    });
+
+    it('check: nicht offenes Dokument → error (nicht {passed:0,total:0})', async () => {
+        const { shared } = createFindslServices(EmptyFileSystem);
+        const r = await runCheck(shared, 'inmemory://playground/nichtda.findsl');
+        expect(r.error).toBeTruthy();
+        expect(r.total).toBe(0);
+    });
 });

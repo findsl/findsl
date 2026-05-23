@@ -34,24 +34,31 @@ export async function runCheck(shared: SharedLike, uri: string): Promise<CheckRe
     const t0 = jetzt();
     const document = shared.workspace.LangiumDocuments.getDocument(URI.parse(uri));
     if (!document) {
-        return { cases: [], passed: 0, total: 0, durationMs: 0, diagnostics: [] };
+        return { cases: [], passed: 0, total: 0, durationMs: 0, error: `Dokument nicht offen: ${uri}` };
     }
-    // Linking/Validierung sicherstellen (runPruefe braucht aufgelöste Referenzen).
-    await shared.workspace.DocumentBuilder.build([document], { validation: true });
-    const program = document.parseResult.value as Program;
-    const report = runPruefe(program);
+    try {
+        // Linking/Validierung sicherstellen (runPruefe braucht aufgelöste Refs).
+        await shared.workspace.DocumentBuilder.build([document], { validation: true });
+        const program = document.parseResult.value as Program;
+        const report = runPruefe(program);
 
-    const cases: PruefeCase[] = report.results.map((r) => ({
-        name: r.pruefeName ? `${r.pruefeName} › ${r.testfallLabel}` : r.testfallLabel,
-        status: r.status,
-        message: r.detail || undefined,
-    }));
+        const cases: PruefeCase[] = report.results.map((r) => ({
+            name: r.pruefeName ? `${r.pruefeName} › ${r.testfallLabel}` : r.testfallLabel,
+            status: r.status,
+            message: r.detail || undefined,
+        }));
 
-    return {
-        cases,
-        passed: report.passed,
-        total: report.total,
-        durationMs: Math.round(jetzt() - t0),
-        diagnostics: document.diagnostics ?? [],
-    };
+        return {
+            cases,
+            passed: report.passed,
+            total: report.total,
+            durationMs: Math.round(jetzt() - t0),
+            diagnostics: document.diagnostics ?? [],
+        };
+    } catch (err) {
+        return {
+            cases: [], passed: 0, total: 0, durationMs: Math.round(jetzt() - t0),
+            error: err instanceof Error ? err.message : String(err),
+        };
+    }
 }

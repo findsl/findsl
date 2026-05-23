@@ -11,13 +11,25 @@
 import * as ts from 'typescript';
 
 export function tsToJs(tsSource: string): string {
-    return ts.transpileModule(tsSource, {
+    const out = ts.transpileModule(tsSource, {
         compilerOptions: {
             target: ts.ScriptTarget.ES2022,
             module: ts.ModuleKind.ESNext,
             removeComments: false,
             newLine: ts.NewLineKind.LineFeed,
         },
-        reportDiagnostics: false,
-    }).outputText;
+        reportDiagnostics: true,
+    });
+    // Der Input ist Emitter-Output (immer valides TS); eine Diagnose deutet
+    // auf einen Emitter-Bug → werfen statt still leeres JS (ok:true) liefern.
+    const fehler = (out.diagnostics ?? []).filter(
+        (d) => d.category === ts.DiagnosticCategory.Error,
+    );
+    if (fehler.length > 0) {
+        const msg = fehler
+            .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+            .join('; ');
+        throw new Error(`JS-Strip-Diagnose: ${msg}`);
+    }
+    return out.outputText;
 }

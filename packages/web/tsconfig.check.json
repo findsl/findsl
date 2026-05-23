@@ -1,0 +1,14 @@
+{
+  "//": "Typprüft die GESAMTE Web-Laufzeit (worker/check/generate/strip-browser/pdf-browser + Shims) — noEmit. Schließt die Verifikationslücke aus dem Review: strict greift auf allen src-Dateien, nicht nur den Typ-Exporten. Läuft im build:web.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "WebWorker"],
+    "types": []
+  },
+  "include": ["src/**/*.ts"]
+}

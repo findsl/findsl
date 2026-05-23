@@ -40,8 +40,11 @@ interface SharedLike {
 /** Klassen-/Modulname aus der Dokument-URI (Single-File-Playground). */
 function classNameFromUri(uri: string): string {
     const base = (uri.split('/').pop() ?? 'Main').replace(/\.findsl$/i, '');
-    const cleaned = base.replace(/[^A-Za-z0-9_]/g, '');
-    const stem = cleaned.length > 0 ? cleaned : 'Main';
+    let stem = base.replace(/[^A-Za-z0-9_]/g, '');
+    if (stem.length === 0) stem = 'Main';
+    // Führende Ziffer → ungültiger Java/TS-Identifier (z. B. `2024-reform`):
+    // mit `M` präfixen.
+    if (/^[0-9]/.test(stem)) stem = `M${stem}`;
     return stem.charAt(0).toUpperCase() + stem.slice(1);
 }
 

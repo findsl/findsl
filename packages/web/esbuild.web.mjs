@@ -39,6 +39,13 @@ const result = await esbuild.build({
         'node:fs': shim('fs.ts'),
         'node:fs/promises': shim('fs-promises.ts'),
         'node:module': shim('module.ts'),
+        // Nackte (präfixlose) Builtins ebenfalls aliasen — falls Core/Deps
+        // mal `from 'fs'` statt `from 'node:fs'` nutzen (umginge sonst Alias
+        // UND Guard).
+        path: shim('path.ts'),
+        fs: shim('fs.ts'),
+        'fs/promises': shim('fs-promises.ts'),
+        module: shim('module.ts'),
         'langium/node': shim('langium-node.ts'),
         // Node-pdfmake-Printer (pdfkit) — von docgen/pdf.ts importiert, aber
         // im Browser ungenutzt (wir nehmen nur buildPdfDoc). Stub statt
@@ -51,9 +58,14 @@ const result = await esbuild.build({
 });
 
 // --- Guard: kein Node-Builtin / keine CLI-Schicht im Browser-Bundle ---
+// Nackte (präfixlose) Builtins fängt esbuild selbst ab (bricht den Build mit
+// „Could not resolve" ab, sofern nicht aliasiert) — ein Output-Scan dafür wäre
+// nur ein False-Positive-Magnet (matcht `require("util")` in minifizierten
+// Dep-Strings). Hier bleibt der Scan auf `node:`-Leaks + die CLI-Schicht.
 const verboten = [
     [/from\s*["']node:/, 'node:-Import'],
     [/require\(\s*["']node:/, 'require(node:)'],
+    [/import\(\s*["']node:/, 'dynamic import(node:)'],
     [/["']@findsl\/cli/, '@findsl/cli im Graph'],
 ];
 let guardFehler = false;

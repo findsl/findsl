@@ -35,6 +35,7 @@ export function join(...segs: string[]): string {
 }
 
 export function dirname(p: string): string {
+    if (/^\/+$/.test(p)) return '/'; // Wurzel (Node: dirname('/') === '/')
     const n = p.replace(/\/+$/, '');
     const i = n.lastIndexOf('/');
     if (i < 0) return '.';

@@ -13,11 +13,10 @@ export type Target = 'java' | 'ts' | 'js' | 'markdown' | 'html' | 'pdf' | 'pap';
 export interface PruefeCase {
     name: string;
     status: 'pass' | 'fail' | 'error';
-    /** Ausgewerteter Wert (pass/fail) bzw. Fehlermeldung (error). */
+    /** Ausgewerteter Wert (pass/fail) bzw. Fehlermeldung (error). Der
+     *  Interpreter-Report (`TestfallReport`) liefert keinen getrennten
+     *  Erwartet/Ist-Diff — daher nur dieses Detail. */
     message?: string;
-    expected?: string;
-    actual?: string;
-    quelle?: string;
 }
 
 export interface CheckResult {
@@ -26,15 +25,20 @@ export interface CheckResult {
     total: number;
     durationMs: number;
     diagnostics?: Diagnostic[];
+    /** Gesetzt, wenn check selbst scheiterte (Dokument nicht offen, Wurf in
+     *  runPruefe) — unterscheidbar von „0 Tests, alle grün". */
+    error?: string;
 }
 
 export interface Artifact {
     target: Target;
     filename: string;
     mime: string;
-    /** java/ts/js/markdown/html */
+    /** java/ts/js/markdown/html — und pdf als pdfmake-Doc-Definition (JSON,
+     *  Path B: die Website rendert daraus die Bytes). */
     text?: string;
-    /** pdf (pdfmake → Uint8Array → base64) */
+    /** Reserviert für worker-seitige PDF-Bytes (Path A, noch nicht genutzt —
+     *  Path B liefert die Doc-Definition in `text`). */
     bytesBase64?: string;
     /** pap (Mermaid-Quelle; Website rendert mit mermaid.js) */
     mermaid?: string;

@@ -56,6 +56,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build @findsl/web (Browser-Bundle + node:-Guard + .d.ts)
+        run: npm run -w @findsl/web build:web
+
       - name: Bundle
         run: npm run bundle
 

@@ -6,12 +6,15 @@
   "type": "module",
   "description": "Browser-Bundle der FinDSL-Toolchain (Langium-LSP-Worker + check/generate-API). Single Source: @findsl/core.",
   "exports": {
-    "./worker": "./dist/worker.js",
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./worker": "./dist/worker.js"
   },
   "files": ["dist"],
   "scripts": {
-    "build:web": "node esbuild.web.mjs"
+    "build:web": "node esbuild.web.mjs && tsc -p tsconfig.json"
   },
   "dependencies": {
     "@findsl/core": "*"

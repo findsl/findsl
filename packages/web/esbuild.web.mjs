@@ -16,8 +16,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const shim = (f) => path.join(__dirname, 'src', 'shims', f);
 
-// index (check/generate) kommt in Phase 3/4 dazu.
-const entryPoints = { worker: 'src/worker.ts' };
+// worker = Laufzeit (LSP + check/generate); index = `.`-Export (nur Typen,
+// die .d.ts liefert tsc separat im build:web).
+const entryPoints = { worker: 'src/worker.ts', index: 'src/index.ts' };
 
 const result = await esbuild.build({
     absWorkingDir: __dirname,

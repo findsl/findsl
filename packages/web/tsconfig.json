@@ -1,0 +1,16 @@
+{
+  "//": "Nur die öffentlichen API-Typen → dist/*.d.ts (für die Website). Die Laufzeit (worker/check/generate) bündelt esbuild separat; sie ist NICHT Teil dieser Deklarations-Emission.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["src/index.ts", "src/types.ts"]
+}

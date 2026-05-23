@@ -18,6 +18,7 @@ import {
     type LangiumDocument,
     type MaybePromise,
     type AstNode,
+    AstUtils,
     CstUtils,
 } from 'langium';
 import type { CodeActionProvider } from 'langium/lsp';
@@ -33,11 +34,19 @@ import {
 import {
     isImportDecl,
     isImportItem,
+    isCallChain,
+    isExpr,
+    isStringLiteral,
+    isAufzaehlungDecl,
     type ImportDecl,
     type ImportItem,
     type Program,
+    type Expr,
 } from './generated/ast.js';
 import { collectRefs } from './findsl-validator.js';
+import { collectExpressionTypes, typeToString, type Type } from './findsl-types.js';
+import { analyzeImports } from './findsl-scope.js';
+import { isBuiltinName } from './findsl-stdlib.js';
 
 /** Symbol-Render eines `verwende`-Items: `Foo` bzw. `Foo als bar`. */
 function renderItem(it: { name: string; alias?: string }): string {
@@ -99,6 +108,10 @@ export class FindslCodeActionProvider implements CodeActionProvider {
         // `only`-Kind es zulässt.
         const organize = this.organizeImports(document, params);
         if (organize) actions.push(organize);
+        // (#90/3) Refactor: markierten Ausdruck in eine neue Top-Level-konst
+        // heben (RefactorExtract).
+        const extract = this.extractConstant(document, params);
+        if (extract) actions.push(extract);
         return actions;
     }
 
@@ -316,6 +329,137 @@ export class FindslCodeActionProvider implements CodeActionProvider {
             kind: CodeActionKind.SourceOrganizeImports,
             edit: { changes: { [document.uri.toString()]: [{ range: region, newText }] } },
         };
+    }
+
+    // --- (#90/3) Refactor: Konstante extrahieren -------------------------
+
+    private extractConstant(
+        document: LangiumDocument, params: CodeActionParams,
+    ): CodeAction | undefined {
+        if (!this.kindAllowed(params, CodeActionKind.RefactorExtract)) return undefined;
+        const program = document.parseResult?.value as Program | undefined;
+        if (!program?.$cstNode) return undefined;
+
+        // Innersten Ausdruck finden, der die Selektion vollständig enthält.
+        const expr = this.smallestExprCovering(program, document, params.range);
+        if (!expr?.$cstNode) return undefined;
+
+        // Bereits eine benannte Top-Level-Referenz (`FOO`) → Extraktion sinnlos.
+        const globals = this.globalNames(program);
+        if (isCallChain(expr) && (expr.chain?.length ?? 0) === 0
+            && expr.name && globals.has(expr.name)) return undefined;
+
+        // Nur einzeilige Ausdrücke (mehrzeilige würde der Formatter umbrechen
+        // → Idempotenz-Risiko; bewusst außerhalb von Phase B).
+        const exprText = document.textDocument.getText(expr.$cstNode.range);
+        if (exprText.includes('\n')) return undefined;
+
+        // Freie Wurzel-Bezeichner müssen ALLE global sein — sonst referenziert
+        // der Ausdruck einen Parameter / eine `let`-Bindung und eine
+        // Top-Level-`konst` wäre nicht auflösbar. (Konservativ: in Lambda/
+        // `für jeden` lokal gebundene Namen blocken ebenfalls — sicherer
+        // False-Negative.)
+        for (const root of this.freeRoots(expr)) {
+            if (!globals.has(root) && !isBuiltinName(root)) return undefined;
+        }
+
+        // Typ inferieren → gültige FinDSL-Annotation. unknown/never/nichts →
+        // nicht annotierbar, kein Angebot.
+        const type = collectExpressionTypes(program).get(expr);
+        if (!type || !this.isAnnotatable(type)) return undefined;
+
+        // Umschließende Top-Level-Decl = Einfügepunkt (davor, damit die neue
+        // konst in Quellreihenfolge VOR ihrer Verwendung steht).
+        const topDecl = this.enclosingTopLevelDecl(program, expr);
+        if (!topDecl?.$cstNode) return undefined;
+
+        const name = this.freshConstName(globals);
+        const insertPos = { line: topDecl.$cstNode.range.start.line, character: 0 };
+        const konstLine = `konst ${name}: ${typeToString(type)} = ${exprText}\n`;
+        const uri = document.uri.toString();
+        return {
+            title: 'Konstante extrahieren',
+            kind: CodeActionKind.RefactorExtract,
+            edit: { changes: { [uri]: [
+                { range: { start: insertPos, end: insertPos }, newText: konstLine },
+                { range: expr.$cstNode.range, newText: name },
+            ] } },
+        };
+    }
+
+    /** Kleinster Expr-Knoten, dessen CST-Bereich die Selektion umschließt. */
+    private smallestExprCovering(
+        program: Program, document: LangiumDocument, range: Range,
+    ): Expr | undefined {
+        const selStart = document.textDocument.offsetAt(range.start);
+        const selEnd = document.textDocument.offsetAt(range.end);
+        let best: { node: Expr; span: number } | undefined;
+        for (const node of AstUtils.streamAllContents(program)) {
+            if (!isExpr(node) || !node.$cstNode) continue;
+            const { offset, end } = node.$cstNode;
+            if (offset <= selStart && end >= selEnd) {
+                const span = end - offset;
+                if (!best || span < best.span) best = { node, span };
+            }
+        }
+        return best?.node;
+    }
+
+    /** Erste Decl auf dem Weg nach oben, deren Container das Programm ist. */
+    private enclosingTopLevelDecl(program: Program, node: AstNode): AstNode | undefined {
+        let n: AstNode | undefined = node;
+        while (n?.$container && n.$container !== program) n = n.$container;
+        return n?.$container === program ? n : undefined;
+    }
+
+    /** Top-Level-sichtbare Namen: Decls, Aufzählungswerte, Importe. */
+    private globalNames(program: Program): Set<string> {
+        const names = new Set<string>();
+        for (const d of program.decls) {
+            const nm = (d as { name?: string }).name;
+            if (nm) names.add(nm);
+            if (isAufzaehlungDecl(d)) for (const v of d.values) names.add(v);
+        }
+        for (const b of analyzeImports(program).bindings) names.add(b.localName);
+        return names;
+    }
+
+    /** Freie Wurzel-Bezeichner eines Ausdrucks: CallChain-Wurzeln +
+     *  `${…}`-Interpolations-Wurzeln (NICHT Feld-/Methodennamen). */
+    private freeRoots(expr: AstNode): Set<string> {
+        const roots = new Set<string>();
+        const slotRe = /\$\{\s*([\p{L}_][\p{L}\p{N}_]*)/gu;
+        const visit = (n: AstNode): void => {
+            if (isCallChain(n) && n.name) roots.add(n.name);
+            if (isStringLiteral(n) && n.value) {
+                for (const m of n.value.matchAll(slotRe)) roots.add(m[1]);
+            }
+        };
+        visit(expr);
+        for (const n of AstUtils.streamAllContents(expr)) visit(n);
+        return roots;
+    }
+
+    /** `typeToString(t)` ist eine gültige FinDSL-Annotation? */
+    private isAnnotatable(t: Type): boolean {
+        switch (t.kind) {
+            case 'unknown': case 'never': case 'nichts': return false;
+            case 'nullable':  return this.isAnnotatable(t.inner);
+            case 'list':      return this.isAnnotatable(t.element);
+            case 'function':  return t.params.every((p) => this.isAnnotatable(p))
+                && this.isAnnotatable(t.result);
+            default:          return true; // primitive | record | enum
+        }
+    }
+
+    /** Eindeutiger UPPER_SNAKE-Name (SPEC § 2.5), kollisionsfrei. */
+    private freshConstName(taken: ReadonlySet<string>): string {
+        const base = 'EXTRAHIERT';
+        if (!taken.has(base)) return base;
+        for (let i = 2; ; i++) {
+            const c = `${base}_${i}`;
+            if (!taken.has(c)) return c;
+        }
     }
 
     /** `params.context.only` respektieren: ohne Filter alles erlaubt, sonst

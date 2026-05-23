@@ -18,18 +18,17 @@
  * tatsächlich liefert:
  *   - `quickfix`               — ungenutzten Import / einzelnes Symbol entfernen
  *   - `source.organizeImports` — Importe sortieren + dedupen
- *
- * Bewusst NICHT angekündigt: `refactor.*`. Das kommt erst mit Phase B
- * (Konstante extrahieren), zusammen mit dem produzierenden Code.
+ *   - `refactor.extract`       — Konstante extrahieren (Phase B)
  */
 
 import { DefaultLanguageServer } from 'langium/lsp';
 import { CodeActionKind, type InitializeParams, type InitializeResult } from 'vscode-languageserver';
 
-/** Die vom CodeActionProvider real erzeugten Kinds (Phase A). */
+/** Die vom CodeActionProvider real erzeugten Kinds. */
 const FINDSL_CODE_ACTION_KINDS: readonly string[] = [
     CodeActionKind.QuickFix,
     CodeActionKind.SourceOrganizeImports,
+    CodeActionKind.RefactorExtract,
 ];
 
 export class FindslLanguageServer extends DefaultLanguageServer {

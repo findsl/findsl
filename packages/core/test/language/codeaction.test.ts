@@ -18,7 +18,7 @@ import { NodeFileSystem } from 'langium/node';
 import { URI } from 'langium';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { createFindslServices } from '../../src/language/findsl-module.js';
-import type { CodeAction, Diagnostic, TextEdit } from 'vscode-languageserver';
+import type { CodeAction, Diagnostic, TextEdit, Range } from 'vscode-languageserver';
 
 interface Ctx {
     services: ReturnType<typeof createFindslServices>['Findsl'];
@@ -208,6 +208,35 @@ async function organizeActions(ctx: Ctx, uri: string): Promise<CodeAction[]> {
         context: { diagnostics: [], only: ['source.organizeImports'] },
     });
     return (res ?? []) as CodeAction[];
+}
+
+/** LSP-Range eines Substrings (Vorkommen ab `from`). */
+function rangeOfText(src: string, needle: string, from = 0): Range {
+    const idx = src.indexOf(needle, from);
+    if (idx < 0) throw new Error(`Substring nicht gefunden: ${needle}`);
+    const toPos = (off: number) => {
+        const before = src.slice(0, off);
+        return { line: before.split('\n').length - 1, character: off - (before.lastIndexOf('\n') + 1) };
+    };
+    return { start: toPos(idx), end: toPos(idx + needle.length) };
+}
+
+/** getCodeActions mit `only: refactor.extract` → die „Konstante extrahieren"-Aktion. */
+async function extractActionFor(
+    ctx: Ctx, uri: string, range: Range, only: string[] = ['refactor.extract'],
+): Promise<CodeAction[]> {
+    const docs = ctx.services.shared.workspace.LangiumDocuments;
+    const doc = [...docs.all].find((d) => d.uri.toString() === uri)!;
+    const res = await ctx.services.lsp.CodeActionProvider!.getCodeActions(doc, {
+        textDocument: { uri }, range, context: { diagnostics: [], only },
+    });
+    return (res ?? []) as CodeAction[];
+}
+
+/** Wendet ALLE Edits einer CodeAction (für die Datei-URI) auf die Quelle an. */
+function applyAction(src: string, action: CodeAction, uri: string): string {
+    const edits = action.edit!.changes![uri];
+    return TextDocument.applyEdits(TextDocument.create(uri, 'findsl', 1, src), edits);
 }
 
 describe('Refactor: ungenutzten Import entfernen (#90/1)', () => {
@@ -436,5 +465,91 @@ describe('LanguageServer-Capabilities', () => {
         const kinds = (cap as { codeActionKinds?: string[] }).codeActionKinds ?? [];
         expect(kinds).toContain('source.organizeImports');
         expect(kinds).toContain('quickfix');
+        expect(kinds).toContain('refactor.extract');
+    });
+});
+
+/**
+ * Refactor „Konstante extrahieren" (#90/3): markierter Ausdruck → neue
+ * Top-Level-`konst NAME: T = …` (UPPER_SNAKE, SPEC § 2.5) VOR der
+ * umschließenden Decl, Original durch die Referenz ersetzt. Typ inferiert.
+ */
+describe('Refactor: Konstante extrahieren (#90/3)', () => {
+    it('hebt den markierten Ausdruck in eine Top-Level-konst (Typ inferiert)', async () => {
+        const ctx = newCtx();
+        const app = 'konst R: Euro = 100 als Euro\n';
+        const v = await validate(ctx, { app }, 'app');
+        const act = (await extractActionFor(ctx, v.uri, rangeOfText(app, '100 als Euro')))
+            .find((a) => a.title === 'Konstante extrahieren');
+        expect(act).toBeDefined();
+        const out = applyAction(app, act!, v.uri);
+        expect(out).toBe(
+            'konst EXTRAHIERT: Euro = 100 als Euro\n'
+            + 'konst R: Euro = EXTRAHIERT\n',
+        );
+        // Re-validiert fehlerfrei + Formatter-idempotent (AK).
+        const ctx2 = newCtx();
+        const v2 = await validate(ctx2, { app: out }, 'app');
+        expect(v2.diags.filter((d) => d.severity === 1)).toEqual([]);
+        expect(await format(out)).toBe(await format(await format(out)));
+    });
+
+    it('inferiert Ganzzahl korrekt', async () => {
+        const ctx = newCtx();
+        const app = 'konst N: Ganzzahl = 2 + 3\n';
+        const v = await validate(ctx, { app }, 'app');
+        const act = (await extractActionFor(ctx, v.uri, rangeOfText(app, '2 + 3')))
+            .find((a) => a.title === 'Konstante extrahieren');
+        expect(act).toBeDefined();
+        const out = applyAction(app, act!, v.uri);
+        expect(out).toBe(
+            'konst EXTRAHIERT: Ganzzahl = 2 + 3\n'
+            + 'konst N: Ganzzahl = EXTRAHIERT\n',
+        );
+    });
+
+    it('verweigert Extraktion bei Bezug auf einen Parameter (würde brechen)', async () => {
+        const ctx = newCtx();
+        const app = 'fn F(z: Euro): Euro = z + 1 als Euro\n';
+        const v = await validate(ctx, { app }, 'app');
+        const acts = (await extractActionFor(ctx, v.uri, rangeOfText(app, 'z + 1 als Euro')))
+            .filter((a) => a.title === 'Konstante extrahieren');
+        expect(acts).toEqual([]);
+    });
+
+    it('eindeutiger Name bei Kollision (EXTRAHIERT_2)', async () => {
+        const ctx = newCtx();
+        const app = 'konst EXTRAHIERT: Ganzzahl = 5\nkonst R: Euro = 100 als Euro\n';
+        const v = await validate(ctx, { app }, 'app');
+        const act = (await extractActionFor(ctx, v.uri, rangeOfText(app, '100 als Euro')))
+            .find((a) => a.title === 'Konstante extrahieren');
+        expect(act).toBeDefined();
+        const out = applyAction(app, act!, v.uri);
+        expect(out).toBe(
+            'konst EXTRAHIERT: Ganzzahl = 5\n'
+            + 'konst EXTRAHIERT_2: Euro = 100 als Euro\n'
+            + 'konst R: Euro = EXTRAHIERT_2\n',
+        );
+    });
+
+    it('only:[quickfix] → Extraktion NICHT angeboten', async () => {
+        const ctx = newCtx();
+        const app = 'konst R: Euro = 100 als Euro\n';
+        const v = await validate(ctx, { app }, 'app');
+        const acts = (await extractActionFor(
+            ctx, v.uri, rangeOfText(app, '100 als Euro'), ['quickfix'],
+        )).filter((a) => a.title === 'Konstante extrahieren');
+        expect(acts).toEqual([]);
+    });
+
+    it('bereits benannte Top-Level-Referenz → keine (sinnlose) Extraktion', async () => {
+        const ctx = newCtx();
+        const app = 'konst BASIS: Euro = 100 als Euro\nkonst R: Euro = BASIS\n';
+        const v = await validate(ctx, { app }, 'app');
+        // Referenz BASIS (zweites Vorkommen, nach dem ersten Zeilenumbruch).
+        const range = rangeOfText(app, 'BASIS', app.indexOf('\n'));
+        const acts = (await extractActionFor(ctx, v.uri, range))
+            .filter((a) => a.title === 'Konstante extrahieren');
+        expect(acts).toEqual([]);
     });
 });

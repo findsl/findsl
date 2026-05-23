@@ -39,6 +39,7 @@ import { FindslCompletionProvider } from './findsl-completion.js';
 import { FindslWorkspaceSymbolProvider } from './findsl-workspace-symbols.js';
 import { FindslTokenBuilder } from './findsl-token-builder.js';
 import { FindslDocumentValidator } from './findsl-document-validator.js';
+import { FindslLanguageServer } from './findsl-language-server.js';
 
 /**
  * Sprach-spezifische Service-Erweiterungen für FinDSL.
@@ -94,6 +95,10 @@ export const FindslModule: Module<FindslServices, PartialLangiumServices & Finds
  */
 export const FindslSharedModule: Module<LangiumSharedServices, PartialLangiumSharedServices> = {
     lsp: {
+        // Eigener LanguageServer: meldet `codeActionKinds` (inkl.
+        // `source.organizeImports`) in den InitializeResult-Capabilities, sonst
+        // blendet VS Code den „Organize Imports"-Command für .findsl aus (#90).
+        LanguageServer: (services) => new FindslLanguageServer(services),
         WorkspaceSymbolProvider: (services) => new FindslWorkspaceSymbolProvider(services),
         ExecuteCommandHandler: (services) => new FindslExecuteCommandHandler(services),
     },

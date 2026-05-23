@@ -16,6 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import { NodeFileSystem } from 'langium/node';
 import { URI } from 'langium';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import { createFindslServices } from '../../src/language/findsl-module.js';
 import type { CodeAction, Diagnostic, TextEdit } from 'vscode-languageserver';
 
@@ -172,10 +173,268 @@ describe('Quick-Fix: Grenzfälle', () => {
         // `findsl.modul-pfad` ist nicht mehr in der Liste — der Fix
         // existiert nach der Abschaffung der `modul`-Deklaration nicht mehr.
         const noCode = v.diags.filter((d) => typeof d.code !== 'string'
-            || !['findsl.fehlende-quelle',
+            || !['findsl.fehlende-quelle', 'findsl.ungenutzt',
                  'findsl.builtin-import', 'findsl.symbol-nicht-exportiert']
                 .includes(d.code as string));
         const actions = await actionsFor(ctx, v.uri, noCode);
         expect(actions).toEqual([]);
+    });
+});
+
+// --- #90: Refactor-CodeActions -----------------------------------------
+
+/** Formatiert über die echte Formatter-Instanz (für Idempotenz-Checks). */
+async function format(src: string): Promise<string> {
+    const services = createFindslServices(NodeFileSystem).Findsl;
+    const doc = services.shared.workspace.LangiumDocumentFactory.fromString(
+        src, URI.parse(`file:///fmt-${Math.random().toString(36).slice(2)}.findsl`),
+    );
+    services.shared.workspace.LangiumDocuments.addDocument(doc);
+    await services.shared.workspace.DocumentBuilder.build([doc], { validation: false });
+    const edits = await services.lsp.Formatter!.formatDocument(doc, {
+        textDocument: { uri: doc.uri.toString() },
+        options: { tabSize: 4, insertSpaces: true },
+    });
+    return TextDocument.applyEdits(doc.textDocument, edits);
+}
+
+/** getCodeActions mit `only: source.organizeImports` über das Dokument. */
+async function organizeActions(ctx: Ctx, uri: string): Promise<CodeAction[]> {
+    const docs = ctx.services.shared.workspace.LangiumDocuments;
+    const doc = [...docs.all].find((d) => d.uri.toString() === uri)!;
+    const res = await ctx.services.lsp.CodeActionProvider!.getCodeActions(doc, {
+        textDocument: { uri },
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+        context: { diagnostics: [], only: ['source.organizeImports'] },
+    });
+    return (res ?? []) as CodeAction[];
+}
+
+describe('Refactor: ungenutzten Import entfernen (#90/1)', () => {
+    it('entfernt ungenutztes verwende-Symbol, behält genutzte', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Eins(z: Euro): Euro = z\nfn Zwei(z: Euro): Euro = z\n';
+        const app = 'verwende {Eins, Zwei} aus "./lib"\nkonst R: Euro = Eins(1 als Euro)\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const diag = v.diags.find(
+            (d) => d.code === 'findsl.ungenutzt' && d.message.includes('Zwei'),
+        );
+        expect(diag).toBeDefined();
+
+        const fix = (await actionsFor(ctx, v.uri, [diag!]))
+            .find((a) => a.title.includes('Ungenutzten Import'));
+        expect(fix).toBeDefined();
+
+        const fixed = applyEdit(app, firstEdit(fix!, v.uri));
+        expect(fixed).toContain('Eins');
+        expect(fixed).not.toContain('Zwei');
+        const v2 = await validate(newCtx(), { lib, app: fixed }, 'app');
+        expect(v2.diags.some(
+            (d) => d.code === 'findsl.ungenutzt' && d.message.includes('Zwei'),
+        )).toBe(false);
+    });
+
+    it('letztes Symbol → ganze verwende-Zeile entfernt', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Eins(z: Euro): Euro = z\n';
+        const app = 'verwende {Eins} aus "./lib"\nkonst R: Euro = 1 als Euro\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const diag = v.diags.find((d) => d.code === 'findsl.ungenutzt' && d.message.includes('Eins'));
+        const fix = (await actionsFor(ctx, v.uri, [diag!]))
+            .find((a) => a.title.includes('Ungenutzten Import'));
+        expect(fix).toBeDefined();
+        const fixed = applyEdit(app, firstEdit(fix!, v.uri));
+        expect(fixed).not.toContain('verwende');
+    });
+
+    it('ungenutzter Parameter bietet KEINEN Import-Fix', async () => {
+        const ctx = newCtx();
+        const src = 'fn F(ungenutzt: Euro): Euro = 0 als Euro\n';
+        const v = await validate(ctx, { m: src }, 'm');
+        const diag = v.diags.find(
+            (d) => d.code === 'findsl.ungenutzt' && d.message.includes('ungenutzt'),
+        );
+        expect(diag).toBeDefined();
+        const actions = await actionsFor(ctx, v.uri, [diag!]);
+        expect(actions.some((a) => a.title.includes('Ungenutzten Import'))).toBe(false);
+    });
+
+    it('letztes Symbol bei MEHRZEILIGEM Import → ganzer Block weg + parsebar', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Eins(z: Euro): Euro = z\n';
+        // Mehrzeilige (Formatter-kanonische) Form — der HIGH-Bug aus PR #129
+        // hätte hier nur die erste Zeile getilgt → unparsebarer Rumpf.
+        const app = 'verwende {\n    Eins,\n} aus "./lib"\nkonst R: Euro = 1 als Euro\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const diag = v.diags.find((d) => d.code === 'findsl.ungenutzt' && d.message.includes('Eins'));
+        const fix = (await actionsFor(ctx, v.uri, [diag!]))
+            .find((a) => a.title.includes('Ungenutzten Import'));
+        expect(fix).toBeDefined();
+        const fixed = applyEdit(app, firstEdit(fix!, v.uri));
+        expect(fixed).not.toContain('verwende');
+        expect(fixed).not.toContain('Eins');
+        expect(fixed).not.toContain('}');
+        // Entscheidend: das Ergebnis parst (keine Parse-/Validierungsfehler).
+        const v2 = await validate(newCtx(), { lib, app: fixed }, 'app');
+        expect(v2.diags.filter((d) => d.severity === 1)).toEqual([]);
+    });
+});
+
+describe('Source: Importe organisieren (#90/2)', () => {
+    it('mergt Quellen, sortiert Symbole, formatter-kanonisch', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Aaa(z: Euro): Euro = z\nfn Bbb(z: Euro): Euro = z\n';
+        const lib2 = 'fn Ccc(z: Euro): Euro = z\n';
+        const app = 'verwende {Ccc} aus "./lib2"\n'
+            + 'verwende {Bbb} aus "./lib"\n'
+            + 'verwende {Aaa} aus "./lib"\n'
+            + 'konst R: Euro = Aaa(1 als Euro) + Bbb(1 als Euro) + Ccc(1 als Euro)\n';
+        const v = await validate(ctx, { lib, lib2, app }, 'app');
+
+        const org = (await organizeActions(ctx, v.uri))
+            .find((a) => a.title === 'Importe organisieren');
+        expect(org).toBeDefined();
+
+        const out = applyEdit(app, firstEdit(org!, v.uri));
+        // Quellen alphabetisch (./lib vor ./lib2), Symbole sortiert + gemergt,
+        // mehrzeilig (Formatter-Konvention).
+        expect(out).toBe(
+            'verwende {\n    Aaa,\n    Bbb,\n} aus "./lib"\n'
+            + 'verwende {\n    Ccc,\n} aus "./lib2"\n'
+            + 'konst R: Euro = Aaa(1 als Euro) + Bbb(1 als Euro) + Ccc(1 als Euro)\n',
+        );
+        // Formatter-idempotent (keine Oszillation) + weiterhin valide +
+        // organize ist idempotent (erneut angewandt → keine Aktion mehr).
+        expect(await format(out)).toBe(await format(await format(out)));
+        const ctx2 = newCtx();
+        const v2 = await validate(ctx2, { lib, lib2, app: out }, 'app');
+        expect(v2.diags.filter((d) => d.severity === 1)).toEqual([]);
+        expect((await organizeActions(ctx2, v2.uri)).length).toBe(0);
+    });
+
+    it('bereits organisiert → keine (No-op-)Aktion', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Aaa(z: Euro): Euro = z\n';
+        const app = 'verwende {\n    Aaa,\n} aus "./lib"\nkonst R: Euro = Aaa(1 als Euro)\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const org = (await organizeActions(ctx, v.uri))
+            .find((a) => a.title === 'Importe organisieren');
+        expect(org).toBeUndefined();
+    });
+
+    it('erhält Alias (Foo als bar) und sortiert', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Alpha(z: Euro): Euro = z\nfn Zeta(z: Euro): Euro = z\n';
+        const app = 'verwende {Zeta als z, Alpha} aus "./lib"\n'
+            + 'konst R: Euro = z(1 als Euro) + Alpha(1 als Euro)\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const org = (await organizeActions(ctx, v.uri)).find((a) => a.title === 'Importe organisieren');
+        expect(org).toBeDefined();
+        const out = applyEdit(app, firstEdit(org!, v.uri));
+        // Alias erhalten + alphabetisch (Alpha vor Zeta).
+        expect(out).toContain('verwende {\n    Alpha,\n    Zeta als z,\n} aus "./lib"');
+    });
+
+    it('entfernt ungenutzte Symbole beim Organisieren (TS-Parität)', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Aaa(z: Euro): Euro = z\nfn Bbb(z: Euro): Euro = z\n';
+        const app = 'verwende {Aaa, Bbb} aus "./lib"\nkonst R: Euro = Aaa(1 als Euro)\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const org = (await organizeActions(ctx, v.uri)).find((a) => a.title === 'Importe organisieren');
+        expect(org).toBeDefined();
+        const out = applyEdit(app, firstEdit(org!, v.uri));
+        // Bbb ungenutzt → raus; nur Aaa bleibt (kanonisch mehrzeilig).
+        expect(out).toBe('verwende {\n    Aaa,\n} aus "./lib"\nkonst R: Euro = Aaa(1 als Euro)\n');
+    });
+
+    it('lässt eine Quelle ganz weg, wenn alle ihre Symbole ungenutzt sind', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Aaa(z: Euro): Euro = z\n';
+        const lib2 = 'fn Bbb(z: Euro): Euro = z\n';
+        const app = 'verwende {Bbb} aus "./lib2"\n'
+            + 'verwende {Aaa} aus "./lib"\n'
+            + 'konst R: Euro = Aaa(1 als Euro)\n';
+        const v = await validate(ctx, { lib, lib2, app }, 'app');
+        const org = (await organizeActions(ctx, v.uri)).find((a) => a.title === 'Importe organisieren');
+        expect(org).toBeDefined();
+        const out = applyEdit(app, firstEdit(org!, v.uri));
+        // ./lib2 (nur Bbb, ungenutzt) fällt weg; nur ./lib bleibt.
+        expect(out).toBe('verwende {\n    Aaa,\n} aus "./lib"\nkonst R: Euro = Aaa(1 als Euro)\n');
+    });
+
+    it('entfernt ungenutzten Alias (Zeta als z) beim Organisieren', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Alpha(z: Euro): Euro = z\nfn Zeta(z: Euro): Euro = z\n';
+        const app = 'verwende {Zeta als z, Alpha} aus "./lib"\n'
+            + 'konst R: Euro = Alpha(1 als Euro)\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const org = (await organizeActions(ctx, v.uri)).find((a) => a.title === 'Importe organisieren');
+        expect(org).toBeDefined();
+        const out = applyEdit(app, firstEdit(org!, v.uri));
+        // z (Alias von Zeta) nicht referenziert → raus; Alpha bleibt.
+        expect(out).toBe('verwende {\n    Alpha,\n} aus "./lib"\nkonst R: Euro = Alpha(1 als Euro)\n');
+    });
+
+    it('alle Importe ungenutzt → Block komplett entfernt (keine Leerzeile)', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Aaa(z: Euro): Euro = z\n';
+        const app = 'verwende {Aaa} aus "./lib"\nkonst R: Euro = 1 als Euro\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const org = (await organizeActions(ctx, v.uri)).find((a) => a.title === 'Importe organisieren');
+        expect(org).toBeDefined();
+        const out = applyEdit(app, firstEdit(org!, v.uri));
+        // Import-Zeile inkl. Umbruch weg → keine führende Leerzeile.
+        expect(out).toBe('konst R: Euro = 1 als Euro\n');
+    });
+
+    it('only:[quickfix] → Organize NICHT angeboten', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Aaa(z: Euro): Euro = z\n';
+        const app = 'verwende {Aaa} aus "./lib"\nkonst R: Euro = Aaa(1 als Euro)\n';
+        const v = await validate(ctx, { lib, app }, 'app');
+        const docs = ctx.services.shared.workspace.LangiumDocuments;
+        const doc = [...docs.all].find((d) => d.uri.toString() === v.uri)!;
+        const res = await ctx.services.lsp.CodeActionProvider!.getCodeActions(doc, {
+            textDocument: { uri: v.uri },
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+            context: { diagnostics: [], only: ['quickfix'] },
+        });
+        expect((res ?? []).some((a) => (a as CodeAction).title === 'Importe organisieren')).toBe(false);
+    });
+
+    it('Kommentar zwischen Imports → Organize NICHT angeboten (kein Content-Loss)', async () => {
+        const ctx = newCtx();
+        const lib = 'fn Aaa(z: Euro): Euro = z\n';
+        const lib2 = 'fn Bbb(z: Euro): Euro = z\n';
+        const app = 'verwende {Bbb} aus "./lib2"\n// wichtig\nverwende {Aaa} aus "./lib"\n'
+            + 'konst R: Euro = Aaa(1 als Euro) + Bbb(1 als Euro)\n';
+        const v = await validate(ctx, { lib, lib2, app }, 'app');
+        const org = (await organizeActions(ctx, v.uri)).find((a) => a.title === 'Importe organisieren');
+        expect(org).toBeUndefined();
+    });
+});
+
+/**
+ * Server-Capability (Issue #90, Phase A): Der FinDSL-LanguageServer muss die
+ * unterstützten `codeActionKinds` in den InitializeResult-Capabilities melden.
+ * Langiums Default meldet nur `codeActionProvider: true` (Boolean ohne Kinds);
+ * dann blendet VS Code „Organize Imports" (`source.organizeImports`) aus —
+ * exakt der im Editor beobachtete Fehler. Regressionsschutz dagegen.
+ */
+describe('LanguageServer-Capabilities', () => {
+    it('meldet codeActionKinds inkl. source.organizeImports', async () => {
+        const { shared } = createFindslServices(NodeFileSystem);
+        const res = await shared.lsp.LanguageServer.initialize({
+            processId: null,
+            rootUri: null,
+            capabilities: {},
+            workspaceFolders: null,
+        });
+        const cap = res.capabilities.codeActionProvider;
+        // Muss ein Objekt mit Kinds sein, KEIN bloßes `true`.
+        expect(typeof cap).toBe('object');
+        const kinds = (cap as { codeActionKinds?: string[] }).codeActionKinds ?? [];
+        expect(kinds).toContain('source.organizeImports');
+        expect(kinds).toContain('quickfix');
     });
 });

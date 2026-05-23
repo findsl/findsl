@@ -521,7 +521,7 @@ function stringLiteralContent(raw: string): string {
  * Quell-Symbol). `streamAllContents` liefert nur Nachfahren, nie `root`
  * selbst — Decl-Namen (String-Properties) sind hier nie enthalten.
  */
-function collectRefs(root: AstNode, into: Set<string>): void {
+export function collectRefs(root: AstNode, into: Set<string>): void {
     for (const n of AstUtils.streamAllContents(root)) {
         if (isCallChain(n)) {
             if (n.name) into.add(n.name);

@@ -32,8 +32,37 @@ import {
 } from 'vscode-languageserver';
 import {
     isImportDecl,
+    isImportItem,
+    type ImportDecl,
+    type ImportItem,
     type Program,
 } from './generated/ast.js';
+import { collectRefs } from './findsl-validator.js';
+
+/** Symbol-Render eines `verwende`-Items: `Foo` bzw. `Foo als bar`. */
+function renderItem(it: { name: string; alias?: string }): string {
+    return it.alias ? `${it.name} als ${it.alias}` : it.name;
+}
+
+/**
+ * `verwende { … } aus "…"` in der **Formatter-kanonischen** Form rendern:
+ * IMMER mehrzeilig, jedes Item auf eigener, 4-fach eingerückter Zeile mit
+ * Trailing-Komma, `}` auf eigener Zeile. Genau das, was der Formatter
+ * idempotent erzeugt (empirisch verifiziert) → der Edit übersteht ein
+ * nachgelagertes `format` unverändert (AK „Formatter-idempotent").
+ */
+function renderVerwende(
+    source: string, items: ReadonlyArray<{ name: string; alias?: string }>,
+): string {
+    const body = items.map((it) => `    ${renderItem(it)},`).join('\n');
+    return `verwende {\n${body}\n} aus "${source}"`;
+}
+
+/** Deterministischer Code-Unit-Vergleich (locale-unabhängig → stabil über
+ *  Umgebungen, wichtig für die Determinismus-/Idempotenz-Garantie). */
+function cmp(a: string, b: string): number {
+    return a < b ? -1 : a > b ? 1 : 0;
+}
 
 export class FindslCodeActionProvider implements CodeActionProvider {
 
@@ -56,8 +85,20 @@ export class FindslCodeActionProvider implements CodeActionProvider {
                     if (a) actions.push(a);
                     break;
                 }
+                case 'findsl.ungenutzt': {
+                    // (#90/1) Nur ungenutzte IMPORTE — dieselbe Diagnose gilt
+                    // auch für Params/var/Decls (dort kein Import-Fix).
+                    const a = this.fixRemoveUnusedImport(document, diag);
+                    if (a) actions.push(a);
+                    break;
+                }
             }
         }
+        // (#90/2) Nicht-diagnose-getrieben: „Importe organisieren" (Refactor
+        // bzw. source.organizeImports), verfügbar wenn das angeforderte
+        // `only`-Kind es zulässt.
+        const organize = this.organizeImports(document, params);
+        if (organize) actions.push(organize);
         return actions;
     }
 
@@ -120,12 +161,14 @@ export class FindslCodeActionProvider implements CodeActionProvider {
         const declRange = multi.$cstNode.range;
         let edit: TextEdit;
         if (remaining.length === 0) {
-            // Einziges Symbol → ganze verwende-Zeile inkl. Zeilenumbruch tilgen.
-            const startLine = declRange.start.line;
+            // Einziges Symbol → den GANZEN Decl (mehrzeilig!) inkl. Zeilen-
+            // umbruch tilgen. `end.line + 1`, NICHT `start.line + 1` — sonst
+            // bliebe bei der Mehrzeilen-Form ein unparsebarer Rumpf stehen
+            // (PR #129-Review HIGH).
             edit = {
                 range: {
-                    start: { line: startLine, character: 0 },
-                    end:   { line: startLine + 1, character: 0 },
+                    start: { line: declRange.start.line, character: 0 },
+                    end:   { line: declRange.end.line + 1, character: 0 },
                 },
                 newText: '',
             };
@@ -148,15 +191,139 @@ export class FindslCodeActionProvider implements CodeActionProvider {
         };
     }
 
-    private enclosingImportDecl(
-        node: AstNode,
-    ): (AstNode & { items: ReadonlyArray<{ name: string; alias?: string }>; source?: string }) | undefined {
+    private enclosingImportDecl(node: AstNode): ImportDecl | undefined {
         let n: AstNode | undefined = node;
         while (n) {
             if (isImportDecl(n)) return n;
             n = n.$container as AstNode | undefined;
         }
         return undefined;
+    }
+
+    // --- (#90/1) Refactor: ungenutzten Import entfernen ------------------
+
+    private fixRemoveUnusedImport(
+        document: LangiumDocument, diag: Diagnostic,
+    ): CodeAction | undefined {
+        // Die `findsl.ungenutzt`-Diagnose hängt am ungenutzten Knoten —
+        // nur wenn das ein `verwende`-Item ist, gibt es einen Import-Fix
+        // (Params/var/Decls bleiben unberührt).
+        const node = this.astNodeAt(document, diag.range);
+        const item = node && this.enclosingImportItem(node);
+        if (!item) return undefined;
+        const decl = this.enclosingImportDecl(item);
+        if (!decl?.$cstNode || !decl.source) return undefined;
+
+        const remaining = decl.items.filter((it) => it !== item);
+        const range = decl.$cstNode.range;
+        const edit: TextEdit = remaining.length === 0
+            // Einziges Symbol → den GANZEN (mehrzeiligen) Decl inkl. Umbruch
+            // tilgen — `end.line + 1`, sonst bleibt bei der Mehrzeilen-Form
+            // ein unparsebarer Rumpf stehen (PR #129-Review HIGH).
+            ? {
+                range: {
+                    start: { line: range.start.line, character: 0 },
+                    end: { line: range.end.line + 1, character: 0 },
+                },
+                newText: '',
+            }
+            : { range, newText: renderVerwende(decl.source, remaining) };
+
+        return {
+            title: `Ungenutzten Import "${item.name}" entfernen`,
+            kind: CodeActionKind.QuickFix,
+            diagnostics: [diag],
+            isPreferred: true,
+            edit: { changes: { [document.uri.toString()]: [edit] } },
+        };
+    }
+
+    private enclosingImportItem(node: AstNode): ImportItem | undefined {
+        let n: AstNode | undefined = node;
+        while (n) {
+            if (isImportItem(n)) return n;
+            n = n.$container as AstNode | undefined;
+        }
+        return undefined;
+    }
+
+    // --- (#90/2) Refactor: Importe organisieren --------------------------
+
+    private organizeImports(
+        document: LangiumDocument, params: CodeActionParams,
+    ): CodeAction | undefined {
+        if (!this.kindAllowed(params, CodeActionKind.SourceOrganizeImports)) return undefined;
+        const program = document.parseResult?.value as Program | undefined;
+        const imports = (program?.imports ?? []).filter((i) => i.$cstNode && i.source);
+        if (imports.length === 0) return undefined;
+
+        // Kommentar/Trivia zwischen Import-Blöcken? Dann NICHT anbieten — die
+        // Region-Ersetzung würde solche Hidden-Trivia (Kommentare) tilgen
+        // (Content-Loss). Lieber keine Aktion als stille Löschung
+        // (PR #129-Review MEDIUM-1).
+        for (let i = 0; i + 1 < imports.length; i++) {
+            const gap = document.textDocument.getText({
+                start: imports[i].$cstNode!.range.end,
+                end: imports[i + 1].$cstNode!.range.start,
+            });
+            if (gap.trim() !== '') return undefined;
+        }
+
+        // Modul-lokale Referenzen (NUR Decl-Bodies, NICHT der Import-Block —
+        // sonst zählte ein Import sich durch seine eigene Deklaration). Gleiche
+        // Grundlage wie der „ungenutzt"-Hint des Validators (checkUnused), damit
+        // Organize und Quick-Fix konsistent dasselbe als ungenutzt einstufen.
+        const used = new Set<string>();
+        for (const decl of program?.decls ?? []) collectRefs(decl, used);
+        // Ein Item gilt als genutzt, wenn sein lokaler Name (Alias, sonst Name)
+        // im Modul referenziert wird.
+        const isUsed = (it: ImportItem): boolean => used.has(it.alias ?? it.name);
+
+        // Nach Quelle mergen (identische Bindungen dedupliziert), ungenutzte
+        // Items entfernen (TS-Parität zu „Organize Imports"), Quellen und
+        // Symbole alphabetisch (code-unit, deterministisch) sortieren.
+        const bySource = new Map<string, Map<string, ImportItem>>();
+        for (const imp of imports) {
+            let m = bySource.get(imp.source);
+            if (!m) { m = new Map(); bySource.set(imp.source, m); }
+            for (const it of imp.items) {
+                if (it?.name && isUsed(it) && !m.has(renderItem(it))) m.set(renderItem(it), it);
+            }
+        }
+        // Quellen, deren Items komplett ungenutzt waren, fallen ganz weg.
+        const sources = [...bySource.keys()].filter((s) => bySource.get(s)!.size > 0).sort(cmp);
+        const newText = sources
+            .map((src) => {
+                const items = [...bySource.get(src)!.values()]
+                    .sort((a, b) => cmp(renderItem(a), renderItem(b)));
+                return renderVerwende(src, items);
+            })
+            .join('\n');
+
+        // Region = erster Import-Start … letzter Import-Ende. Bleibt KEIN
+        // Import übrig, auch die nachfolgende Zeilenumbruch-Trivia schlucken,
+        // damit keine Leerzeile zurückbleibt (analog zum Einzel-Quick-Fix).
+        const lastEnd = imports[imports.length - 1].$cstNode!.range.end;
+        const region: Range = {
+            start: imports[0].$cstNode!.range.start,
+            end: sources.length === 0 ? { line: lastEnd.line + 1, character: 0 } : lastEnd,
+        };
+        // Schon organisiert → keine No-op-Aktion anbieten.
+        if (document.textDocument.getText(region) === newText) return undefined;
+
+        return {
+            title: 'Importe organisieren',
+            kind: CodeActionKind.SourceOrganizeImports,
+            edit: { changes: { [document.uri.toString()]: [{ range: region, newText }] } },
+        };
+    }
+
+    /** `params.context.only` respektieren: ohne Filter alles erlaubt, sonst
+     *  nur, wenn ein angefordertes Kind dieses (als Präfix) abdeckt. */
+    private kindAllowed(params: CodeActionParams, kind: string): boolean {
+        const only = params.context.only;
+        if (!only || only.length === 0) return true;
+        return only.some((k) => kind === k || kind.startsWith(`${k}.`));
     }
 
     // --- Helfer ----------------------------------------------------------

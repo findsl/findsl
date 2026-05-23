@@ -23,7 +23,8 @@ import {
 } from 'vscode-languageserver/browser';
 import { createFindslServices } from '@findsl/core/language/findsl-module.js';
 import { runCheck } from './check.js';
-import type { CheckResult } from './types.js';
+import { runGenerate } from './generate.js';
+import type { CheckResult, GenerateResult, Target } from './types.js';
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -39,6 +40,11 @@ const { shared } = createFindslServices({ connection, ...EmptyFileSystem });
 connection.onRequest(
     'findsl/check',
     (params: { uri: string }): Promise<CheckResult> => runCheck(shared, params.uri),
+);
+connection.onRequest(
+    'findsl/generate',
+    (params: { uri: string; target: Target }): Promise<GenerateResult> =>
+        runGenerate(shared, params.uri, params.target),
 );
 
 startLanguageServer(shared);

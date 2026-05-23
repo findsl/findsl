@@ -32,7 +32,9 @@ const result = await esbuild.build({
     alias: {
         'node:path': shim('path.ts'),
         'node:fs': shim('fs.ts'),
+        'node:fs/promises': shim('fs-promises.ts'),
         'node:module': shim('module.ts'),
+        'langium/node': shim('langium-node.ts'),
     },
 });
 

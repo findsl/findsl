@@ -22,6 +22,7 @@ tsconfig.tsbuildinfo
 # --- esbuild-Bundles & self-contained CLI / natives Binary ---
 # apps/vscode/out (Extension-Bundle) deckt `out/` oben bereits ab.
 packages/cli/dist/
+packages/web/dist/
 
 # --- Generierte Audit-Doku (regenerierbar via `findsl docgen`) ---
 # Konvention: examples/<Gesetz>/out/<slug>-doku.{md,html,pdf}.

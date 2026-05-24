@@ -15,6 +15,8 @@
 | `@findsl/core` | npm | `npm install @findsl/core` |
 | `@findsl/cli` | npm | `npm install -g @findsl/cli` |
 | `@findsl/lsp` | npm | `npm install @findsl/lsp` |
+| `@findsl/web` | npm | `npm install @findsl/web` (Browser-Bundle: LSP-Worker + check/generate) |
+| `@findsl/editor` | npm | `npm install @findsl/editor` (einbettbarer Monaco-Editor) |
 | VS Code Extension | VS Marketplace + Open VSX | Publisher `findsl`, Extension `findsl` |
 | Native Binaries | GitHub Releases | `findsl-<v>-{darwin,linux,windows}-{x64,arm64}.{tar.gz,zip}` |
 

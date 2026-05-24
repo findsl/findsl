@@ -2,7 +2,8 @@
 # Release — Lockstep-Veröffentlichung aller FinDSL-Artefakte
 #
 # Ein Tag = eine Version = sechs Spuren parallel:
-#   • @findsl/core, @findsl/cli, @findsl/lsp        → npm (Sigstore-Provenance)
+#   • @findsl/core, @findsl/cli, @findsl/lsp,
+#     @findsl/web, @findsl/editor                    → npm (Sigstore-Provenance)
 #   • findsl-<version>.vsix                          → VS Code Marketplace + Open VSX
 #   • findsl-<version>-<plattform>.{tar.gz,zip}      → GitHub Release (Node-SEA-Binary)
 #
@@ -157,11 +158,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (langium:generate + tsc + assets + Browser-Bundle)
+      - name: Build (langium:generate + tsc + assets + Browser-Bundle + Editor)
         run: |
           npm run langium:generate
           npm run build
           npm run -w @findsl/web build:web
+          # @findsl/editor baut NACH @findsl/web (braucht dessen dist-Typen).
+          npm run -w @findsl/editor build:editor
 
       - name: Publish @findsl/core
         env:
@@ -214,6 +217,21 @@ jobs:
             echo "::notice::@findsl/web@$VERSION bereits publiziert — überspringe."
           else
             npm publish -w @findsl/web --provenance --access public $TAG_FLAG
+          fi
+
+      - name: Publish @findsl/editor (einbettbarer Monaco-Editor)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG_FLAG=""
+          [ "$PRERELEASE" = "true" ] && TAG_FLAG="--tag next"
+          if [ "$DRY_RUN" = "true" ]; then
+            npm publish -w @findsl/editor --dry-run --access public $TAG_FLAG
+          elif npm view "@findsl/editor@$VERSION" version >/dev/null 2>&1; then
+            echo "::notice::@findsl/editor@$VERSION bereits publiziert — überspringe."
+          else
+            npm publish -w @findsl/editor --provenance --access public $TAG_FLAG
           fi
 
   # -------------------------------------------------------------------------

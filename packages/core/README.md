@@ -1,117 +1,30 @@
-# findsl-ts
+# @findsl/core
 
-TypeScript-Implementierung des FinDSL-Compilers, Interpreters und Language-Servers,
-gebaut auf [Langium](https://langium.org).
+Sprachkern von **FinDSL** — der DSL für ausführbare, prüfbare Modelle des
+deutschen Steuerrechts. Bündelt Grammatik/AST, Validator + Typsystem,
+Interpreter (bit-genaues Semantik-Orakel), Dokumentations-Generator und
+Codegen (Java/TS/JS).
 
-## Komponenten in einem Paket
+> Programmier-Schnittstelle für Tooling. Für die Kommandozeile siehe
+> [`@findsl/cli`](https://www.npmjs.com/package/@findsl/cli), für den Browser
+> [`@findsl/web`](https://www.npmjs.com/package/@findsl/web).
 
-| Komponente            | Pfad                              | Status     |
-|-----------------------|-----------------------------------|------------|
-| Langium-Grammatik     | `src/language/findsl.langium`     | 🟡 initial |
-| LSP-Server            | `src/language/main.ts`            | 🟡 stub    |
-| VS-Code-Extension     | `src/extension/main.ts`           | 🟡 stub    |
-| CLI-Werkzeug          | `src/cli/main.ts`                 | 🟡 parse-Subkommando |
-| Validator             | `src/language/findsl-validator.ts`| ⬜ leer    |
-| Interpreter           | `src/interpret/`                  | ⬜ offen   |
-| Codegen Java          | `src/codegen/java-target.ts`      | ⬜ offen   |
-| Codegen TypeScript    | `src/codegen/typescript-target.ts`| ⬜ offen   |
-| Codegen JavaScript    | `src/codegen/javascript-target.ts`| ⬜ offen   |
-| Doku-Generator        | `src/docs/`                       | ⬜ offen   |
-| TextMate-Highlighting | `syntaxes/findsl.tmLanguage.json` | 🟢 vollständig |
-| VS-Code-Konfig        | `language-configuration.json`     | 🟢 vollständig |
-
-## Voraussetzungen
-
-- **Node.js ≥ 18 LTS**
-- **npm** (kommt mit Node.js)
-
-Keine JVM, kein JDK, kein separater Runtime — alles läuft im Node.js-Prozess.
-
-## Quick Start
+## Installation
 
 ```bash
-cd findsl-ts
-
-# Abhängigkeiten installieren
-npm install
-
-# Parser, AST-Typen und LSP-Glue aus der Grammatik generieren
-npm run langium:generate
-
-# TypeScript kompilieren
-npm run build
-
-# Eine FinDSL-Datei parsen (Diagnose)
-node out/cli/main.js parse ../examples/einkommensteuer/tarif/tarif2025.fin --verbose
-
-# Tests
-npm test
+npm install @findsl/core
 ```
 
-## In VS Code testen
+## Module (Subpath-Exports)
 
-```bash
-# Im Repository-Wurzel-Verzeichnis VS Code öffnen
-code .
+| Import | Inhalt |
+|---|---|
+| `@findsl/core/language/*` | Langium-Grammatik, AST, Validator, Typsystem |
+| `@findsl/core/interpret/*` | Interpreter — bit-genaues Semantik-Orakel |
+| `@findsl/core/codegen/*` | IR + Emitter für Java / TypeScript / JavaScript |
+| `@findsl/core/docgen/*` | Dokumentation (Markdown / HTML / PDF) |
+| `@findsl/core/papgen/*` | Programmablaufpläne (DIN 66001, Mermaid) |
 
-# Im VS-Code-Debugger: F5 startet die Extension in einem Extension-Host-Fenster.
-# Dort öffne eine .fin-Datei — Syntax-Highlighting und LSP-Features sind aktiv.
-```
+## Lizenz
 
-Nach `vsce package` entsteht eine `.vsix`-Datei, die du per "Install from VSIX..."
-in jeden VS-Code-Installation einfügen kannst — ohne Marketplace-Veröffentlichung.
-
-## Architektur — Pipeline
-
-```
-.fin-Datei
-   │
-   ▼
-Chevrotain-Lexer + -Parser    ←  generiert aus findsl.langium
-   │
-   ▼
-AST (TypeScript-Interfaces)   ←  generiert aus findsl.langium
-   │
-   ▼
-Linker (Cross-References) + Validator  ←  src/language/findsl-validator.ts
-   │
-   ▼
-       ┌───────────────────────────┴───────────────────────────┐
-       ▼                                                        ▼
-LSP-Endpunkte (Hover,                                Tree-Walking-Interpreter
-Completion, Definition,                              + Codegen-Visitors
-Diagnostics, Format, …)                              (Java / TS / JS / Doku)
-       │                                                        │
-       ▼                                                        ▼
-   VS Code / Editor                                  Quelltext / Test-Reports
-```
-
-## Sprachstand
-
-Die kanonische Sprachreferenz liegt im Repository-Wurzel als
-[`SPEC.md`](../SPEC.md). Bei Sprachänderungen müssen drei Artefakte
-synchron gepflegt werden:
-
-1. `SPEC.md` — autoritative Sprachspezifikation
-2. `grammar/findsl.ebnf` — kanonische Grammatik
-3. `findsl-ts/src/language/findsl.langium` — ausführbare Langium-Grammatik
-
-## Bekannte TODOs in der initialen Grammatik
-
-| Thema                               | Lösungsweg                                           |
-|-------------------------------------|------------------------------------------------------|
-| Mehrzeilige Strings (`"""..."""`)   | Chevrotain-Lexer-Mode                                |
-| String-Interpolation `${...}`       | Lexer-Mode + Sub-Parser                              |
-| Robuste Doc-Comment-Erkennung       | Lexer-Mode mit `--`-am-Zeilenanfang-Anker            |
-| `verwende`-Disambiguierung          | Validator-Pass nach dem Parse                        |
-| Number-Literal-Klassifizierung      | Im Validator: Token-Text in INT / DEC / PCT trennen  |
-
-## Beziehung zum übergeordneten Repository
-
-```
-FinDSL/
-├── SPEC.md                  (Sprachspezifikation)
-├── grammar/findsl.ebnf      (kanonische EBNF)
-├── examples/                (FinDSL-Beispieldateien)
-└── findsl-ts/               (dieses Verzeichnis)
-```
+EUPL-1.2 — Teil des [findsl/findsl](https://github.com/findsl/findsl)-Monorepos.

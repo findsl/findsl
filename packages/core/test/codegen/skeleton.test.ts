@@ -139,11 +139,15 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         expect(iface).not.toContain('return einkommen');             // kein Rumpf im Interface
         // Kommentar-Übertragung steht im Interface:
         expect(iface).toContain('Datei-Doc → Klassen-Javadoc.');
-        expect(iface).toContain(' * @Quelle § 23 KStG');
         expect(iface).toContain('Steuerbetrag, auf volle Euro abgerundet.');
         expect(iface).toContain(' * @param zve');
         expect(iface).toContain(' * @return  Betrag (§ 31 Satz 2).');
-        expect(iface).toContain(' * @Quelle § 23 Absatz 1 KStG');
+        // #156: @Quelle = echte org.findsl.runtime.Quelle-Annotation, KEIN
+        // Javadoc-Tag mehr (das war ein unbekanntes Tag → Warnung).
+        expect(iface).toContain('@Quelle("§ 23 KStG")');                  // vor konst SATZ
+        expect(iface).toContain('@Quelle("§ 23 Absatz 1 KStG")');         // vor fn betrag
+        expect(iface).toContain('import org.findsl.runtime.Quelle;');
+        expect(iface).not.toContain('* @Quelle');                          // nicht mehr im Javadoc
 
         // --- Impl (C): EINE Methode (keine Fassade/_kern), kein
         //     `.zahl()` (Sicht IS-A FinDslNumber), Box NUR an Schreib-
@@ -155,6 +159,11 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         expect(impl).not.toContain('.zahl()');                       // IS-A, kein Unbox
         expect(impl).toContain('public Prozent wahl(Ganzzahl jahr, Ausschluss a) {');
         expect(impl).toContain('public Euro betrag(Euro zve, Ganzzahl jahr) {');
+        // #156: @Quelle auch an der Impl-Methode (Java vererbt Methoden-
+        // Annotationen nicht vom Interface) + Import.
+        expect(impl).toContain('@Quelle("§ 23 Absatz 1 KStG")');
+        expect(impl).toContain('import org.findsl.runtime.Quelle;');
+        expect(impl).not.toContain('* @Quelle');
         // Rückgabe an der Ergebnisposition geboxt (Sicht-Adapter):
         expect(impl).toContain('return Prozent.von(SATZ);');
         expect(impl).toMatch(/return Euro\.von\(zve\.mul\(SATZ\)\.abrunden\(FinDslNumber\.Type\.Euro\)\);/);

@@ -14,6 +14,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.RecordDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 
 import java.io.IOException;
@@ -331,6 +332,22 @@ class GeneratedStructureTest {
                     .mapToLong(f -> f.getVariables().size()).sum();
             assertTrue(ctors.get(0).getParameters().size() == fieldCount,
                     u.path + ": Konstruktor-Parameter ≠ Anzahl Abhängigkeits-Felder");
+        }
+    }
+
+    @Test
+    @DisplayName("@Quelle: Annotation statt Javadoc-Tag, mit Runtime-Import (#156)")
+    void quelleIsAnnotation() {
+        for (Unit u : MAIN) {
+            assertFalse(u.cu.toString().contains("* @Quelle"),
+                    u.path + ": `@Quelle` darf nicht als Javadoc-Tag erscheinen (#156)");
+            boolean usesQuelle = u.cu.findAll(AnnotationExpr.class).stream()
+                    .anyMatch(a -> a.getNameAsString().equals("Quelle"));
+            if (usesQuelle) {
+                assertTrue(u.cu.getImports().stream().anyMatch(
+                                i -> i.getNameAsString().equals("org.findsl.runtime.Quelle")),
+                        u.path + ": @Quelle-Annotation ohne `import org.findsl.runtime.Quelle`");
+            }
         }
     }
 

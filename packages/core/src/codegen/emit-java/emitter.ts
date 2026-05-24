@@ -78,7 +78,11 @@ function javaMethodName(name: string): string {
     return name.replace(/^(_*)(\p{L})/u, (_m, us: string, c: string) => us + c.toLowerCase());
 }
 
-/** FinDSL-Doc + `@Quelle` → Javadoc-Zeilen (oder leer). */
+/**
+ * FinDSL-`--…--`-Doc → Javadoc-Zeilen (oder leer). `@Quelle` gehört NICHT
+ * mehr hierher (war ein unbekanntes Javadoc-Tag → Warnung) — es wird über
+ * {@link quelleAnnotations} zur echten `@Quelle`-Annotation (#156).
+ */
 function javadoc(info: IrDoc, indent: string): string[] {
     const body: string[] = [];
     if (info.doc && info.doc.trim() !== '') {
@@ -92,11 +96,17 @@ function javadoc(info: IrDoc, indent: string): string[] {
         while (body.length && body[0] === ' *') body.shift();
         while (body.length && body[body.length - 1] === ' *') body.pop();
     }
-    for (const q of info.quelle) {
-        body.push(` * @Quelle ${q.replace(/\*\//g, '* /')}`);
-    }
     if (body.length === 0) return [];
     return [`${indent}/**`, ...body.map((l) => indent + l), `${indent} */`];
+}
+
+/**
+ * `@Quelle("…")` → echte `org.findsl.runtime.Quelle`-Annotationen (#156),
+ * eine je Norm-Verweis. `@Repeatable` ⇒ mehrere sind zulässig; der Java-
+ * Compiler bündelt sie in `@Quellen`. RUNTIME-Retention ⇒ später auswertbar.
+ */
+function quelleAnnotations(info: IrDoc, indent: string): string[] {
+    return info.quelle.map((q) => `${indent}@Quelle(${javaString(q)})`);
 }
 
 /**
@@ -436,8 +446,8 @@ function emitFnBody(decl: Extract<IrDecl, { kind: 'fn' }>): string {
  * gehören NICHT ins Interface (nur in die Implementierung) → `undefined`.
  */
 function emitInterfaceMember(d: IrDecl): string | undefined {
-    const doc = javadoc(d.info, IND);
-    const head = doc.length ? doc.join('\n') + '\n' : '';
+    const lines = [...javadoc(d.info, IND), ...quelleAnnotations(d.info, IND)];
+    const head = lines.length ? lines.join('\n') + '\n' : '';
     switch (d.kind) {
         case 'enum':
             return head + `${IND}public enum ${d.name} {\n`
@@ -479,14 +489,18 @@ function emitInterfaceMember(d: IrDecl): string | undefined {
 function emitImplFn(d: IrDecl): string | undefined {
     if (d.kind !== 'fn') return undefined;
     if (d.internal) {
-        const doc = javadoc(d.info, IND);
-        const head = doc.length ? doc.join('\n') + '\n' : '';
+        const lines = [...javadoc(d.info, IND), ...quelleAnnotations(d.info, IND)];
+        const head = lines.length ? lines.join('\n') + '\n' : '';
         const kernParams = d.params.map((p) => `${irTypeToJavaCore(p.type)} ${p.name}`).join(', ');
         const sig = `${irTypeToJavaCore(d.returnType)} ${javaMethodName(d.name)}(${kernParams})`;
         return head + `${IND}protected ${sig} {\n` + emitFnBody(d) + `\n${IND}}`;
     }
     const apiParams = d.params.map((p) => `${irTypeToJavaApi(p.type)} ${p.name}`).join(', ');
-    return `${IND}@Override\n`
+    // `@Quelle` auch an der Impl-Methode (#156): Java vererbt Methoden-
+    // Annotationen NICHT vom Interface → Reflection auf der konkreten Klasse
+    // soll die Norm-Verweise ebenfalls finden.
+    const head = quelleAnnotations(d.info, IND).map((a) => a + '\n').join('');
+    return head + `${IND}@Override\n`
         + `${IND}public ${irTypeToJavaApi(d.returnType)} ${javaMethodName(d.name)}(${apiParams}) {\n`
         + emitFnBody(d) + `\n${IND}}`;
 }
@@ -511,6 +525,9 @@ function runtimeImportsFor(code: string): string[] {
         'Tarifart', 'Steuerklasse',
         'FinDslAbort', 'FinDslRuntimeError',
         'Euro', 'EuroCent', 'Cent', 'Prozent', 'Ganzzahl', 'Dezimal',
+        // #156: `@Quelle(...)`-Annotation. `\bQuelle\b` matcht NICHT `Quellen`
+        // (Compiler-Container) — der braucht keinen expliziten Import.
+        'Quelle',
     ]
         .filter((t) => new RegExp(`\\b${t}\\b`).test(code))
         .map((t) => `import org.findsl.runtime.${t};`);
@@ -585,14 +602,18 @@ export function emitJavaModuleFiles(m: IrModule): JavaModuleFiles {
         ]
         : [];
 
+    // Datei-Doc-`@Quelle` → Annotation am Typ (Modul-Ebene), an Interface UND
+    // Impl (beide tragen das Klassen-Doc). #156.
+    const fileQuelle = quelleAnnotations(m.info, '');
     const interfaceCode = [
         ...pkgHeader,
-        ...runtimeImportsFor(interfaceBody),
+        ...runtimeImportsFor([interfaceBody, ...fileQuelle].join('\n')),
         ...crossImports,
         'import javax.annotation.processing.Generated;',
         '',
         ...classDoc,
         generated,
+        ...fileQuelle,
         `public interface ${interfaceName} {`,
         '',
         interfaceBody,
@@ -602,12 +623,13 @@ export function emitJavaModuleFiles(m: IrModule): JavaModuleFiles {
 
     const implCode = [
         ...pkgHeader,
-        ...runtimeImportsFor(implBody),
+        ...runtimeImportsFor([implBody, ...fileQuelle].join('\n')),
         ...crossImports,
         'import javax.annotation.processing.Generated;',
         '',
         ...classDoc,
         generated,
+        ...fileQuelle,
         `class ${implName} implements ${interfaceName} {`,
         '',
         ...composedFields,

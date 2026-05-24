@@ -87,7 +87,7 @@ generierbar zu PDF/HTML/Bundessteuerblatt-Format und maschinell parsbar.
 **P7 — Transparenz vor Privatheit.** Deklarationen sind grundsätzlich
 öffentlich; Auditierbarkeit hat Priorität gegenüber Kapselung. Einzige
 Verfeinerung: ein führendes `_` macht eine Top-Level-Decl *modul-intern*
-(nicht cross-file importierbar, nicht in der Doku) — die öffentliche
+(nicht cross-file importierbar, nicht in der Dokumentation) — die öffentliche
 API-Fläche wird kleiner und damit auditierbarer, die Logik bleibt über
 die öffentliche API und die zugehörige `.test.findsl` nachvollziehbar
 (siehe [§ 8.4](#84-sichtbarkeit)).
@@ -1184,7 +1184,7 @@ fn EstGrundtarif(zve: Euro): Euro = wähle {
 - **Pflicht-Begründung.** Das `Text`-Argument ist syntaktisch erzwungen.
   Eine leere Begründung *sollte* vom Validator beanstandet werden.
 - **Audit-sichtbar.** Begründung, umschließende Funktion und deren
-  `@Quelle` werden für den Doku-Anhang „Explizit ausgeschlossene
+  `@Quelle` werden für den Dokumentationsanhang „Explizit ausgeschlossene
   Konstellationen" maschinell gesammelt.
 - **Geschwister von `!!`** ([§ 4.7](#47-force-unwrap)): `!!` ist der
   *unbeabsichtigte* Bug-Abbruch, `abbruch` der *beabsichtigte,
@@ -1731,7 +1731,7 @@ Der unterstützte Makro-Umfang ist der KaTeX-Standard; ungültiges TeX
 wird als Fehlerhinweis dargestellt, nicht als Build-Abbruch
 (`strict:'ignore'`, `trust:false`).
 
-**Abgrenzung:** Mathe-Notation ist reine **Doku-Konvention** und hat
+**Abgrenzung:** Mathe-Notation ist reine **Dokumentationskonvention** und hat
 **keinen** Einfluss auf Grammatik, Parsing oder Auswertung. `$…$` in
 einem Doc-Kommentar ist unabhängig von der `${…}`-String-Interpolation
 (§ 2) in FinDSL-Quelltext — letztere wird zur Laufzeit ausgewertet,

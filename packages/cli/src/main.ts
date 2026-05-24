@@ -34,7 +34,7 @@ const program = new Command();
 program
     .name('findsl')
     .description('FinDSL — Werkzeug für die deutsche steuerliche Finanzverwaltung')
-    .version('1.0.0-rc.1');
+    .version('1.0.0-rc.2');
 
 interface LineDiag {
     readonly line: number;

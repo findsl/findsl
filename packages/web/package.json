@@ -1,7 +1,6 @@
 {
   "name": "@findsl/web",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0-rc.2",
   "license": "EUPL-1.2",
   "type": "module",
   "description": "Browser-Bundle der FinDSL-Toolchain (Langium-LSP-Worker + check/generate-API). Single Source: @findsl/core.",
@@ -12,11 +11,13 @@
     },
     "./worker": "./dist/worker.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build:web": "tsc -p tsconfig.check.json && node esbuild.web.mjs && tsc -p tsconfig.json"
   },
-  "dependencies": {
-    "@findsl/core": "*"
+  "devDependencies": {
+    "@findsl/core": "1.0.0-rc.2"
   }
 }

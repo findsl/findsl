@@ -40,8 +40,14 @@ Asset ausgeliefert — kein Re-Bundling. Ein mitgeliefertes Bin kopiert ihn:
 }
 ```
 
-`mountFindslEditor` lädt ihn per Default unter `findsl-web/worker.js`
-(relativ zu `document.baseURI`); abweichend über `workerUrl`.
+`mountFindslEditor` lädt ihn per Default **root-absolut** unter
+`/findsl-web/worker.js` — funktioniert auch auf Unterseiten. Abweichendes
+Hosting über `workerUrl`.
+
+> **Hinweis:** Hostest du den Worker NICHT am Root (z. B. unter einem
+> Base-Path), setze `workerUrl` explizit. Ein nicht gefundener Worker äußert
+> sich als irreführendes `Illegal worker configuration detected` — der Editor
+> mountet, scheitert erst an der Worker-Connection.
 
 ## Vite-Konfiguration
 
@@ -101,6 +107,22 @@ handle.setTheme({ base: 'light', colorCustomizations: { 'editor.background': '#f
 
 Die **Theme-Quelle** (CSS-Var, `data-theme`, Toggle) bleibt beim Konsumenten;
 das Paket liest kein DOM-Attribut. `'auto'` folgt `prefers-color-scheme` live.
+
+**CSS-Custom-Properties / `data-theme` (Convenience):** Hat dein Design-System
+oklch-Tokens + einen `data-theme`-Toggle, kapselt der optionale Helfer
+`themeFromCssVars` das Auflösen zu sRGB-Hex (Canvas-Probe) und das Lesen der
+Basis — kein API-Zwang:
+
+```ts
+import { mountFindslEditor, themeFromCssVars } from '@findsl/editor';
+
+const colorMap = { 'editor.background': '--paper', 'editorGutter.background': '--paper' };
+const handle = await mountFindslEditor(el, { theme: themeFromCssVars(colorMap) });
+
+// Editor dem Theme-Toggle folgen lassen:
+new MutationObserver(() => handle.setTheme(themeFromCssVars(colorMap)))
+  .observe(document.documentElement, { attributeFilter: ['data-theme'] });
+```
 
 ### Gutter-Play-Pfeile (CSS)
 

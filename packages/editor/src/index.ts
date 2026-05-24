@@ -35,6 +35,7 @@ import findslLanguageConfig from '@findsl/web/language-configuration.json?raw';
 import type { CheckResult, GenerateResult, Target } from '@findsl/web';
 
 export type { CheckResult, GenerateResult, Target } from '@findsl/web';
+export { themeFromCssVars, type ThemeFromCssVarsOptions } from './theme-css-vars.js';
 
 const LANGUAGE_ID = 'findsl';
 const SCOPE_NAME = 'source.findsl';
@@ -94,9 +95,10 @@ export interface FindslEditorOptions {
     /** Anfangsinhalt. Default: `""`. */
     initialCode?: string;
     /**
-     * URL des LSP-Workers (aus `@findsl/web/worker`). Default:
-     * `new URL('findsl-web/worker.js', document.baseURI)`. Der Konsument
+     * URL des LSP-Workers (aus `@findsl/web/worker`). Default: **root-absolut**
+     * `/findsl-web/worker.js` (funktioniert auch auf Unterseiten). Der Konsument
      * hostet den Worker (Copy-Step; siehe README + `findsl-editor-copy-worker`).
+     * Eine relative Angabe wird gegen `document.baseURI` aufgelöst.
      */
     workerUrl?: string | URL;
     /** Logisches Theme. Default: `'auto'`. */
@@ -239,9 +241,14 @@ export async function mountFindslEditor(
     });
     await apiWrapper.start();
 
-    // Absolute `workerUrl` ignoriert die Basis; relative wird gegen `baseURI`
-    // aufgelöst. Default: same-origin `findsl-web/worker.js` (Copy-Step).
-    const workerUrl = new URL(opts.workerUrl ?? 'findsl-web/worker.js', document.baseURI);
+    // Default ROOT-absolut (`/findsl-web/worker.js`): so findet der Editor den
+    // am Root gehosteten Worker (Copy-Step → `public/findsl-web/`) auch auf
+    // Unterseiten. Ein `baseURI`-relativer Default ergäbe auf z. B.
+    // `/playground/` fälschlich `/playground/findsl-web/worker.js` → 404 mit
+    // irreführendem „Illegal worker configuration" (#151-Dogfooding Finding #1).
+    // Absolute `workerUrl` ignoriert die Basis; eine vom Konsumenten gesetzte
+    // relative wird gegen `baseURI` aufgelöst (dessen bewusste Wahl).
+    const workerUrl = new URL(opts.workerUrl ?? '/findsl-web/worker.js', document.baseURI);
     const lcWrapper = new LanguageClientWrapper({
         languageId: LANGUAGE_ID,
         connection: {

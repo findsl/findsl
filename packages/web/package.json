@@ -1,6 +1,6 @@
 {
   "name": "@findsl/web",
-  "version": "1.0.0-rc.2",
+  "version": "1.0.0-rc.3",
   "license": "EUPL-1.2",
   "repository": {
     "type": "git",
@@ -25,6 +25,6 @@
     "build:web": "tsc -p tsconfig.check.json && node esbuild.web.mjs && tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@findsl/core": "1.0.0-rc.2"
+    "@findsl/core": "1.0.0-rc.3"
   }
 }

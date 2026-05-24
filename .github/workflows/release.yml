@@ -140,6 +140,7 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     env:
+      VERSION: ${{ needs.prepare.outputs.version }}
       DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
       PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
     steps:
@@ -171,6 +172,8 @@ jobs:
           [ "$PRERELEASE" = "true" ] && TAG_FLAG="--tag next"
           if [ "$DRY_RUN" = "true" ]; then
             npm publish -w @findsl/core --dry-run --access public $TAG_FLAG
+          elif npm view "@findsl/core@$VERSION" version >/dev/null 2>&1; then
+            echo "::notice::@findsl/core@$VERSION bereits publiziert — überspringe."
           else
             npm publish -w @findsl/core --provenance --access public $TAG_FLAG
           fi
@@ -186,8 +189,16 @@ jobs:
             npm publish -w @findsl/cli --dry-run --access public $TAG_FLAG
             npm publish -w @findsl/lsp --dry-run --access public $TAG_FLAG
           else
-            npm publish -w @findsl/cli --provenance --access public $TAG_FLAG
-            npm publish -w @findsl/lsp --provenance --access public $TAG_FLAG
+            if npm view "@findsl/cli@$VERSION" version >/dev/null 2>&1; then
+              echo "::notice::@findsl/cli@$VERSION bereits publiziert — überspringe."
+            else
+              npm publish -w @findsl/cli --provenance --access public $TAG_FLAG
+            fi
+            if npm view "@findsl/lsp@$VERSION" version >/dev/null 2>&1; then
+              echo "::notice::@findsl/lsp@$VERSION bereits publiziert — überspringe."
+            else
+              npm publish -w @findsl/lsp --provenance --access public $TAG_FLAG
+            fi
           fi
 
       - name: Publish @findsl/web (Browser-Bundle)
@@ -199,6 +210,8 @@ jobs:
           [ "$PRERELEASE" = "true" ] && TAG_FLAG="--tag next"
           if [ "$DRY_RUN" = "true" ]; then
             npm publish -w @findsl/web --dry-run --access public $TAG_FLAG
+          elif npm view "@findsl/web@$VERSION" version >/dev/null 2>&1; then
+            echo "::notice::@findsl/web@$VERSION bereits publiziert — überspringe."
           else
             npm publish -w @findsl/web --provenance --access public $TAG_FLAG
           fi

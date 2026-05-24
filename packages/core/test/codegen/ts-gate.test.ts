@@ -136,14 +136,20 @@ describe('TS/JS-Codegen-Differential-Gate (Issue #100/#101)', () => {
                 if (gen) rmSync(gen, { recursive: true, force: true });
             });
 
-            it.skipIf(!cliBuilt || !tsc)('AK1: tsc --noEmit typecheckt das Generat', () => {
-                expect(existsSync(join(gen, 'runtime', 'index.ts')),
-                    'TS-Runtime nicht mit-ausgeliefert').toBe(true);
-                const r = spawnSync('node', [TSC_BIN, '-p', join(gen, 'tsconfig.json')], {
-                    encoding: 'utf-8', cwd: gen, timeout: FIVE_MIN,
-                });
-                expectSpawnOk(r, `tsc ${dir}`);
-            }, FIVE_MIN);
+            // AK1 (tsc-Typecheck) gibt es NUR fürs TS-Target: das JS-Generat
+            // ist typgestrippt (#101) — es existiert nichts zum Typchecken.
+            // Daher wird der Test für JS gar nicht erst registriert (statt als
+            // Skip aufzutauchen); die JS-Ausführbarkeit beweisen AK2/AK3.
+            if (tsc) {
+                it.skipIf(!cliBuilt)('AK1: tsc --noEmit typecheckt das Generat', () => {
+                    expect(existsSync(join(gen, 'runtime', 'index.ts')),
+                        'TS-Runtime nicht mit-ausgeliefert').toBe(true);
+                    const r = spawnSync('node', [TSC_BIN, '-p', join(gen, 'tsconfig.json')], {
+                        encoding: 'utf-8', cwd: gen, timeout: FIVE_MIN,
+                    });
+                    expectSpawnOk(r, `tsc ${dir}`);
+                }, FIVE_MIN);
+            }
 
             it.skipIf(!cliBuilt)('AK2/AK3: prüfe→Vitest grün, bit-genau (≥ minTests)', () => {
                 // Beweist für JS zugleich AK1 (das gestrippte ESM ist

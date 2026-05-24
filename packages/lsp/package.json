@@ -1,6 +1,6 @@
 {
   "name": "@findsl/lsp",
-  "version": "1.0.0-rc.4",
+  "version": "1.0.0-rc.5",
   "description": "FinDSL Language-Server (LSP) — Server-Entry, von der VS-Code-Extension gebündelt",
   "type": "module",
   "license": "EUPL-1.2",
@@ -11,7 +11,7 @@
   },
   "main": "./out/main.js",
   "dependencies": {
-    "@findsl/core": "1.0.0-rc.4",
+    "@findsl/core": "1.0.0-rc.5",
     "langium": "4.2.4",
     "vscode-languageserver": "9.0.1"
   }

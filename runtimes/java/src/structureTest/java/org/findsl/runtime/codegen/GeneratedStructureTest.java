@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.AccessSpecifier;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.RecordDeclaration;
@@ -83,6 +84,11 @@ class GeneratedStructureTest {
         return u.path.getFileName().toString().endsWith("Impl.java");
     }
 
+    /** `<Pkg>Factory.java` — die Komposition-Wurzel (Issue #141). */
+    private static boolean isFactory(Unit u) {
+        return u.path.getFileName().toString().endsWith("Factory.java");
+    }
+
     private static String baseName(Unit u) {
         String n = u.path.getFileName().toString();
         return n.substring(0, n.length() - ".java".length());
@@ -124,26 +130,74 @@ class GeneratedStructureTest {
     }
 
     @Test
-    @DisplayName("Interface: static <Name> newInstance() { new <Name>Impl(); }")
-    void interfaceNewInstanceFactory() {
+    @DisplayName("Interface: KEIN newInstance() mehr (Erzeugung lebt in der Factory, #141)")
+    void interfaceHasNoNewInstance() {
         for (Unit u : MAIN) {
-            if (isImpl(u)) {
+            if (isImpl(u) || isFactory(u)) {
                 continue;
             }
             var t = u.cu.getType(0);
             assertTrue(t instanceof ClassOrInterfaceDeclaration ci && ci.isInterface(),
                     u.path + ": Top-Typ ist kein interface");
             var iface = (ClassOrInterfaceDeclaration) t;
-            var ni = iface.getMethodsByName("newInstance");
-            assertFalse(ni.isEmpty(), u.path + ": newInstance() fehlt");
-            var m = ni.get(0);
-            assertTrue(m.isStatic(), u.path + ": newInstance() nicht static");
-            assertTrue(m.getType().asString().equals(iface.getNameAsString()),
-                    u.path + ": newInstance()-Rückgabetyp ≠ " + iface.getNameAsString());
-            assertTrue(m.findAll(ObjectCreationExpr.class).stream()
-                            .anyMatch(o -> o.getType().getNameAsString()
-                                    .equals(iface.getNameAsString() + "Impl")),
-                    u.path + ": newInstance() konstruiert kein " + iface.getNameAsString() + "Impl");
+            assertTrue(iface.getMethodsByName("newInstance").isEmpty(),
+                    u.path + ": newInstance() darf NICHT mehr im Interface stehen (#141)");
+        }
+    }
+
+    @Test
+    @DisplayName("Factory: public final <Pkg>Factory, privater Ctor, create…() = new …Impl()")
+    void packageFactoryShape() {
+        var factories = MAIN.stream().filter(GeneratedStructureTest::isFactory).toList();
+        assertFalse(factories.isEmpty(), "keine <Pkg>Factory generiert (#141)");
+        for (Unit u : factories) {
+            var t = u.cu.getType(0);
+            assertTrue(t instanceof ClassOrInterfaceDeclaration ci && !ci.isInterface()
+                            && ci.isPublic() && ci.isFinal(),
+                    u.path + ": erwartet `public final class`");
+            var cls = (ClassOrInterfaceDeclaration) t;
+            assertTrue(cls.getConstructors().stream()
+                            .anyMatch(c -> c.isPrivate() && c.getParameters().isEmpty()),
+                    u.path + ": privater (parameterloser) Konstruktor fehlt");
+            var creators = cls.getMethods().stream()
+                    .filter(m -> m.getNameAsString().startsWith("create"))
+                    .toList();
+            assertFalse(creators.isEmpty(), u.path + ": keine create…()-Methode");
+            creators.forEach(m -> assertTrue(m.isStatic() && m.isPublic(),
+                    u.path + ": " + m.getNameAsString() + " nicht public static"));
+            // Geteilte Singletons (#141 „geteilte Instanzen"): jede …Impl wird
+            // GENAU EINMAL konstruiert — kein Re-Newing (`new BImpl(new AImpl())`),
+            // sonst wären die Instanzen nicht geteilt.
+            long implNews = cls.findAll(ObjectCreationExpr.class).stream()
+                    .filter(o -> o.getType().getNameAsString().endsWith("Impl"))
+                    .count();
+            assertTrue(implNews > 0, u.path + ": Factory konstruiert keine …Impl");
+            assertTrue(implNews == creators.size(),
+                    u.path + ": " + implNews + " `new …Impl()` bei " + creators.size()
+                    + " create…() — jede Impl genau einmal (geteilte Singletons)");
+        }
+    }
+
+    @Test
+    @DisplayName("Factory: genau eine pro Package; jedes Interface-Package hat eine")
+    void oneFactoryPerPackage() {
+        var byPkg = new java.util.HashMap<String, Integer>();
+        for (Unit u : MAIN) {
+            if (!isFactory(u)) {
+                continue;
+            }
+            String pkg = u.cu.getPackageDeclaration().map(pd -> pd.getNameAsString()).orElse("");
+            byPkg.merge(pkg, 1, Integer::sum);
+        }
+        byPkg.forEach((pkg, count) -> assertTrue(count == 1,
+                "Package \"" + pkg + "\": " + count + " Factories (erwartet genau 1)"));
+        for (Unit u : MAIN) {
+            if (isImpl(u) || isFactory(u)) {
+                continue;
+            }
+            String pkg = u.cu.getPackageDeclaration().map(pd -> pd.getNameAsString()).orElse("");
+            assertTrue(byPkg.getOrDefault(pkg, 0) >= 1,
+                    u.path + ": Package \"" + pkg + "\" ohne <Pkg>Factory");
         }
     }
 
@@ -158,7 +212,8 @@ class GeneratedStructureTest {
             assertTrue(t instanceof ClassOrInterfaceDeclaration ci && !ci.isInterface(),
                     u.path + ": Top-Typ ist keine Klasse");
             var cls = (ClassOrInterfaceDeclaration) t;
-            assertFalse(cls.isPublic(), u.path + ": Impl darf NICHT public sein");
+            assertTrue(cls.getAccessSpecifier() == AccessSpecifier.NONE,
+                    u.path + ": Impl muss paket-privat sein (kein public/protected/private)");
             String iface = baseName(u).substring(0, baseName(u).length() - "Impl".length());
             assertTrue(cls.getImplementedTypes().stream()
                             .anyMatch(it -> it.getNameAsString().equals(iface)),
@@ -185,7 +240,7 @@ class GeneratedStructureTest {
     @DisplayName("Öffentliche Interface-Signaturen: nur sprechende Typen, keine rohe Numerik")
     void interfaceSignaturesAreSpeaking() {
         for (Unit u : MAIN) {
-            if (isImpl(u)) {
+            if (isImpl(u) || isFactory(u)) {
                 continue;
             }
             var iface = (ClassOrInterfaceDeclaration) u.cu.getType(0);
@@ -197,9 +252,6 @@ class GeneratedStructureTest {
                 }
             });
             iface.getMethods().forEach(method -> {
-                if (method.getNameAsString().equals("newInstance")) {
-                    return;
-                }
                 checkType(u, method.getType().asString(), local);
                 method.getParameters().forEach(p -> checkType(u, p.getType().asString(), local));
             });
@@ -224,7 +276,7 @@ class GeneratedStructureTest {
     @DisplayName("Jedes Interface hat eine zugehörige <Name>Impl")
     void everyInterfaceHasImpl() {
         for (Unit u : MAIN) {
-            if (isImpl(u)) {
+            if (isImpl(u) || isFactory(u)) {
                 continue;
             }
             String impl = baseName(u) + "Impl";
@@ -236,20 +288,49 @@ class GeneratedStructureTest {
     }
 
     @Test
-    @DisplayName("Cross-Modul-Komposition via newInstance(), nie `new …Impl()` außerhalb der Factory")
-    void compositionViaNewInstance() {
+    @DisplayName("Impl: kein `new …Impl()` und kein newInstance() — Erzeugung nur in der Factory")
+    void implDoesNotConstructImpls() {
         for (Unit u : MAIN) {
             if (!isImpl(u)) {
                 continue;
             }
-            String ownImpl = baseName(u);
             u.cu.findAll(ObjectCreationExpr.class).forEach(o -> {
                 String tn = o.getType().getNameAsString();
-                if (tn.endsWith("Impl") && !tn.equals(ownImpl)) {
-                    fail(u.path + ": `new " + tn + "()` — Cross-Modul muss über "
-                            + "<Iface>.newInstance() laufen");
+                if (tn.endsWith("Impl")) {
+                    fail(u.path + ": `new " + tn + "()` in der Impl — `new …Impl()` "
+                            + "lebt ausschließlich in der <Pkg>Factory (#141)");
                 }
             });
+            assertFalse(u.cu.toString().contains("newInstance"),
+                    u.path + ": newInstance() darf nicht mehr vorkommen (#141)");
+        }
+    }
+
+    @Test
+    @DisplayName("Impl mit Abhängigkeiten: final-Felder via Konstruktor injiziert (#141)")
+    void implConstructorInjection() {
+        for (Unit u : MAIN) {
+            if (!isImpl(u)) {
+                continue;
+            }
+            var cls = (ClassOrInterfaceDeclaration) u.cu.getType(0);
+            var instanceFields = cls.getFields().stream()
+                    .filter(f -> !f.isStatic())
+                    .toList();
+            if (instanceFields.isEmpty()) {
+                continue;       // Modul ohne Abhängigkeit → kein Konstruktor nötig
+            }
+            instanceFields.forEach(f -> assertTrue(f.isFinal(),
+                    u.path + ": Abhängigkeits-Feld nicht final"));
+            var ctors = cls.getConstructors();
+            assertTrue(ctors.size() == 1,
+                    u.path + ": erwartet genau einen Konstruktor (Injektion)");
+            assertTrue(ctors.get(0).getAccessSpecifier() == AccessSpecifier.NONE,
+                    u.path + ": injizierender Konstruktor muss paket-privat sein");
+            long fieldCount = instanceFields.stream()
+                    .mapToLong(f -> f.getVariables().size()).sum();
+            assertTrue(ctors.get(0).getParameters().size() == fieldCount,
+                    u.path + ": Konstruktor-Parameter ≠ Anzahl Abhängigkeits-Felder");
         }
     }
 

@@ -7,13 +7,14 @@
  * IR → Java-21-Quelltext (ADR1 `emit-java/`).
  *
  * Reiner, deterministischer Pretty-Printer (Risiko R9). Ein FinDSL-Modul
- * → ZWEI Dateien: `public interface <Name>` (Datei-Doc, `newInstance()`,
- * öffentliche Methodensignaturen, nested `enum`/`record`, `public static
- * final` Konstanten) + paket-private `class <Name>Impl implements
- * <Name>` (nur Methodenrümpfe). `_`-interne `fn` → `protected` (nur in
- * der Impl). Methoden-Namen lowerCamel.
- * `wähle`/`abbruch`/Block-Arm → Statement-Lowering (ADR4). FinDSL-Doc +
- * `@Quelle` → Javadoc. Wert-/Tag-/Listen-Semantik liegt in der Runtime.
+ * → ZWEI Dateien: `public interface <Name>` (Datei-Doc, öffentliche
+ * Methodensignaturen, nested `enum`/`record`, `public static final`
+ * Konstanten) + paket-private `class <Name>Impl implements <Name>` (nur
+ * Methodenrümpfe; Abhängigkeiten per Konstruktor injiziert). `_`-interne
+ * `fn` → `protected` (nur in der Impl). Methoden-Namen lowerCamel.
+ * Erzeugung/Verdrahtung der Module lebt in der `<Package>Factory`
+ * ({@link emitJavaPackageFactory}, Issue #141). `wähle`/`abbruch`/Block-Arm
+ * → Statement-Lowering (ADR4). FinDSL-Doc + `@Quelle` → Javadoc.
  */
 
 import type {
@@ -530,10 +531,11 @@ export interface JavaModuleFiles {
 
 /**
  * Rendert ein `IrModule` zu ZWEI Java-Dateien (deterministisch): das
- * öffentliche `interface <Name>` (Datei-Doc, `newInstance()`, öffentliche
- * Methodensignaturen, nested `enum`/`record`, `public static final`
- * Konstanten) und die paket-private `class <Name>Impl implements <Name>`
- * (nur Methodenrümpfe; Cross-Modul-SUTs via `<Iface>.newInstance()`).
+ * öffentliche `interface <Name>` (Datei-Doc, öffentliche Methoden-
+ * signaturen, nested `enum`/`record`, `public static final` Konstanten)
+ * und die paket-private `class <Name>Impl implements <Name>` (nur
+ * Methodenrümpfe; Cross-Modul-Abhängigkeiten per Konstruktor injiziert,
+ * verdrahtet durch die `<Package>Factory`).
  */
 export function emitJavaModuleFiles(m: IrModule): JavaModuleFiles {
     const interfaceName = m.className;
@@ -542,37 +544,43 @@ export function emitJavaModuleFiles(m: IrModule): JavaModuleFiles {
     const pkgHeader = packageHeader(m.javaPackage);
     const generated = '@Generated(value = "findsl.Generator")';
 
-    // --- Interface: newInstance ▸ öffentliche fn-Signaturen ▸ enum ▸
-    //     record ▸ konst (Quellreihenfolge je Gruppe, deterministisch). ---
+    // --- Interface: öffentliche fn-Signaturen ▸ enum ▸ record ▸ konst
+    //     (Quellreihenfolge je Gruppe, deterministisch). ---
     const ifaceOrder = { fn: 0, enum: 1, record: 2, konst: 3 } as const;
     const ifaceMembers = [...m.decls]
         .map((d, i) => ({ d, i }))
         .sort((a, b) => ifaceOrder[a.d.kind] - ifaceOrder[b.d.kind] || a.i - b.i)
         .map(({ d }) => emitInterfaceMember(d))
         .filter((s): s is string => s !== undefined);
-    const newInstance =
-        `${IND}static ${interfaceName} newInstance() {\n`
-        + `${IND}${IND}return new ${implName}();\n${IND}}`;
-    const interfaceBody = [newInstance, ...ifaceMembers].join('\n\n');
+    // Issue #141: `newInstance()` entfällt — die Erzeugung lebt
+    // ausschließlich in der `<Package>Factory` (emitJavaPackageFactory).
+    const interfaceBody = ifaceMembers.join('\n\n');
 
     // --- Impl: nur `fn` in QUELLREIHENFOLGE (interne `_` an Ort und
-    //     Stelle); Cross-Modul-Komposition via Interface-Factory. ---
+    //     Stelle); Cross-Modul-Komposition via Konstruktor-Injektion. ---
     const implFns = m.decls
         .map(emitImplFn)
         .filter((s): s is string => s !== undefined);
     const implBody = implFns.join('\n\n');
 
-    // Cross-Modul: `import` NUR bei abweichendem Package; Komposition
-    // hält das IMPLEMENTIERTE Interface, instanziiert via `newInstance()`
-    // (die Impl-Klasse des Zielmoduls ist paket-privat).
+    // Cross-Modul: `import` NUR bei abweichendem Package; Komposition via
+    // Konstruktor-Injektion (`final`-Felder; die `<Package>Factory`
+    // verdrahtet die Instanzen). Die Impl des Zielmoduls bleibt paket-
+    // privat — instanziiert wird sie nur in der Factory.
     const crossImports = m.composedModules
         .filter((c) => c.javaPackage !== undefined && c.javaPackage !== m.javaPackage)
         .map((c) => `import ${c.javaPackage}.${c.className};`);
+    const ctorParams = m.composedModules
+        .map((c) => `${c.className} ${c.fieldName}`).join(', ');
     const composedFields = m.composedModules.length > 0
         ? [
             ...m.composedModules.map(
-                (c) => `${IND}private final ${c.className} ${c.fieldName} `
-                    + `= ${c.className}.newInstance();`),
+                (c) => `${IND}private final ${c.className} ${c.fieldName};`),
+            '',
+            `${IND}${implName}(${ctorParams}) {`,
+            ...m.composedModules.map(
+                (c) => `${IND}${IND}this.${c.fieldName} = ${c.fieldName};`),
+            `${IND}}`,
             '',
         ]
         : [];
@@ -616,6 +624,181 @@ export function emitJavaModuleFiles(m: IrModule): JavaModuleFiles {
         implName,
         implCode: reflowJava(implCode),
     };
+}
+
+/** PascalCase-className → `SCREAMING_SNAKE_CASE` (static-final-Feldname). */
+function screamingSnake(name: string): string {
+    return name
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+        .toUpperCase();
+}
+
+/**
+ * Letztes Package-Segment → PascalCase-Basis des `<Basis>Factory`-Namens
+ * (`kraftst` → `Kraftst` ⇒ `KraftstFactory`). Unbenanntes (Default-)Package
+ * → `''`, die Factory-Klasse heißt dann schlicht `Factory` (Wurzelverzeichnis).
+ */
+function factoryBaseName(javaPackage: string | undefined): string {
+    if (javaPackage === undefined || javaPackage === '') return '';
+    const last = javaPackage.split('.').pop() ?? '';
+    return last.length ? last.charAt(0).toUpperCase() + last.slice(1) : '';
+}
+
+/**
+ * Topologische Modul-Reihenfolge (Abhängigkeit VOR Nutzer) über die
+ * Same-Package-`composedModules`-Kanten. Nötig, weil die Factory die
+ * Instanzen als eager `private static final` hält (Init in Deklarations-
+ * reihenfolge — eine Abhängigkeit nach ihrem Nutzer ⇒ NPE). DFS-Postorder
+ * in Eingangsreihenfolge ⇒ stabiler Tie-Break (Determinismus R9). Cross-
+ * Package-Kanten zählen nicht (die fremde Factory initialisiert sie).
+ * Zyklus ⇒ klarer Fehler (`verwende` ist ein DAG; stille NPE vermeiden).
+ */
+function topoSortModules(modules: ReadonlyArray<IrModule>): IrModule[] {
+    const byName = new Map(modules.map((m) => [m.className, m] as const));
+    const result: IrModule[] = [];
+    const done = new Set<string>();
+    const onStack = new Set<string>();
+    const visit = (m: IrModule): void => {
+        if (done.has(m.className)) return;
+        if (onStack.has(m.className)) {
+            throw new Error(
+                `Zyklische Modul-Abhängigkeit in der Factory erkannt `
+                + `("${m.className}") — \`verwende\` muss azyklisch sein.`);
+        }
+        onStack.add(m.className);
+        for (const c of m.composedModules) {
+            const dep = byName.get(c.className);
+            if (dep !== undefined) visit(dep);          // nur Same-Package
+        }
+        onStack.delete(m.className);
+        done.add(m.className);
+        result.push(m);
+    };
+    for (const m of modules) visit(m);
+    return result;
+}
+
+/**
+ * Globaler Zyklus-Finder über den Kompositionsgraphen (`composedModules`),
+ * **paket-qualifiziert** — fängt damit auch Cross-Package-Zyklen, die der
+ * per-Paket-{@link topoSortModules} NICHT sieht. Nötig, weil die
+ * `<Package>Factory`-Singletons eager `static final` sind: ein Zyklus
+ * (auch über Paketgrenzen) gäbe still eine `null`-Dependency (JLS §12.4.2).
+ * Liefert den Zyklus-Pfad (paket-qualifiziert) oder `undefined`. Der CLI
+ * ruft das VOR der Factory-Generierung über alle Module auf.
+ */
+export function findCompositionCycle(
+    modules: ReadonlyArray<IrModule>,
+): readonly string[] | undefined {
+    const qual = (pkg: string | undefined, cls: string): string => `${pkg ?? ''}.${cls}`;
+    const byKey = new Map(modules.map((m) => [qual(m.javaPackage, m.className), m] as const));
+    const state = new Map<string, 'visiting' | 'done'>();
+    const stack: string[] = [];
+    let found: string[] | undefined;
+    const visit = (m: IrModule): void => {
+        if (found) return;
+        const k = qual(m.javaPackage, m.className);
+        if (state.get(k) === 'done') return;
+        if (state.get(k) === 'visiting') {
+            found = [...stack.slice(stack.indexOf(k)), k];      // der geschlossene Zyklus
+            return;
+        }
+        state.set(k, 'visiting');
+        stack.push(k);
+        for (const c of m.composedModules) {
+            const dep = byKey.get(qual(c.javaPackage, c.className));
+            if (dep !== undefined) visit(dep);
+            if (found) return;
+        }
+        stack.pop();
+        state.set(k, 'done');
+    };
+    for (const m of modules) {
+        visit(m);
+        if (found) break;
+    }
+    return found;
+}
+
+export interface JavaFactoryFile {
+    readonly factoryName: string;
+    readonly code: string;
+}
+
+/**
+ * Rendert die `<Package>Factory` eines Java-Packages (= Gesetzes-Modul):
+ * die Komposition-Wurzel. Hält jede generierte Klasse als prozessweites,
+ * geteiltes Singleton (`private static final`, topologisch initialisiert)
+ * und exponiert sie via `public static create<Klasse>()`. Same-Package-
+ * Abhängigkeiten werden direkt verdrahtet, Cross-Package über die Ziel-
+ * Factory. `newInstance()` (früher im Interface) entfällt — `new …Impl()`
+ * lebt ausschließlich hier. Deterministisch (Risiko R9).
+ */
+export function emitJavaPackageFactory(
+    javaPackage: string | undefined,
+    modules: ReadonlyArray<IrModule>,
+): JavaFactoryFile {
+    const factoryName = `${factoryBaseName(javaPackage)}Factory`;
+    const ordered = topoSortModules(modules);
+
+    // SCREAMING_SNAKE-Feldnamen müssen injektiv sein — sonst doppeltes
+    // `static final`-Feld + doppelte `create…()` (javac „duplicate field").
+    // Klare Diagnose hier statt eines kryptischen Compile-Fehlers.
+    const snakeNames = new Set(ordered.map((m) => screamingSnake(m.className)));
+    if (snakeNames.size !== ordered.length) {
+        throw new Error(
+            `Factory-Feldnamen-Kollision in Package "${javaPackage ?? '(default)'}": `
+            + `mehrere Klassen ergeben denselben SCREAMING_SNAKE-Namen `
+            + `(${ordered.map((m) => m.className).join(', ')}).`);
+    }
+
+    // `new <Impl>(<deps>)` je Abhängigkeit: same-package → geteiltes
+    // Singleton-Feld; cross-package → Ziel-Factory-`create…()`.
+    const ctorArg = (c: { className: string; javaPackage: string | undefined }): string =>
+        c.javaPackage !== undefined && c.javaPackage !== javaPackage
+            ? `${factoryBaseName(c.javaPackage)}Factory.create${c.className}()`
+            : screamingSnake(c.className);
+    const fields = ordered.map((m) => {
+        const args = m.composedModules.map(ctorArg).join(', ');
+        return `${IND}private static final ${m.className} ${screamingSnake(m.className)} `
+            + `= new ${m.className}Impl(${args});`;
+    });
+    const creators = ordered.map((m) =>
+        `${IND}public static ${m.className} create${m.className}() {\n`
+        + `${IND}${IND}return ${screamingSnake(m.className)};\n${IND}}`);
+
+    // Cross-Package-Factory-Importe (dedupliziert, sortiert → determ.).
+    const crossFactoryImports = [...new Set(
+        modules
+            .flatMap((m) => m.composedModules)
+            .filter((c) => c.javaPackage !== undefined && c.javaPackage !== javaPackage)
+            .map((c) => `import ${c.javaPackage}.${factoryBaseName(c.javaPackage)}Factory;`),
+    )].sort();
+
+    const code = [
+        ...packageHeader(javaPackage),
+        ...crossFactoryImports,
+        'import javax.annotation.processing.Generated;',
+        '',
+        '/**',
+        ' * Komposition-Wurzel (generiert) — erzeugt die Modul-Instanzen dieses',
+        ' * Pakets und verdrahtet ihre Abhängigkeiten per Konstruktor-Injektion.',
+        ' * Geteilte, prozessweite Singletons. NICHT manuell editieren.',
+        ' */',
+        '@Generated(value = "findsl.Generator")',
+        `public final class ${factoryName} {`,
+        '',
+        `${IND}private ${factoryName}() {}`,
+        '',
+        ...fields,
+        '',
+        creators.join('\n\n'),
+        '}',
+        '',
+    ].join('\n');
+
+    return { factoryName, code: reflowJava(code) };
 }
 
 /** `var`-Bindungen eines testfall → `final <T> <n> …;` (auch `= wähle`). */
@@ -725,14 +908,20 @@ export function emitJavaTestModule(m: IrTestModule): string {
     // SUT-Komposition: `import` nur bei abweichendem Package (Testklasse
     // liegt im selben Package wie das SUT → kein Import, `protected`
     // `_`-Methoden erreichbar).
+    // SUT-Komposition über die `<Package>Factory` (Issue #141): bei
+    // abweichendem Package Interface UND Factory importieren; same-package
+    // (Regelfall: Test liegt beim SUT) kein Import, einfacher Name.
     const crossImports = m.composedModules
         .filter((c) => c.javaPackage !== undefined && c.javaPackage !== m.javaPackage)
-        .map((c) => `import ${c.javaPackage}.${c.className};`);
+        .flatMap((c) => [
+            `import ${c.javaPackage}.${c.className};`,
+            `import ${c.javaPackage}.${factoryBaseName(c.javaPackage)}Factory;`,
+        ]);
     const composedFields = m.composedModules.length > 0
         ? [
             ...m.composedModules.map(
                 (c) => `${IND}private final ${c.className} ${c.fieldName} `
-                    + `= ${c.className}.newInstance();`),
+                    + `= ${factoryBaseName(c.javaPackage)}Factory.create${c.className}();`),
             '',
         ]
         : [];

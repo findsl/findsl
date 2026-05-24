@@ -29,7 +29,9 @@ export function istUnterstuetzteSprache(s: string): s is ZielSprache {
 
 export { lowerProgram, lowerTestProgram, type LowerContext } from './lower/lower.js';
 export {
-    emitJavaModuleFiles, emitJavaTestModule, type JavaModuleFiles,
+    emitJavaModuleFiles, emitJavaTestModule, emitJavaPackageFactory,
+    findCompositionCycle,
+    type JavaModuleFiles, type JavaFactoryFile,
 } from './emit-java/emitter.js';
 export {
     emitTsModule, emitTsTestModule, irTypeToTs, type TsModuleFile,

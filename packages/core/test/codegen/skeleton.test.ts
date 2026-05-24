@@ -15,7 +15,10 @@ import {
     render, concat, text, line, indent,
 } from '../../src/codegen/emit/doc.js';
 import { lowerProgram, lowerTestProgram } from '../../src/codegen/lower/lower.js';
-import { emitJavaModuleFiles, emitJavaTestModule } from '../../src/codegen/emit-java/emitter.js';
+import {
+    emitJavaModuleFiles, emitJavaTestModule, emitJavaPackageFactory,
+    findCompositionCycle,
+} from '../../src/codegen/emit-java/emitter.js';
 import {
     istUnterstuetzteSprache,
     sanitizePackageSegment, derivePackage, deriveClassName, isTestFile,
@@ -113,15 +116,15 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         expect(a).toEqual(b);                                       // byte-deterministisch
         const { interfaceCode: iface, implCode: impl } = a;
 
-        // --- Interface: Package, @Generated, newInstance, Konstanten,
-        //     enum, öffentliche Signaturen (KEIN Rumpf), Javadoc ---
+        // --- Interface: Package, @Generated, Konstanten, enum,
+        //     öffentliche Signaturen (KEIN Rumpf, KEIN newInstance), Javadoc ---
         expect(iface).toContain('package com.x;');
         expect(iface).toContain('import javax.annotation.processing.Generated;');
         expect(iface).toMatch(
             /@Generated\(value = "findsl\.Generator"\)\npublic interface M \{/,
         );
-        expect(iface).toContain('static M newInstance() {');
-        expect(iface).toContain('return new MImpl();');
+        // Issue #141: Erzeugung lebt in der <Pkg>Factory, nicht im Interface.
+        expect(iface).not.toContain('newInstance');
         // Konstanten Wrapper-getypt, Kern-Ausdruck geboxt:
         expect(iface).toContain(
             'public static final Prozent SATZ = Prozent.von(FinDslNumber.prozent("0.15"));');
@@ -147,6 +150,7 @@ describe('Lowering + Java-Emission (Phase 1, kst-Konstruktsatz)', () => {
         //     grenzen; interne `_`-fn = Kern (FinDslNumber, protected) ---
         expect(impl).toMatch(/@Generated[^\n]*\nclass MImpl implements M \{/);
         expect(impl).not.toContain('private MImpl()');
+        expect(impl).not.toMatch(/\bMImpl\s*\(/);    // ohne Abhängigkeiten kein Konstruktor
         expect(impl).not.toContain('_kern');                         // keine Doppelmethode
         expect(impl).not.toContain('.zahl()');                       // IS-A, kein Unbox
         expect(impl).toContain('public Prozent wahl(Ganzzahl jahr, Ausschluss a) {');
@@ -304,8 +308,11 @@ describe('Cross-Modul-Komposition (Phase 3, Inkrement 2)', () => {
         // Cross-Package-Import in beiden Dateien:
         expect(iface).toContain('import pkg.typen.Typen;');
         expect(impl).toContain('import pkg.typen.Typen;');
-        // Komposition hält das Interface, instanziiert via newInstance():
-        expect(impl).toContain('private final Typen typen = Typen.newInstance();');
+        // Komposition via Konstruktor-Injektion (Issue #141):
+        expect(impl).toContain('private final Typen typen;');
+        expect(containsFlat(impl, 'NutzerImpl(Typen typen) {')).toBe(true);
+        expect(containsFlat(impl, 'this.typen = typen;')).toBe(true);
+        expect(impl).not.toContain('newInstance');
         expect(impl).toContain('typen.helfer(');                    // lowerCamel-Cross-Aufruf
         expect(impl).toContain('a == Typen.Art.A');                 // enumCmp + owner
         expect(impl).toContain('new Typen.Sache(');                 // nested-static ctor
@@ -330,6 +337,109 @@ const T_TEST = `prüfe "Doppel-Block" {
     }
 }
 `;
+
+describe('Factory pro Package (Issue #141)', () => {
+    // Zwei Module im SELBEN Package: Typen (ohne Abhängigkeit) + Nutzer
+    // (ruft Typen.Helfer → composedModule). Die Factory verdrahtet beide.
+    async function lowerSamePackage() {
+        const typenProg = await parseSource(X_TYPEN);
+        const nutzerProg = await parseSource(X_NUTZER);
+        const typenIr = lowerProgram(typenProg, { javaPackage: 'pkg', className: 'Typen' });
+        const nutzerIr = lowerProgram(nutzerProg, {
+            javaPackage: 'pkg',
+            className: 'Nutzer',
+            imports: [{
+                program: typenProg,
+                className: 'Typen',
+                javaPackage: 'pkg',
+                bindings: ['Art', 'A', 'B', 'Sache', 'Helfer', 'GRENZE']
+                    .map((n) => ({ localName: n, sourceName: n })),
+            }],
+        });
+        return { typenIr, nutzerIr };
+    }
+
+    it('rendert <Pkg>Factory: geteilte Singletons, Konstruktor-Verdrahtung, topologisch, deterministisch', async () => {
+        const { typenIr, nutzerIr } = await lowerSamePackage();
+        // Bewusst UNSORTIERT (Nutzer vor Abhängigkeit) hineingeben — der
+        // Topo-Sort muss Typen trotzdem zuerst initialisieren.
+        const a = emitJavaPackageFactory('pkg', [nutzerIr, typenIr]);
+        const b = emitJavaPackageFactory('pkg', [nutzerIr, typenIr]);
+        expect(a).toEqual(b);                                       // byte-deterministisch
+        const { factoryName, code } = a;
+
+        expect(factoryName).toBe('PkgFactory');
+        expect(code).toContain('package pkg;');
+        expect(code).toContain('public final class PkgFactory {');
+        expect(code).toContain('private PkgFactory() {}');
+        // Geteilte, prozessweite Singletons (static final):
+        expect(code).toContain('private static final Typen TYPEN = new TypenImpl();');
+        expect(containsFlat(code,
+            'private static final Nutzer NUTZER = new NutzerImpl(TYPEN);')).toBe(true);
+        // Topologisch: Abhängigkeit (Typen) VOR Nutzer initialisiert:
+        expect(code.indexOf('new TypenImpl()')).toBeLessThan(code.indexOf('new NutzerImpl('));
+        // create…() liefern die Singletons (keine frische Instanz):
+        expect(containsFlat(code, 'public static Typen createTypen() { return TYPEN; }')).toBe(true);
+        expect(containsFlat(code, 'public static Nutzer createNutzer() { return NUTZER; }')).toBe(true);
+        expect(code).not.toContain('newInstance');
+    });
+
+    it('verdrahtet Cross-Package-Abhängigkeit über die Ziel-Factory + Import', async () => {
+        // Nutzer in pkg.nutzer, Abhängigkeit Typen in pkg.typen (cross-package).
+        const typenProg = await parseSource(X_TYPEN);
+        const nutzerProg = await parseSource(X_NUTZER);
+        const nutzerIr = lowerProgram(nutzerProg, {
+            javaPackage: 'pkg.nutzer',
+            className: 'Nutzer',
+            imports: [{
+                program: typenProg,
+                className: 'Typen',
+                javaPackage: 'pkg.typen',
+                bindings: ['Art', 'A', 'B', 'Sache', 'Helfer', 'GRENZE']
+                    .map((n) => ({ localName: n, sourceName: n })),
+            }],
+        });
+        const { code } = emitJavaPackageFactory('pkg.nutzer', [nutzerIr]);
+        expect(code).toContain('public final class NutzerFactory {');
+        expect(code).toContain('import pkg.typen.TypenFactory;');
+        expect(containsFlat(code,
+            'new NutzerImpl(TypenFactory.createTypen())')).toBe(true);
+    });
+
+    it('findCompositionCycle erkennt Cross-Package-Zyklus, undefined bei DAG', async () => {
+        // A(p1) ruft GB aus B(p2); B(p2) ruft GA aus A(p1) → Cross-Package-Zyklus.
+        const progA = await parseSource('fn GA(n: Ganzzahl): Ganzzahl = GB(n)\n');
+        const progB = await parseSource('fn GB(n: Ganzzahl): Ganzzahl = GA(n)\n');
+        const irA = lowerProgram(progA, {
+            javaPackage: 'p1', className: 'A',
+            imports: [{ program: progB, className: 'B', javaPackage: 'p2',
+                bindings: [{ localName: 'GB', sourceName: 'GB' }] }],
+        });
+        const irB = lowerProgram(progB, {
+            javaPackage: 'p2', className: 'B',
+            imports: [{ program: progA, className: 'A', javaPackage: 'p1',
+                bindings: [{ localName: 'GA', sourceName: 'GA' }] }],
+        });
+        const cyc = findCompositionCycle([irA, irB]);
+        expect(cyc).toBeDefined();
+        expect(cyc).toEqual(expect.arrayContaining(['p1.A', 'p2.B']));
+        // azyklisch: A → B(leaf, ohne Rückbezug)
+        const irBleaf = lowerProgram(
+            await parseSource('fn GB(n: Ganzzahl): Ganzzahl = n\n'),
+            { javaPackage: 'p2', className: 'B' });
+        expect(findCompositionCycle([irA, irBleaf])).toBeUndefined();
+    });
+
+    it('emitJavaPackageFactory wirft bei SCREAMING_SNAKE-Feldnamen-Kollision', async () => {
+        // `AbTest` und `ABTest` ergeben beide `AB_TEST` → doppeltes Feld.
+        const m1 = lowerProgram(await parseSource('fn F(): Ganzzahl = 1\n'),
+            { javaPackage: 'p', className: 'AbTest' });
+        const m2 = lowerProgram(await parseSource('fn G(): Ganzzahl = 2\n'),
+            { javaPackage: 'p', className: 'ABTest' });
+        expect(() => emitJavaPackageFactory('p', [m1, m2]))
+            .toThrow(/Feldnamen-Kollision|SCREAMING_SNAKE/);
+    });
+});
 
 describe('prüfe → JUnit5 (Phase 3, Inkrement 3)', () => {
     async function lowerTest() {
@@ -376,7 +486,7 @@ describe('prüfe → JUnit5 (Phase 3, Inkrement 3)', () => {
         expect(out).toContain('import org.junit.jupiter.api.Test;');
         expect(out).toContain('import static org.junit.jupiter.api.Assertions.assertTrue;');
         expect(out).toContain('import static org.junit.jupiter.api.Assertions.assertThrows;');
-        expect(out).toContain('private final Kst kst = Kst.newInstance();');
+        expect(out).toContain('private final Kst kst = KstFactory.createKst();');
         expect(out).toContain('@Nested');
         expect(out).toContain('@DisplayName("Doppel-Block")');
         expect(out).toContain('@DisplayName("2*3 \\u2192 6")'.replace('\\u2192', '→'));

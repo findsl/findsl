@@ -523,6 +523,7 @@ Beispiele:
         const {
             istUnterstuetzteSprache, GEPLANTE_SPRACHEN,
             lowerProgram, lowerTestProgram, emitJavaModuleFiles, emitJavaTestModule,
+            emitJavaPackageFactory, findCompositionCycle,
             emitTsModule, emitTsTestModule, emitJsModule, emitJsTestModule, stripRuntimeToJs,
             derivePackage, deriveClassName, isTestFile,
             JAVA_RUNTIME_FILES, TS_RUNTIME_FILES,
@@ -627,6 +628,9 @@ Beispiele:
         // Voll-qualifizierter Name (Package + Klasse) → Quelldatei:
         // schützt vor stillem Überschreiben bei Kollision.
         const seen = new Map<string, string>();
+        // Java (#141): erfolgreich gelowerte Module je Package (Key = Package
+        // oder '' für Default) → nach der Schleife eine <Pkg>Factory je Paket.
+        const javaModulesByPkg = new Map<string, ReturnType<typeof lowerProgram>[]>();
         for (const mod of modules.values()) {
             const fqcn = (mod.javaPackage ?? '') + '.' + mod.className;
             const kollision = seen.get(fqcn);
@@ -702,6 +706,11 @@ Beispiele:
                         { name: `${f.interfaceName}.java`, content: f.interfaceCode },
                         { name: `${f.implName}.java`, content: f.implCode },
                     ];
+                    // Für die <Pkg>Factory sammeln (nur erfolgreich gelowert).
+                    const key = mod.javaPackage ?? '';
+                    const bucket = javaModulesByPkg.get(key);
+                    if (bucket === undefined) javaModulesByPkg.set(key, [ir]);
+                    else bucket.push(ir);
                 }
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
@@ -719,6 +728,47 @@ Beispiele:
                 const target = path.join(targetDir, of.name);
                 await fs.writeFile(target, of.content, 'utf-8');
                 written.push(target);
+            }
+        }
+
+        // Durchgang 2c (nur Java, #141): pro Package eine <Pkg>Factory
+        // (Komposition-Wurzel). Erst NACH dem Lowering aller Module, weil
+        // die Factory die composedModules (Konstruktor-Args) jedes Moduls
+        // des Pakets braucht. Default-Package → Wurzelverzeichnis.
+        if (lang === 'java') {
+            // Cross-Package-Zyklen sieht der per-Paket-Topo-Sort nicht; ein
+            // eager `static final`-Singleton bekäme sonst still `null`
+            // injiziert. Global (paket-qualifiziert) prüfen → klare Meldung
+            // statt stillem Laufzeit-`null`.
+            const allJavaMods = [...javaModulesByPkg.values()].flat();
+            const cycle = findCompositionCycle(allJavaMods);
+            if (cycle !== undefined) {
+                console.error('✗ Zyklische Modul-Komposition (verwende): '
+                    + `${cycle.join(' → ')} — die <Pkg>Factory kann keine `
+                    + 'azyklische Singleton-Initialisierung erzeugen; '
+                    + 'keine Factory geschrieben.');
+                failures++;
+            } else {
+                for (const [pkgKey, mods] of javaModulesByPkg) {
+                    const pkg = pkgKey === '' ? undefined : pkgKey;
+                    // Emit/Schreiben kapseln: ein Factory-Fehler (z. B.
+                    // Feldnamen-Kollision) meldet sauber, statt den Lauf
+                    // mit Stacktrace abzubrechen.
+                    try {
+                        const f = emitJavaPackageFactory(pkg, mods);
+                        const targetDir = pkg === undefined
+                            ? outDir
+                            : path.join(outDir, ...pkg.split('.'));
+                        await fs.mkdir(targetDir, { recursive: true });
+                        const target = path.join(targetDir, `${f.factoryName}.java`);
+                        await fs.writeFile(target, f.code, 'utf-8');
+                        written.push(target);
+                    } catch (err) {
+                        const msg = err instanceof Error ? err.message : String(err);
+                        console.error(`✗ Factory für Package "${pkg ?? '(default)'}": ${msg}`);
+                        failures++;
+                    }
+                }
             }
         }
 

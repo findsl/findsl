@@ -14,7 +14,9 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./worker": "./dist/worker.js"
+    "./worker": "./dist/worker.js",
+    "./findsl.tmLanguage.json": "./dist/findsl.tmLanguage.json",
+    "./language-configuration.json": "./dist/language-configuration.json"
   },
   "files": [
     "dist"

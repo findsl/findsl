@@ -57,6 +57,22 @@ const result = await esbuild.build({
     },
 });
 
+// --- Editor-Assets für Konsumenten (z. B. findsl/website-Playground) ---
+// TextMate-Grammatik + language-configuration mitliefern, damit ein Monaco-
+// Editor 1:1 wie die VS-Code-Extension hervorhebt — versioniert zusammen mit
+// dem Worker, also kein Vendoring/Sync auf Konsumentenseite. Single Source:
+// Grammatik aus packages/core/syntaxes (vgl. scripts/copy-assets.mjs, das sie
+// auch in die Extension spiegelt), language-configuration aus apps/vscode.
+const editorAssets = [
+    ['../core/syntaxes/findsl.tmLanguage.json', 'dist/findsl.tmLanguage.json'],
+    ['../../apps/vscode/language-configuration.json', 'dist/language-configuration.json'],
+];
+for (const [from, to] of editorAssets) {
+    fs.mkdirSync(path.dirname(path.join(__dirname, to)), { recursive: true });
+    fs.copyFileSync(path.join(__dirname, from), path.join(__dirname, to));
+    console.log(`[web] Asset: ${from} → ${to}`);
+}
+
 // --- Guard: kein Node-Builtin / keine CLI-Schicht im Browser-Bundle ---
 // Nackte (präfixlose) Builtins fängt esbuild selbst ab (bricht den Build mit
 // „Could not resolve" ab, sofern nicht aliasiert) — ein Output-Scan dafür wäre

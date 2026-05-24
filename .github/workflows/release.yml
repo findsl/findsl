@@ -518,11 +518,17 @@ jobs:
             echo "::warning::WEBSITE_DISPATCH_TOKEN nicht gesetzt — SPEC-Sync zu findsl/website übersprungen (Issue #125)."
             exit 0
           fi
-          gh api repos/findsl/website/dispatches \
+          # Best-effort: ein fehlgeschlagener Dispatch (Token ohne Zugriff aufs
+          # private findsl/website → 404, falsche Permission → 403, o. Ä.) darf
+          # das Release NICHT kippen — die SPEC-Benachrichtigung ist nachrangig.
+          if gh api repos/findsl/website/dispatches \
             -f event_type=spec-updated \
             -F "client_payload[version]=$VERSION" \
-            -F "client_payload[tag]=v$VERSION"
-          echo "::notice::repository_dispatch 'spec-updated' an findsl/website (v$VERSION) gesendet."
+            -F "client_payload[tag]=v$VERSION"; then
+            echo "::notice::repository_dispatch 'spec-updated' an findsl/website (v$VERSION) gesendet."
+          else
+            echo "::warning::repository_dispatch an findsl/website fehlgeschlagen (Token-Zugriff/Repo prüfen) — Release nicht blockiert (Issue #125)."
+          fi
 
       - name: Dry-Run summary
         if: needs.prepare.outputs.dry_run == 'true'

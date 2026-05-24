@@ -68,4 +68,45 @@ describe('texToPlain — TeX → WinAnsi-sicherer Klartext', () => {
     it('unbekannte Makros werden verworfen, Text bleibt', () => {
         expect(texToPlain('\\foo x + 1')).toBe('x + 1');
     });
+
+    it('\\sqrt → sqrt(…)', () => {
+        expect(texToPlain('\\sqrt{a}')).toBe('sqrt(a)');
+        expect(texToPlain('\\sqrt{a + b}')).toBe('sqrt(a + b)');
+    });
+
+    it('griechische Buchstaben + weitere Operatoren/Symbole (WinAnsi-sicher)', () => {
+        expect(texToPlain('\\alpha + \\beta')).toBe('alpha + beta');
+        expect(texToPlain('a \\div b')).toBe('a ÷ b');
+        expect(texToPlain('a \\pm b')).toBe('a ± b');
+        expect(texToPlain('\\sum')).toBe('Summe');
+        expect(texToPlain('a \\ldots b')).toBe('a ... b');
+    });
+
+    it('Escapes: \\{ \\} \\% bleiben literal, \\\\ wird Leerraum', () => {
+        expect(texToPlain('\\{ a \\}')).toBe('{ a }');
+        expect(texToPlain('30 \\%')).toBe('30 %');
+        expect(texToPlain('a \\\\ b')).toBe('a b');
+    });
+
+    it('cases-Umgebung: mehrzeilig mit "wenn"-Trenner', () => {
+        const out = texToPlain('\\begin{cases} a & x > 0 \\\\ b & x \\le 0 \\end{cases}');
+        expect(out).toContain('\n');         // mehrzeilig
+        expect(out).toContain('wenn');       // Wert-wenn-Bedingung
+        expect(out).toContain('a');
+        expect(out).toContain('b');
+    });
+
+    it('matrix-Umgebung: mehrzeilig mit Zellwerten', () => {
+        const out = texToPlain('\\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}');
+        expect(out).toContain('\n');
+        expect(out).toContain('1');
+        expect(out).toContain('4');
+    });
+
+    it('aligned-Umgebung: mehrzeilig', () => {
+        const out = texToPlain('\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}');
+        expect(out).toContain('\n');
+        expect(out).toContain('a');
+        expect(out).toContain('d');
+    });
 });

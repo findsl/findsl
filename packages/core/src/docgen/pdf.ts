@@ -583,13 +583,23 @@ function mdContent(src: string): Content[] {
         } else if (t.type === 'math_block') {
             // Block-Mathe: echtes Vektor-SVG (MathJax); Breite auf den
             // Satzspiegel begrenzt, Seitenverhältnis bleibt (nur width).
-            const { svg, width } = texToSvg(t.content, true);
-            out.push({
-                svg,
-                width: Math.min(width, CONTENT_W),
-                alignment: 'center',
-                margin: [0, 6, 0, 10],
-            });
+            try {
+                const { svg, width } = texToSvg(t.content, true);
+                out.push({
+                    svg,
+                    width: Math.min(width, CONTENT_W),
+                    alignment: 'center',
+                    margin: [0, 6, 0, 10],
+                });
+            } catch {
+                // MathJax nicht initialisiert / Render-Fehler: WinAnsi-sicherer
+                // Klartext-Fallback (wie Inline-Mathe), statt das ganze PDF zu
+                // kippen (Issue #136 Defense-in-Depth).
+                out.push({
+                    text: texToPlain(t.content), italics: true,
+                    alignment: 'center', margin: [0, 6, 0, 10],
+                });
+            }
         } else if (t.type === 'fence' || t.type === 'code_block') {
             out.push(codeBlock(t.content.replace(/\n$/, '')));
         } else if (t.type === 'bullet_list_open' || t.type === 'ordered_list_open') {

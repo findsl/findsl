@@ -173,6 +173,23 @@ let mjDoc: MathjaxConverter | null = null;
 let mjAdaptor: MathjaxAdaptor | null = null;
 
 /**
+ * Holt einen Named-Export interop-robust aus einem (kompilierten CJS-)
+ * Modul. Hintergrund (Issue #136): `mathjax-full` liefert CJS; Node-
+ * NodeNext stellt `import { liteAdaptor }` direkt bereit, aber esbuilds
+ * Browser-Bundle kann den Named-Export hinter die `.default`-Hülle des
+ * CJS↔ESM-Interops legen — dann käme `liteAdaptor` als `undefined`/
+ * Namespace an (⇒ „liteAdaptor is not a function"). Reihenfolge wie das
+ * `cjsDefault`-Muster in pdf.ts: erst direkter Named-Export, dann über
+ * `.default`. In Node ändert sich nichts (direkter Export greift).
+ */
+function namedExport<T>(mod: unknown, name: string): T {
+    const m = mod as Record<string, unknown>;
+    if (m[name] !== undefined) return m[name] as T;
+    const def = m.default as Record<string, unknown> | undefined;
+    return (def?.[name] ?? def) as T;
+}
+
+/**
  * Initialisiert MathJax einmalig (lazy `import()` ⇒ nur der PDF-Pfad
  * zieht die schwere Abhängigkeit). `fontCache:'none'` + fester
  * `idPrefix` ⇒ keine instabilen SVG-IDs ⇒ byte-stabile/idempotente
@@ -180,12 +197,18 @@ let mjAdaptor: MathjaxAdaptor | null = null;
  */
 export async function ensureMathJax(): Promise<void> {
     if (mjDoc) return;
-    const { mathjax } = await import('mathjax-full/js/mathjax.js');
-    const { TeX } = await import('mathjax-full/js/input/tex.js');
-    const { SVG } = await import('mathjax-full/js/output/svg.js');
-    const { liteAdaptor } = await import('mathjax-full/js/adaptors/liteAdaptor.js');
-    const { RegisterHTMLHandler } = await import('mathjax-full/js/handlers/html.js');
-    const { AllPackages } = await import('mathjax-full/js/input/tex/AllPackages.js');
+    const mathjax = namedExport<{ document(s: string, o: unknown): unknown }>(
+        await import('mathjax-full/js/mathjax.js'), 'mathjax');
+    const TeX = namedExport<new (o: unknown) => unknown>(
+        await import('mathjax-full/js/input/tex.js'), 'TeX');
+    const SVG = namedExport<new (o: unknown) => unknown>(
+        await import('mathjax-full/js/output/svg.js'), 'SVG');
+    const liteAdaptor = namedExport<() => unknown>(
+        await import('mathjax-full/js/adaptors/liteAdaptor.js'), 'liteAdaptor');
+    const RegisterHTMLHandler = namedExport<(a: unknown) => void>(
+        await import('mathjax-full/js/handlers/html.js'), 'RegisterHTMLHandler');
+    const AllPackages = namedExport<readonly string[]>(
+        await import('mathjax-full/js/input/tex/AllPackages.js'), 'AllPackages');
     const adaptor = liteAdaptor();
     RegisterHTMLHandler(adaptor);
     // Defense-in-Depth (Issue #73): `AllPackages` enthält `html`

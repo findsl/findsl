@@ -21,9 +21,11 @@ import { buildPdfDoc } from '@findsl/core/docgen/pdf.js';
 import { ensureMathJax } from '@findsl/core/docgen/math.js';
 import type { DocModel } from '@findsl/core/docgen/model.js';
 
-export async function pdfDocDefinition(model: DocModel): Promise<string> {
-    // buildPdfDoc ruft intern texToSvg (Block-Mathe → SVG) → MathJax muss
-    // initialisiert sein.
-    await ensureMathJax();
+export async function pdfDocDefinition(model: DocModel, hasMath: boolean): Promise<string> {
+    // buildPdfDoc ruft texToSvg NUR bei `$…$`/`$$…$$`-Formeln (Block → SVG,
+    // Inline → Flow-Layout). Nur dann MathJax initialisieren — formelfreie
+    // Module (häufigster Fall) laden den schweren mathjax-Chunk gar nicht
+    // (Issue #136) und können nicht an dessen Init scheitern.
+    if (hasMath) await ensureMathJax();
     return JSON.stringify(buildPdfDoc(model));
 }

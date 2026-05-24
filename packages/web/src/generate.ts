@@ -113,11 +113,16 @@ export async function runGenerate(
                 // Path B: Worker liefert die pdfmake-Doc-Definition (Mathe als
                 // SVG); die Website rendert daraus die PDF-Bytes (pdfmake
                 // statisch geladen). Vermeidet pdfkit/Polyfills im Worker.
-                const model = buildDocModelFromProgram(program, document.textDocument.getText(), className);
+                const src = document.textDocument.getText();
+                const model = buildDocModelFromProgram(program, src, className);
                 const { pdfDocDefinition } = await import('./pdf-browser.js');
+                // `$` ist notwendige Bedingung für `$…$`/`$$…$$`-Mathe →
+                // konservative Über-Approximation: kein `$` ⇒ definitiv keine
+                // Formeln ⇒ MathJax-Init (schwerer Chunk) überspringen (#136).
+                const hasMath = src.includes('$');
                 return ok({
                     target, filename: `${className}.pdfmake.json`, mime: 'application/json',
-                    text: await pdfDocDefinition(model),
+                    text: await pdfDocDefinition(model, hasMath),
                 });
             }
             default:

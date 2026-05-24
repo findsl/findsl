@@ -12,9 +12,9 @@ import * as esbuild from 'esbuild';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { browserAlias } from './esbuild.shared.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const shim = (f) => path.join(__dirname, 'src', 'shims', f);
 
 // worker = Laufzeit (LSP + check/generate); index = `.`-Export (nur Typen,
 // die .d.ts liefert tsc separat im build:web).
@@ -34,27 +34,9 @@ const result = await esbuild.build({
     chunkNames: 'chunks/[name]-[hash]',
     metafile: true,
     logLevel: 'warning',
-    alias: {
-        'node:path': shim('path.ts'),
-        'node:fs': shim('fs.ts'),
-        'node:fs/promises': shim('fs-promises.ts'),
-        'node:module': shim('module.ts'),
-        // Nackte (präfixlose) Builtins ebenfalls aliasen — falls Core/Deps
-        // mal `from 'fs'` statt `from 'node:fs'` nutzen (umginge sonst Alias
-        // UND Guard).
-        path: shim('path.ts'),
-        fs: shim('fs.ts'),
-        'fs/promises': shim('fs-promises.ts'),
-        module: shim('module.ts'),
-        'langium/node': shim('langium-node.ts'),
-        // Node-pdfmake-Printer (pdfkit) — von docgen/pdf.ts importiert, aber
-        // im Browser ungenutzt (wir nehmen nur buildPdfDoc). Stub statt
-        // pdfkit + ~9 Polyfills.
-        'pdfmake/js/Printer.js': shim('empty.ts'),
-        'pdfmake/js/virtual-fs.js': shim('empty.ts'),
-        'pdfmake/js/URLResolver.js': shim('empty.ts'),
-        'pdfkit': shim('empty.ts'),
-    },
+    // Alias-Map (node:-Shims + pdfmake/pdfkit-Stubs) zentral in
+    // esbuild.shared.mjs — geteilt mit dem Bundle-Test (Issue #136).
+    alias: browserAlias(__dirname),
 });
 
 // --- Editor-Assets für Konsumenten (z. B. findsl/website-Playground) ---

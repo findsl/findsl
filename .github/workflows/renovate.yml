@@ -12,11 +12,16 @@
 # Single-Repo OHNE Org-`.github`-Repo → Stub + Reusable sind hier bewusst
 # in EINER self-contained Datei konsolidiert.
 #
-# Cron 04:00 UTC Mo–Fr spiegelt den Config-Filter
-# `before 6am every weekday` (Europe/Berlin) aus `.github/renovate.json`.
+# Cron 04:00 UTC Mo–Fr ist das EINZIGE Timing-Gate. `.github/renovate.json`
+# hat bewusst KEINEN `schedule`-Filter mehr: das frühere enge Fenster
+# (`before 6am`, Europe/Berlin) kollidierte mit der Sommerzeit (04:00 UTC =
+# 06:00 Berlin, knapp außerhalb) UND der GHA-Cron-Verzögerung (Läufe oft
+# Stunden später) → Renovate war beim Lauf stets außerhalb seines Fensters
+# und schob alle Updates dauerhaft in „Awaiting Schedule", statt PRs zu
+# öffnen. Ohne Config-`schedule` handelt Renovate bei JEDEM Lauf.
 # `workflow_dispatch` erlaubt On-Demand-Läufe (Actions-Tab oder
-# `gh workflow run renovate.yml`); dann wird der schedule-Filter via
-# RENOVATE_FORCE übersteuert, sodass PRs sofort geöffnet werden.
+# `gh workflow run renovate.yml`); RENOVATE_FORCE setzt dort zusätzlich
+# `recreateWhen:always`, sodass auch geschlossene/limitierte Updates neu öffnen.
 #
 # HINWEIS: Renovate nutzt das PAT-Secret `RENOVATE_TOKEN`. Mit einem PAT
 # erstellte PRs lösen — anders als mit `GITHUB_TOKEN` — Folge-Workflows

@@ -51,4 +51,12 @@ export interface GenerateResult {
     error?: string;
 }
 
+export interface GenerateOptions {
+    /** Sprechender Klassen-/Modulname fürs Generat (z. B. `Einkommensteuer`).
+     *  Serverseitig via `deriveClassName` saniert (PascalCase, gültiger
+     *  Java/TS-Identifier) — dieselbe Regel wie der CLI-/Datei-Pfad. Ohne
+     *  Angabe: aus der Dokument-URI abgeleitet (Issue #157). */
+    className?: string;
+}
+
 export type { Diagnostic };

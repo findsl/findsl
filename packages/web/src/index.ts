@@ -13,5 +13,6 @@ export type {
     CheckResult,
     Artifact,
     GenerateResult,
+    GenerateOptions,
     Diagnostic,
 } from './types.js';

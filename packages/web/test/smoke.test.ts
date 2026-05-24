@@ -74,6 +74,25 @@ describe('@findsl/web — Worker-API (Node-Smoke)', () => {
         expect(/\b(class|function|const)\s+[0-9]/.test(r.artifact?.text ?? '')).toBe(false);
     });
 
+    it('generate: expliziter className → sprechender Java-Name (#157)', async () => {
+        const { shared, uri } = await setup();
+        const r = await runGenerate(shared, uri, 'java', { className: 'Einkommensteuer' });
+        expect(r.ok).toBe(true);
+        // interface Einkommensteuer + class EinkommensteuerImpl, Datei danach.
+        expect(r.artifact?.filename).toMatch(/^Einkommensteuer/);
+        expect(r.artifact?.text).toContain('Einkommensteuer');
+        // NICHT der URI-Fallback (Main…) — der className hat Vorrang.
+        expect(r.artifact?.text ?? '').not.toContain('Main');
+    });
+
+    it('generate: className läuft durch deriveClassName-Sanitisierung (#157)', async () => {
+        const { shared, uri } = await setup();
+        const r = await runGenerate(shared, uri, 'ts', { className: 'mein-modul' });
+        expect(r.ok).toBe(true);
+        // PascalCase-Wortsplit (geteilte CLI-Regel): mein-modul → MeinModul.
+        expect(`${r.artifact?.filename}${r.artifact?.text}`).toContain('MeinModul');
+    });
+
     it('check: nicht offenes Dokument → error (nicht {passed:0,total:0})', async () => {
         const { shared } = createFindslServices(EmptyFileSystem);
         const r = await runCheck(shared, 'inmemory://playground/nichtda.findsl');

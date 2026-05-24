@@ -20,8 +20,9 @@ import { renderMermaid, renderModuleMarkdown } from '@findsl/core/papgen/mermaid
 import { buildDocModelFromProgram } from '@findsl/core/docgen/model.js';
 import { renderMarkdown } from '@findsl/core/docgen/markdown.js';
 import { renderHtml as renderDocHtml } from '@findsl/core/docgen/html.js';
+import { deriveClassName } from '@findsl/core/codegen/path-naming.js';
 import type { Program } from '@findsl/core/language/generated/ast.js';
-import type { Artifact, GenerateResult, Target } from './types.js';
+import type { Artifact, GenerateOptions, GenerateResult, Target } from './types.js';
 
 interface SharedLike {
     workspace: {
@@ -56,12 +57,19 @@ export async function runGenerate(
     shared: SharedLike,
     uri: string,
     target: Target,
+    opts?: GenerateOptions,
 ): Promise<GenerateResult> {
     const document = shared.workspace.LangiumDocuments.getDocument(URI.parse(uri));
     if (!document) return { ok: false, error: `Dokument nicht offen: ${uri}` };
     await shared.workspace.DocumentBuilder.build([document], { validation: false });
     const program = document.parseResult.value as Program;
-    const className = classNameFromUri(uri);
+    // Sprechender Klassenname: expliziter Konsumenten-Wert (durch dieselbe
+    // deriveClassName-Sanitisierung wie der CLI-/Datei-Pfad) vor der reinen
+    // URI-Ableitung. So bleibt der technische `-${counter}`-Suffix der
+    // Modell-URI außen vor (Issue #157).
+    const className = opts?.className
+        ? deriveClassName(opts.className)
+        : classNameFromUri(uri);
     const ctx = { javaPackage: undefined, className, imports: [] };
 
     try {

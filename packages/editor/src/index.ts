@@ -32,9 +32,9 @@ import * as monaco from '@codingame/monaco-vscode-editor-api';
 import findslGrammar from '@findsl/web/findsl.tmLanguage.json?raw';
 import findslLanguageConfig from '@findsl/web/language-configuration.json?raw';
 
-import type { CheckResult, GenerateResult, Target } from '@findsl/web';
+import type { CheckResult, GenerateOptions, GenerateResult, Target } from '@findsl/web';
 
-export type { CheckResult, GenerateResult, Target } from '@findsl/web';
+export type { CheckResult, GenerateOptions, GenerateResult, Target } from '@findsl/web';
 export { themeFromCssVars, type ThemeFromCssVarsOptions } from './theme-css-vars.js';
 
 const LANGUAGE_ID = 'findsl';
@@ -118,8 +118,9 @@ export interface FindslEditorHandle {
     setCode(code: string): void;
     /** `findsl/check` gegen das aktuelle Dokument. */
     check(): Promise<CheckResult>;
-    /** `findsl/generate` für ein Ziel. */
-    generate(target: Target): Promise<GenerateResult>;
+    /** `findsl/generate` für ein Ziel. `opts.className` setzt einen
+     *  sprechenden Klassennamen fürs Generat (statt URI-Ableitung, #157). */
+    generate(target: Target, opts?: GenerateOptions): Promise<GenerateResult>;
     /** Listener bei Nutzer-Änderungen; gibt eine Unsubscribe-Funktion zurück. */
     onChange(listener: () => void): () => void;
     /** Listener bei Editor-Prüf-Auslöser; gibt eine Unsubscribe-Funktion zurück. */
@@ -357,10 +358,10 @@ export async function mountFindslEditor(
                 return { cases: [], passed: 0, total: 0, durationMs: 0, error: msg };
             }
         },
-        async generate(target) {
+        async generate(target, opts) {
             try {
                 return await client.sendRequest<GenerateResult>(
-                    'findsl/generate', { uri, target },
+                    'findsl/generate', { uri, target, className: opts?.className },
                 );
             } catch (err) {
                 return { ok: false, error: err instanceof Error ? err.message : String(err) };

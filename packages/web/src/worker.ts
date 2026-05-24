@@ -43,8 +43,8 @@ connection.onRequest(
 );
 connection.onRequest(
     'findsl/generate',
-    (params: { uri: string; target: Target }): Promise<GenerateResult> =>
-        runGenerate(shared, params.uri, params.target),
+    (params: { uri: string; target: Target; className?: string }): Promise<GenerateResult> =>
+        runGenerate(shared, params.uri, params.target, { className: params.className }),
 );
 
 startLanguageServer(shared);

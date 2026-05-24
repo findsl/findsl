@@ -354,6 +354,13 @@ ist ein Fehler:
 | `Cent`     | ganzzahlig, kein `,`; `.`-Gruppen optional    | `100`, `1.000`, `250.000`      |
 | `EuroCent` | **genau zwei** Nachkommastellen Pflicht       | `3,23`, `2.003,32`, `3434,00`  |
 
+Geldwerte sind **vorzeichenbehaftet** ([§ 3.2.1](#321-wertebereich)). Ein
+negativer Geldwert entsteht durch ein vorangestelltes unäres `-`
+(`-100`, `-3,23` — z. B. Nachzahlung/Erstattung/Saldo); die verbindliche
+Schreibweise oben gilt für den **Betrag** (ohne Vorzeichen). Negative
+Literale sind in jedem Geld-Kontext zulässig (Annotation, Parameter,
+Rückgabe, Default), nicht nur als berechnetes Ergebnis.
+
 #### 2.7.4 Prozent-Literale
 
 Suffix `%` direkt nach Zahl-Literal:
@@ -519,6 +526,12 @@ Drei Typen mit unterschiedlicher Präzision:
 
 Implementierungen *müssen* Geldwerte als willkürlich präzise Dezimal­
 zahlen führen. Kein Rundungsverlust durch Float-Arithmetik.
+
+Geldwerte sind **vorzeichenbehaftet**: negative Beträge sind zulässig und
+für die Steuer-/Buchhaltungslogik notwendig (Nachzahlung, Erstattung,
+Saldo, Verlustvortrag). Das Vorzeichen wird über das unäre `-` gebildet
+([§ 2.7.3](#273-geldwert-literale)) und gilt für Literale **und**
+berechnete Werte.
 
 #### 3.2.2 Implizite Konversion
 

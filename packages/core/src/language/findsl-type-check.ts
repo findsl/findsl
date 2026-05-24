@@ -22,6 +22,7 @@ import {
     isNumberLiteral,
     isParenChain,
     isSonstArm,
+    isUnaryOp,
     isWaehleExpr,
     isWennExpr,
     type Expr,
@@ -71,6 +72,16 @@ export function checkAgainstAnnotation(
 function checkAgainstAnnotationImpl(
     expr: Expr, expected: Type, env: TypeEnv, ctx: TypeContext, report: Reporter,
 ): Type {
+    // Negatives Zahl-/Geld-Literal (#144): das Vorzeichen ändert den Typ
+    // nicht — `-100` muss im Euro-Kontext genauso als Euro angenommen
+    // werden wie `100` (bidirektionale Annahme, § 3.13). Geldwerte sind
+    // vorzeichenbehaftet (Nachzahlung/Erstattung/Saldo). Auf den Operanden
+    // (das Literal) propagieren; der Schreibweisen-Check (§ 2.7.3) bezieht
+    // sich auf den Betrag. (`op === 'nicht'` ist boolesch, nicht betroffen.)
+    if (isUnaryOp(expr) && expr.op === '-' && isNumberLiteral(expr.operand)) {
+        return checkAgainstAnnotation(expr.operand, expected, env, ctx, report);
+    }
+
     // Bidirektional: nackte Number-Literale annehmen Geldtyp aus Kontext.
     if (isNumberLiteral(expr)) {
         const raw = expr.value;

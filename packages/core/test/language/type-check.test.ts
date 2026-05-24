@@ -88,6 +88,72 @@ konst R: Text? = P.adresse?.straße
     });
 });
 
+describe('Negative Geld-Literale (#144) — vorzeichenbehaftet', () => {
+    it('negatives Euro-Literal im Euro-Kontext (fn-Rückgabe)', async () => {
+        const msgs = await typecheck(
+            `modul m
+fn nachzahlung(): Euro = -100
+`);
+        expect(msgs).toEqual([]);
+    });
+
+    it('negatives Euro-Literal als Konstante', async () => {
+        const msgs = await typecheck(
+            `modul m
+konst MIN_SALDO: Euro = -500
+`);
+        expect(msgs).toEqual([]);
+    });
+
+    it('negatives EuroCent-Literal (zwei Nachkommastellen)', async () => {
+        const msgs = await typecheck(
+            `modul m
+konst ERSTATTUNG: EuroCent = -3,23
+`);
+        expect(msgs).toEqual([]);
+    });
+
+    it('negatives Geld-Literal als Parameter-Default', async () => {
+        const msgs = await typecheck(
+            `modul m
+fn f(korrektur: Euro = -50): Euro = korrektur
+`);
+        expect(msgs).toEqual([]);
+    });
+
+    it('negatives Geld-Literal als Record-Feld-Default', async () => {
+        const msgs = await typecheck(
+            `modul m
+datensatz Bescheid(saldo: Euro = -100)
+`);
+        expect(msgs).toEqual([]);
+    });
+
+    it('negatives Ganzzahl-Literal bleibt zulässig', async () => {
+        const msgs = await typecheck(
+            `modul m
+konst DELTA: Ganzzahl = -7
+`);
+        expect(msgs).toEqual([]);
+    });
+
+    it('Schreibweisen-Check greift auf den Betrag: negatives EuroCent mit 3 Nachkommastellen ist Fehler', async () => {
+        const msgs = await typecheck(
+            `modul m
+konst X: EuroCent = -3,234
+`);
+        expect(msgs.some((m) => /EuroCent-Literal.*zwei Nachkommastellen/.test(m))).toBe(true);
+    });
+
+    it('Schreibweisen-Check greift auf den Betrag: negatives Euro mit Nachkommastellen ist Fehler', async () => {
+        const msgs = await typecheck(
+            `modul m
+konst X: Euro = -3,50
+`);
+        expect(msgs.some((m) => /Euro-Literal.*ganzzahlig/.test(m))).toBe(true);
+    });
+});
+
 describe('Negativfälle (erwartete Diagnosen)', () => {
     it('Geld * Geld ist verboten (SPEC § 3.2.3)', async () => {
         const msgs = await typecheck(

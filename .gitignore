@@ -14,6 +14,9 @@
 # --- Abhängigkeiten ---
 node_modules/
 
+# --- Lokales Ausgabe-/Scratch-Verzeichnis (z. B. `docgen -o tmp/...`) ---
+/tmp/
+
 # --- TypeScript-Build (tsc -b, composite; je Paket rootDir=src outDir=out) ---
 out/
 *.tsbuildinfo

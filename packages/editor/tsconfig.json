@@ -1,0 +1,17 @@
+{
+  "//": "Browser-only Glue (Monaco + @findsl/web-Worker). tsc emittiert JS + .d.ts; KEIN Bundling — der Monaco-Stack bleibt als bare ESM-Import extern (peerDependencies), damit der Konsument-Bundler genau EINE @codingame/*-Instanz dedupliziert (Singleton-/Deadlock-Garantie, Issue #151).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["src"]
+}

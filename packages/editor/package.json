@@ -1,0 +1,42 @@
+{
+  "name": "@findsl/editor",
+  "version": "1.0.0-rc.3",
+  "license": "EUPL-1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/findsl/findsl.git",
+    "directory": "packages/editor"
+  },
+  "type": "module",
+  "description": "Einbettbarer FinDSL-Editor (Monaco + @findsl/web-LSP-Worker). mountFindslEditor() liefert Editor + check/generate — ohne Preview-/Ergebnis-UI.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "findsl-editor-copy-worker": "./bin/copy-worker.mjs"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build:editor": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@codingame/monaco-vscode-api": "25.1.2",
+    "@codingame/monaco-vscode-configuration-service-override": "25.1.2",
+    "@codingame/monaco-vscode-editor-api": "25.1.2",
+    "@findsl/web": "1.0.0-rc.3",
+    "monaco-languageclient": "^10.7.0"
+  },
+  "devDependencies": {
+    "@codingame/monaco-vscode-api": "25.1.2",
+    "@codingame/monaco-vscode-configuration-service-override": "25.1.2",
+    "@codingame/monaco-vscode-editor-api": "25.1.2",
+    "@findsl/web": "1.0.0-rc.3",
+    "monaco-languageclient": "^10.7.0"
+  }
+}

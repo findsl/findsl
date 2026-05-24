@@ -19,6 +19,14 @@
  * (`enumVal.ownerClass`/`ctor.ownerClass`/`crossRef.ownerClass` und
  * `crossCall.fieldName`→Klasse via {@link IrModule.composedModules}).
  *
+ * Diese Namespace-Import-Kante IST die Mocking-Naht für Konsumenten
+ * (`vi.mock('./Owner.js')`, Issue #142) — das ESM-idiomatische Äquivalent
+ * zur Java-Konstruktor-Injektion (#141). Die strukturelle Asymmetrie zu #141
+ * ist BEABSICHTIGT: FinDSL-Module sind reine, zustandslose Funktionen ohne
+ * Injektions-Zustand; ein Umbau auf Closure-/Klassen-Factory ist bewusst
+ * verworfen (KISS/YAGNI, Drift-Risiko). Siehe `docs/codegen-ts-js-mocking.md`
+ * und den Regressions-/Smoke-Test `test/codegen/ts-mock-seam.test.ts`.
+ *
  * Sicht-Wrapper (Euro/…) sind decimal.js-FinDslNumber-Subtypen (IS-A,
  * Runtime `runtimes/ts/`): Box = `Wrapper.von(kern)`, Unbox = No-op.
  * Walking-Skeleton-Umfang (#99): genau der `examples/kst`-Konstruktsatz

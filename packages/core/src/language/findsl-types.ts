@@ -503,32 +503,31 @@ export function typeCheckProgram(
         checkFunctionBody(decl.body, returnType, callEnv, ctx, report);
     }
 
-    // `prüfe`/`testfall` werden vom Validator NICHT typgeprüft. Nur für
-    // den Tooling-Sammellauf (recordType gesetzt) inferieren wir die
-    // Ausdrücke — so kennen Inlay-Hints auch Geld-Typen in Vergleichen
-    // (`… == 9.600`). report ist im Sammellauf ein NOOP → keine
-    // zusätzlichen Diagnosen.
-    if (options.recordType) {
-        for (const decl of program.decls) {
-            if (!isPruefeDecl(decl)) continue;
-            for (const b of decl.testfaelle) {
-                const block = b.body;
-                if (!block) continue;
-                // Blockform wie ein fn-Rumpf: Setup-Env aufbauen, dann
-                // die finale Assertion inferieren (recordType erfasst sie).
-                const env = ctx.globals.child();
-                for (const stmt of block.stmts ?? []) {
-                    if (isAusgabeStmt(stmt)) {
-                        if (stmt.text) checkAgainstAnnotation(stmt.text, TText, env, ctx, report);
-                        continue;
-                    }
-                    if (!isLetStmt(stmt)) continue;
-                    const annot = resolveTypeAnnotation(stmt.type, ctx);
-                    if (stmt.value) checkAgainstAnnotation(stmt.value, annot, env, ctx, report);
-                    env.define(stmt.name, annot);
+    // `prüfe`/`testfall`-Ausdrücke werden wie ein fn-Rumpf geprüft (#147):
+    // Setup-Env (`var`-Bindungen) aufbauen, dann die finale Assertion
+    // inferieren. So melden `infer`/`checkAgainstAnnotation` auch hier
+    // unaufgelöste Referenzen (unbekanntes Aufrufziel/Identifier) als
+    // Diagnose — vorher wurde der Block nur im Tooling-Sammellauf mit
+    // NOOP-Reporter durchlaufen, sodass Editor-Diagnosen ausblieben.
+    // Im Sammellauf (recordType gesetzt) erfasst derselbe Pass weiterhin
+    // die Ausdruckstypen für Inlay-Hints; report ist dort ein NOOP.
+    for (const decl of program.decls) {
+        if (!isPruefeDecl(decl)) continue;
+        for (const b of decl.testfaelle) {
+            const block = b.body;
+            if (!block) continue;
+            const env = ctx.globals.child();
+            for (const stmt of block.stmts ?? []) {
+                if (isAusgabeStmt(stmt)) {
+                    if (stmt.text) checkAgainstAnnotation(stmt.text, TText, env, ctx, report);
+                    continue;
                 }
-                if (block.result) infer(block.result, env, ctx, report);
+                if (!isLetStmt(stmt)) continue;
+                const annot = resolveTypeAnnotation(stmt.type, ctx);
+                if (stmt.value) checkAgainstAnnotation(stmt.value, annot, env, ctx, report);
+                env.define(stmt.name, annot);
             }
+            if (block.result) infer(block.result, env, ctx, report);
         }
     }
 }

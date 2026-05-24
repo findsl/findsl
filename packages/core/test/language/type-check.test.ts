@@ -537,3 +537,61 @@ fn f(zve: Euro): Euro = wähle {
         expect(msgs).toEqual([]);
     });
 });
+
+describe('prüfe/testfall-Validierung (#147)', () => {
+    it('unbekanntes Aufrufziel im testfall wird gemeldet (rot)', async () => {
+        const msgs = await typecheck(
+            `modul m
+fn Real(n: Ganzzahl): Ganzzahl = n
+prüfe "p" {
+    testfall "x" { GibtsNicht(Real(5)) == 0 }
+}
+`);
+        expect(msgs.some((m) => /GibtsNicht.*nicht definiert/.test(m))).toBe(true);
+    });
+
+    it('unbekannter Identifier im testfall wird gemeldet', async () => {
+        const msgs = await typecheck(
+            `modul m
+prüfe "p" {
+    testfall "x" { unbekannteVar == 0 }
+}
+`);
+        expect(msgs.some((m) => /Unbekannter Identifier.*unbekannteVar/.test(m))).toBe(true);
+    });
+
+    it('unbekanntes Aufrufziel in einer testfall-var-Bindung wird gemeldet', async () => {
+        const msgs = await typecheck(
+            `modul m
+prüfe "p" {
+    testfall "x" {
+        var r: Ganzzahl = GibtsNicht(5)
+        r == 0
+    }
+}
+`);
+        expect(msgs.some((m) => /GibtsNicht.*nicht definiert/.test(m))).toBe(true);
+    });
+
+    it('valides testfall erzeugt keine Diagnose', async () => {
+        const msgs = await typecheck(
+            `modul m
+fn Real(n: Ganzzahl): Ganzzahl = n
+prüfe "p" {
+    testfall "x" { Real(5) == 5 }
+}
+`);
+        expect(msgs).toEqual([]);
+    });
+
+    it('valider Geld-Vergleich im testfall erzeugt keine Diagnose (kein Falsch-Positiv)', async () => {
+        const msgs = await typecheck(
+            `modul m
+fn Betrag(): EuroCent = 0,00
+prüfe "p" {
+    testfall "x" { Betrag() == 0,00 }
+}
+`);
+        expect(msgs).toEqual([]);
+    });
+});

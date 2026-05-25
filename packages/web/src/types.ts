@@ -59,4 +59,24 @@ export interface GenerateOptions {
     className?: string;
 }
 
+/** Ergebnis von `findsl/eval` — ein FinDSL-Ausdruck im Scope des offenen
+ *  Dokuments ausgewertet (Issue #164). Ermöglicht „Engine im Browser"
+ *  (Formular → Live-Berechnung) ohne Editor und ohne den Test-Pfad zu
+ *  missbrauchen. Stabil halten (Website-Konsument). */
+export interface EvalResult {
+    /** true = ausgewertet; false = Parse-/Auswertungsfehler oder `abbruch`. */
+    ok: boolean;
+    /** Reine deutsche Zahldarstellung OHNE Einheit (z. B. `"7.500"`, `"15"`). */
+    value?: string;
+    /** FinDSL-Typ des Ergebnisses (z. B. `"Euro"`, `"Prozent"`, `"Wahrheitswert"`). */
+    type?: string;
+    /** Voll formatiert INKL. Einheit (z. B. `"7.500 €"`, `"15 %"`). */
+    text?: string;
+    /** Abbruch-Begründung, Parse- oder Auswertungsfehler (bei `ok:false`). */
+    error?: string;
+    /** Reserviert (Issue-API): Validierungs-Diagnosen. Aktuell ungenutzt — der
+     *  Eval-Pfad baut ohne Validierung und meldet Fehler über `error`. */
+    diagnostics?: Diagnostic[];
+}
+
 export type { Diagnostic };

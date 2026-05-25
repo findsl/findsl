@@ -16,8 +16,12 @@
       "default": "./out/*.js"
     }
   },
+  "files": [
+    "out"
+  ],
   "scripts": {
-    "langium:generate": "langium generate && node ../../scripts/enhance-textmate.mjs"
+    "langium:generate": "langium generate && node ../../scripts/enhance-textmate.mjs",
+    "prepack": "test -d out || npm --prefix ../.. run build"
   },
   "dependencies": {
     "chevrotain": "12.0.0",

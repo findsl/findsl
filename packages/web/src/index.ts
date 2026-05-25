@@ -14,5 +14,6 @@ export type {
     Artifact,
     GenerateResult,
     GenerateOptions,
+    EvalResult,
     Diagnostic,
 } from './types.js';

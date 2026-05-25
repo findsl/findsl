@@ -86,8 +86,9 @@ const editor = await mountFindslEditor(document.getElementById('app')!, {
   onRun: () => void runPruefen(),      // CodeLens / Gutter-Play
 });
 
-const result = await editor.check();           // CheckResult
-const java   = await editor.generate('java');  // GenerateResult
+const result = await editor.check();              // CheckResult
+const java   = await editor.generate('java');     // GenerateResult
+const wert   = await editor.evaluate('Kst(50000)'); // EvalResult: { value, type, text }
 editor.getCode();
 editor.setCode('…');
 editor.dispose();
@@ -142,6 +143,7 @@ der Konsument stylt sie (z. B. ein ▶-Glyph):
 | `getCode()` / `setCode(code)` | Inhalt lesen/setzen (`setCode` löst `onChange` nicht aus) |
 | `check()` | `findsl/check` → `CheckResult` |
 | `generate(target)` | `findsl/generate` → `GenerateResult` |
+| `evaluate(expr)` | `findsl/eval` → `EvalResult` (Ausdruck im Dokument-Scope) |
 | `onChange(fn)` / `onRun(fn)` | Listener; geben Unsubscribe zurück |
 | `setTheme(theme)` | Theme zur Laufzeit |
 | `dispose()` | alle Wrapper + Listener abräumen |

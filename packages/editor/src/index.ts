@@ -32,9 +32,9 @@ import * as monaco from '@codingame/monaco-vscode-editor-api';
 import findslGrammar from '@findsl/web/findsl.tmLanguage.json?raw';
 import findslLanguageConfig from '@findsl/web/language-configuration.json?raw';
 
-import type { CheckResult, GenerateOptions, GenerateResult, Target } from '@findsl/web';
+import type { CheckResult, EvalResult, GenerateOptions, GenerateResult, Target } from '@findsl/web';
 
-export type { CheckResult, GenerateOptions, GenerateResult, Target } from '@findsl/web';
+export type { CheckResult, EvalResult, GenerateOptions, GenerateResult, Target } from '@findsl/web';
 export { themeFromCssVars, type ThemeFromCssVarsOptions } from './theme-css-vars.js';
 
 const LANGUAGE_ID = 'findsl';
@@ -121,6 +121,9 @@ export interface FindslEditorHandle {
     /** `findsl/generate` für ein Ziel. `opts.className` setzt einen
      *  sprechenden Klassennamen fürs Generat (statt URI-Ableitung, #157). */
     generate(target: Target, opts?: GenerateOptions): Promise<GenerateResult>;
+    /** `findsl/eval` — wertet einen FinDSL-Ausdruck (z. B. `Kst(50000)`) im
+     *  Scope des Dokuments aus; liefert Wert + Typ + formatierten Text (#164). */
+    evaluate(expr: string): Promise<EvalResult>;
     /** Listener bei Nutzer-Änderungen; gibt eine Unsubscribe-Funktion zurück. */
     onChange(listener: () => void): () => void;
     /** Listener bei Editor-Prüf-Auslöser; gibt eine Unsubscribe-Funktion zurück. */
@@ -363,6 +366,13 @@ export async function mountFindslEditor(
                 return await client.sendRequest<GenerateResult>(
                     'findsl/generate', { uri, target, className: opts?.className },
                 );
+            } catch (err) {
+                return { ok: false, error: err instanceof Error ? err.message : String(err) };
+            }
+        },
+        async evaluate(expr) {
+            try {
+                return await client.sendRequest<EvalResult>('findsl/eval', { uri, expr });
             } catch (err) {
                 return { ok: false, error: err instanceof Error ? err.message : String(err) };
             }

@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
         setCode: vi.fn(),
         check: vi.fn(async () => ({ cases: [], passed: 0, total: 0, durationMs: 0 })),
         generate: vi.fn(async () => ({ ok: true })),
+        evaluate: vi.fn(async () => ({ ok: true, value: '42', type: 'Ganzzahl', text: '42' })),
         onChange: vi.fn(() => () => {}),
         onRun: vi.fn(() => () => {}),
         setTheme: vi.fn(),
@@ -71,7 +72,7 @@ describe('<FindslEditor> Lebenszyklus (#162)', () => {
         expect(onReady).not.toHaveBeenCalled();   // kein onReady für abgebrochenen Mount
     });
 
-    it('Ref delegiert check/generate/getCode ans Handle', async () => {
+    it('Ref delegiert check/generate/evaluate/getCode ans Handle', async () => {
         const ref = createRef<FindslEditorRef>();
         render(<FindslEditor ref={ref} />);
         await waitFor(() => expect(ref.current?.handle).toBe(mocks.handle));
@@ -79,6 +80,9 @@ describe('<FindslEditor> Lebenszyklus (#162)', () => {
         expect(mocks.handle.check).toHaveBeenCalled();
         await ref.current!.generate('java');
         expect(mocks.handle.generate).toHaveBeenCalledWith('java', undefined);
+        const ev = await ref.current!.evaluate('40 + 2');
+        expect(mocks.handle.evaluate).toHaveBeenCalledWith('40 + 2');
+        expect(ev.text).toBe('42');
         expect(ref.current!.getCode()).toBe('CODE');
     });
 

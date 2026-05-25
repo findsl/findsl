@@ -2,8 +2,8 @@
 # Release — Lockstep-Veröffentlichung aller FinDSL-Artefakte
 #
 # Ein Tag = eine Version = sechs Spuren parallel:
-#   • @findsl/core, @findsl/cli, @findsl/lsp,
-#     @findsl/web, @findsl/editor                    → npm (Sigstore-Provenance)
+#   • @findsl/core, @findsl/cli, @findsl/lsp, @findsl/web,
+#     @findsl/editor, @findsl/editor-react           → npm (Sigstore-Provenance)
 #   • findsl-<version>.vsix                          → VS Code Marketplace + Open VSX
 #   • findsl-<version>-<plattform>.{tar.gz,zip}      → GitHub Release (Node-SEA-Binary)
 #
@@ -165,6 +165,8 @@ jobs:
           npm run -w @findsl/web build:web
           # @findsl/editor baut NACH @findsl/web (braucht dessen dist-Typen).
           npm run -w @findsl/editor build:editor
+          # @findsl/editor-react baut NACH @findsl/editor (braucht dessen dist-Typen).
+          npm run -w @findsl/editor-react build:editor-react
 
       - name: Publish @findsl/core
         env:
@@ -232,6 +234,21 @@ jobs:
             echo "::notice::@findsl/editor@$VERSION bereits publiziert — überspringe."
           else
             npm publish -w @findsl/editor --provenance --access public $TAG_FLAG
+          fi
+
+      - name: Publish @findsl/editor-react (React-Komponente)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG_FLAG=""
+          [ "$PRERELEASE" = "true" ] && TAG_FLAG="--tag next"
+          if [ "$DRY_RUN" = "true" ]; then
+            npm publish -w @findsl/editor-react --dry-run --access public $TAG_FLAG
+          elif npm view "@findsl/editor-react@$VERSION" version >/dev/null 2>&1; then
+            echo "::notice::@findsl/editor-react@$VERSION bereits publiziert — überspringe."
+          else
+            npm publish -w @findsl/editor-react --provenance --access public $TAG_FLAG
           fi
 
   # -------------------------------------------------------------------------

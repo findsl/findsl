@@ -1,0 +1,18 @@
+{
+  "//": "React-Adapter um @findsl/editor. tsc emittiert JS + .d.ts; KEIN Bundling — react und @findsl/editor (samt Monaco-Stack) bleiben als bare Imports extern (peerDependencies), damit der Konsument-Bundler je genau EINE Instanz dedupliziert (#162).",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["src"]
+}

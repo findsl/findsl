@@ -59,6 +59,16 @@ jobs:
       - name: Build @findsl/web (Browser-Bundle + node:-Guard + .d.ts)
         run: npm run -w @findsl/web build:web
 
+      # editor + editor-react sind tsc-only und nicht Teil von `tsc -b` (sie
+      # hängen an den web-/editor-dist-Typen). Hier bauen, damit (1) ihr Build
+      # in CI verifiziert wird — nicht erst im Release — und (2) Vitest den
+      # Bare-Import `@findsl/editor` im editor-react-Test auflösen kann.
+      # Reihenfolge: web → editor → editor-react (dist-Typen-Abhängigkeit).
+      - name: Build @findsl/editor + @findsl/editor-react (tsc)
+        run: |
+          npm run -w @findsl/editor build:editor
+          npm run -w @findsl/editor-react build:editor-react
+
       - name: Bundle
         run: npm run bundle
 

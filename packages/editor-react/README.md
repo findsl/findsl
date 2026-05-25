@@ -48,6 +48,7 @@ function Playground() {
 // imperativ über den Ref:
 const result = await ref.current?.check();
 const java   = await ref.current?.generate('java');
+const wert   = await ref.current?.evaluate('Kst(50000)');  // EvalResult: { value, type, text }
 ```
 
 ## Next.js (App Router) — client-only
@@ -76,8 +77,8 @@ const FindslEditor = dynamic(
 | `onChange(code)` / `onRun` / `onError` / `onReady(handle)` | Callbacks |
 | `className` / `style` | Container-`div` |
 
-`FindslEditorRef`: `check()`, `generate(target, opts?)`, `getCode()`,
-`setCode()`, `setTheme()`, `handle` (rohes `@findsl/editor`-Handle).
+`FindslEditorRef`: `check()`, `generate(target, opts?)`, `evaluate(expr)`,
+`getCode()`, `setCode()`, `setTheme()`, `handle` (rohes `@findsl/editor`-Handle).
 
 ## Lizenz
 

@@ -22,6 +22,7 @@ import type { CSSProperties } from 'react';
 import {
     mountFindslEditor,
     type CheckResult,
+    type EvalResult,
     type FindslEditorAppearance,
     type FindslEditorBehavior,
     type FindslEditorHandle,
@@ -32,7 +33,7 @@ import {
 } from '@findsl/editor';
 
 export type {
-    CheckResult, FindslEditorAppearance, FindslEditorBehavior, FindslEditorHandle,
+    CheckResult, EvalResult, FindslEditorAppearance, FindslEditorBehavior, FindslEditorHandle,
     FindslEditorTheme, FindslEditorThemeSpec, GenerateOptions, GenerateResult, Target,
 } from '@findsl/editor';
 export { themeFromCssVars, type ThemeFromCssVarsOptions } from '@findsl/editor';
@@ -43,6 +44,9 @@ export interface FindslEditorRef {
     check(): Promise<CheckResult>;
     /** `findsl/generate` für ein Ziel. Wirft vor dem Mount. */
     generate(target: Target, opts?: GenerateOptions): Promise<GenerateResult>;
+    /** `findsl/eval` — wertet einen FinDSL-Ausdruck im Dokument-Scope aus
+     *  (Wert + Typ + formatierter Text, #164). Wirft vor dem Mount. */
+    evaluate(expr: string): Promise<EvalResult>;
     /** Aktueller Code; `''` solange nicht gemountet (tolerant, kein Wurf). */
     getCode(): string;
     /** Code setzen. **No-op vor dem Mount** (anders als `check`/`generate`, die werfen). */
@@ -143,6 +147,7 @@ export const FindslEditor = forwardRef<FindslEditorRef, FindslEditorProps>(
         useImperativeHandle(ref, (): FindslEditorRef => ({
             check: () => requireHandle(handleRef.current).check(),
             generate: (target, opts) => requireHandle(handleRef.current).generate(target, opts),
+            evaluate: (expr) => requireHandle(handleRef.current).evaluate(expr),
             getCode: () => handleRef.current?.getCode() ?? '',
             setCode: (code) => handleRef.current?.setCode(code),
             setTheme: (theme) => handleRef.current?.setTheme(theme),

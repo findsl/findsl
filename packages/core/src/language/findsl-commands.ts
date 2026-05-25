@@ -131,15 +131,14 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
         const uri = String(args?.[0] ?? '');
         const format: 'markdown' | 'html' =
             String(args?.[1] ?? 'markdown') === 'html' ? 'html' : 'markdown';
-        const connection = this.shared.lsp.Connection;
 
         const doc = this.shared.workspace.LangiumDocuments.getDocument(URI.parse(uri));
         const program = doc?.parseResult?.value as Program | undefined;
-        if (!doc || !program) {
-            await connection?.window.showErrorMessage(
-                'FinDSL: Dokument nicht geladen — bitte erneut öffnen.');
-            return undefined;
-        }
+        // Kein Dokument/Program → `undefined`; die Nutzer-Rückmeldung übernimmt
+        // der Extension-Host (direkter vscode-Zugriff). Das vermeidet den
+        // klebrigen `await show*Message`-Pfad (blockierte sonst die
+        // executeCommand-Antwort, vgl. runPruefe-Kommentar) und doppelte Toasts.
+        if (!doc || !program) return undefined;
 
         const baseName = uri.split('/').pop() ?? 'Modul';
         return renderDoku(program, doc.textDocument.getText(), baseName, format);

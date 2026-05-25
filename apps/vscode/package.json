@@ -76,6 +76,10 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "findsl.runAllTests",
+          "when": "editorLangId == findsl"
+        },
+        {
           "command": "findsl.generateDocs",
           "when": "editorLangId == findsl"
         }

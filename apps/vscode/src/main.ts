@@ -101,11 +101,14 @@ async function generateDocs(): Promise<void> {
         void vscode.window.showWarningMessage('FinDSL: Keine aktive .findsl-Datei.');
         return;
     }
-    await clientStartup;
     const format = vscode.workspace.getConfiguration('findsl').get<string>('doku.format') === 'html'
         ? 'html' : 'markdown';
     let result: DokuResult | null;
     try {
+        // clientStartup MIT im try: scheitert der Server-Start, ist das Promise
+        // dauerhaft rejected — eine ungefangene Rejection würde ein generisches
+        // „command failed" zeigen statt der freundlichen Meldung unten.
+        await clientStartup;
         result = await client.sendRequest<DokuResult | null>('workspace/executeCommand', {
             command: GENERATE_DOKU_COMMAND,
             arguments: [editor.document.uri.toString(), format],
@@ -116,13 +119,24 @@ async function generateDocs(): Promise<void> {
         );
         return;
     }
-    if (!result) return;   // Server hat bereits eine Fehler-Notification gezeigt.
-    const doc = await vscode.workspace.openTextDocument({
-        language: result.format === 'html' ? 'html' : 'markdown',
-        content: result.content,
+    if (!result) {
+        void vscode.window.showWarningMessage(
+            'FinDSL: Dokumentation konnte nicht erzeugt werden — Datei neu öffnen und erneut versuchen.',
+        );
+        return;
+    }
+    const r = result;   // ab hier als DokuResult verengt (stabil im edit-Callback)
+    // Benannter Untitled-Tab: Titel + Syntax-Highlighting kommen aus der
+    // Endung (`.doc.md`/`.doc.html`) → nutzt DokuResult.filename. Voll-Ersetzen
+    // macht wiederholtes Generieren in denselben Tab robust (statt anzuhängen).
+    const target = vscode.Uri.parse(`untitled:${r.filename}`);
+    const doc = await vscode.workspace.openTextDocument(target);
+    const shown = await vscode.window.showTextDocument(doc, { preview: false });
+    await shown.edit((b) => {
+        const end = doc.lineAt(Math.max(doc.lineCount - 1, 0)).range.end;
+        b.replace(new vscode.Range(new vscode.Position(0, 0), end), r.content);
     });
-    await vscode.window.showTextDocument(doc, { preview: false });
-    if (result.format === 'markdown') {
+    if (r.format === 'markdown') {
         await vscode.commands.executeCommand('markdown.showPreviewToSide', doc.uri);
     }
 }

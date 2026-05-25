@@ -281,8 +281,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build extension (langium:generate + build + bundle)
-        run: npm run all
+      # `npm run all` = langium:generate + build + bundle + npm test. `tsc -b`
+      # (build) erfasst @findsl/editor + @findsl/editor-react NICHT — beide sind
+      # tsc-only und nicht Teil der tsconfig-references. Ohne ihre dist scheitert
+      # der editor-react-Test in `npm test` am Bare-Import `@findsl/editor`
+      # (exports → ./dist/index.js fehlt). Daher hier statt `npm run all` die
+      # expandierte Kette mit editor-Builds VOR Vitest — Reihenfolge wie ci.yml
+      # und npm-Job: web → editor → editor-react (dist-Typen-Abhängigkeit).
+      - name: Build extension (langium:generate + build + bundle + editor + Vitest)
+        run: |
+          npm run langium:generate
+          npm run build
+          npm run bundle
+          npm run -w @findsl/web build:web
+          npm run -w @findsl/editor build:editor
+          npm run -w @findsl/editor-react build:editor-react
+          npm test
 
       - name: Package .vsix
         working-directory: apps/vscode

@@ -22,7 +22,27 @@ import {
     type TestfallReport,
     type PruefeReport,
 } from '../interpret/pruefe.js';
+import { buildDocModelFromProgram } from '../docgen/model.js';
+import { renderMarkdown } from '../docgen/markdown.js';
+import { renderHtml } from '../docgen/html.js';
+import { deriveClassName } from '../codegen/path-naming.js';
 import { RUN_PRUEFE_COMMAND } from './findsl-codelens.js';
+
+/**
+ * Server-Kommando (LSP `workspace/executeCommand`): rendert die Doku des
+ * übergebenen Dokuments und liefert sie als String zurück; der Client öffnet
+ * sie in einem ungespeicherten Editor. Rein in-process — kein Datei-I/O,
+ * kein CLI. PDF bleibt der CLI/Website vorbehalten (Binär). Issue #95.
+ */
+export const GENERATE_DOKU_COMMAND = 'findsl.doku.generate';
+
+/** Rückgabe von `findsl.doku.generate` (an den Extension-Host). */
+export interface DokuResult {
+    readonly format: 'markdown' | 'html';
+    /** Vorschlag für den Editor-Titel (z. B. `Kraftstg.doc.md`). */
+    readonly filename: string;
+    readonly content: string;
+}
 
 export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
 
@@ -35,6 +55,7 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
 
     registerCommands(accept: ExecuteCommandAcceptor): void {
         accept(RUN_PRUEFE_COMMAND, (args) => this.runPruefe(args));
+        accept(GENERATE_DOKU_COMMAND, (args) => this.runDoku(args));
     }
 
     /**
@@ -98,6 +119,47 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
         }
         return report;
     }
+
+    /**
+     * args = [documentUri: string, format?: 'markdown' | 'html'].
+     * Rendert die Doku des Dokuments rein in-process (buildDocModelFromProgram
+     * + renderMarkdown/renderHtml) und liefert sie als `DokuResult` zurück;
+     * der Extension-Host öffnet den Inhalt in einem ungespeicherten Editor.
+     * Der Modulname folgt derselben `deriveClassName`-Regel wie CLI/Web.
+     */
+    private async runDoku(args: unknown[]): Promise<DokuResult | undefined> {
+        const uri = String(args?.[0] ?? '');
+        const format: 'markdown' | 'html' =
+            String(args?.[1] ?? 'markdown') === 'html' ? 'html' : 'markdown';
+        const connection = this.shared.lsp.Connection;
+
+        const doc = this.shared.workspace.LangiumDocuments.getDocument(URI.parse(uri));
+        const program = doc?.parseResult?.value as Program | undefined;
+        if (!doc || !program) {
+            await connection?.window.showErrorMessage(
+                'FinDSL: Dokument nicht geladen — bitte erneut öffnen.');
+            return undefined;
+        }
+
+        const baseName = uri.split('/').pop() ?? 'Modul';
+        return renderDoku(program, doc.textDocument.getText(), baseName, format);
+    }
+}
+
+/**
+ * Reine Doku-Render-Funktion (testbar ohne LSP-Services): Modulname via
+ * `deriveClassName` (gleiche Regel wie CLI/Web), dann DocModel → Markdown/HTML.
+ */
+export function renderDoku(
+    program: Program,
+    source: string,
+    baseName: string,
+    format: 'markdown' | 'html',
+): DokuResult {
+    const name = deriveClassName(baseName.replace(/\.findsl$/i, ''));
+    const model = buildDocModelFromProgram(program, source, name);
+    const content = format === 'html' ? renderHtml(model) : renderMarkdown(model);
+    return { format, filename: `${name}.doc.${format === 'html' ? 'html' : 'md'}`, content };
 }
 
 const ZERO_RANGE: Range = {

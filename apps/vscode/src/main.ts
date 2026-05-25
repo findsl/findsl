@@ -31,6 +31,10 @@ import {
     LENS_RUN_COMMAND,
     RUN_PRUEFE_COMMAND,
 } from '@findsl/core/language/findsl-codelens.js';
+import {
+    GENERATE_DOKU_COMMAND,
+    type DokuResult,
+} from '@findsl/core/language/findsl-commands.js';
 
 let client: LanguageClient;
 /** Auflöst, sobald der Language-Server bereit ist (nach `client.start()`). */
@@ -72,6 +76,55 @@ export function activate(context: vscode.ExtensionContext): void {
     clientStartup = client.start();
 
     registerTestController(context);
+
+    // Palette-Kommandos (#95): Sprachserver-Neustart + Doku-Generierung.
+    // („Alle Testfälle ausführen" wird in registerTestController registriert,
+    // wo der TestController im Scope ist.)
+    context.subscriptions.push(
+        vscode.commands.registerCommand('findsl.restartServer', async () => {
+            await client.restart();
+            void vscode.window.showInformationMessage('FinDSL: Sprachserver neu gestartet.');
+        }),
+        vscode.commands.registerCommand('findsl.generateDocs', () => generateDocs()),
+    );
+}
+
+/**
+ * „FinDSL: Dokumentation generieren" — rendert die Doku der aktiven
+ * `.findsl`-Datei über das Server-Kommando `findsl.doku.generate` und öffnet
+ * das Ergebnis in einem ungespeicherten Editor (bei Markdown zusätzlich die
+ * Vorschau). Format aus der Einstellung `findsl.doku.format`.
+ */
+async function generateDocs(): Promise<void> {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'findsl') {
+        void vscode.window.showWarningMessage('FinDSL: Keine aktive .findsl-Datei.');
+        return;
+    }
+    await clientStartup;
+    const format = vscode.workspace.getConfiguration('findsl').get<string>('doku.format') === 'html'
+        ? 'html' : 'markdown';
+    let result: DokuResult | null;
+    try {
+        result = await client.sendRequest<DokuResult | null>('workspace/executeCommand', {
+            command: GENERATE_DOKU_COMMAND,
+            arguments: [editor.document.uri.toString(), format],
+        });
+    } catch (err) {
+        void vscode.window.showErrorMessage(
+            `FinDSL: Doku-Generierung fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return;
+    }
+    if (!result) return;   // Server hat bereits eine Fehler-Notification gezeigt.
+    const doc = await vscode.workspace.openTextDocument({
+        language: result.format === 'html' ? 'html' : 'markdown',
+        content: result.content,
+    });
+    await vscode.window.showTextDocument(doc, { preview: false });
+    if (result.format === 'markdown') {
+        await vscode.commands.executeCommand('markdown.showPreviewToSide', doc.uri);
+    }
 }
 
 export function deactivate(): Thenable<void> | undefined {
@@ -129,6 +182,21 @@ function registerTestController(context: vscode.ExtensionContext): void {
                 }
             },
         ),
+    );
+
+    // „FinDSL: Alle Testfälle ausführen" (#95): alle .findsl entdecken und
+    // einen Lauf über den gesamten Test-Baum starten (leerer Request → alle).
+    context.subscriptions.push(
+        vscode.commands.registerCommand('findsl.runAllTests', async () => {
+            await clientStartup;
+            await discoverAllFiles(ctrl);
+            const cts = new vscode.CancellationTokenSource();
+            try {
+                await runHandler(ctrl, new vscode.TestRunRequest(), cts.token);
+            } finally {
+                cts.dispose();
+            }
+        }),
     );
 
     // Aktives, entprelltes Neu-Auflösen — NICHT nur Kinder löschen und auf
@@ -286,8 +354,13 @@ async function resolveFile(
     fileItem.children.replace(blockItems);
 }
 
-/** Server-Request darf die Test-UI nicht unbegrenzt einfrieren. */
-const RUN_TIMEOUT_MS = 20_000;
+/** Server-Request darf die Test-UI nicht unbegrenzt einfrieren. Default 20s,
+ *  per Einstellung `findsl.test.runTimeout` überschreibbar (#95). */
+const RUN_TIMEOUT_DEFAULT_MS = 20_000;
+function runTimeoutMs(): number {
+    const v = vscode.workspace.getConfiguration('findsl').get<number>('test.runTimeout');
+    return typeof v === 'number' && v >= 1000 ? v : RUN_TIMEOUT_DEFAULT_MS;
+}
 
 async function runHandler(
     ctrl: vscode.TestController,
@@ -379,17 +452,18 @@ async function runTarget(
     }
 
     let report: PruefeReport | null = null;
+    const timeoutMs = runTimeoutMs();
     try {
         report = await withTimeout(
             cl.sendRequest<PruefeReport | null>('workspace/executeCommand', {
                 command: RUN_PRUEFE_COMMAND, arguments: args,
             }),
-            RUN_TIMEOUT_MS,
+            timeoutMs,
         );
     } catch (err) {
         const msg = new vscode.TestMessage(
             err instanceof TimeoutError
-                ? `Zeitüberschreitung (${RUN_TIMEOUT_MS / 1000}s) — `
+                ? `Zeitüberschreitung (${timeoutMs / 1000}s) — `
                   + `möglicherweise Endlos-Auswertung oder Server nicht aktuell.`
                 : `Ausführung fehlgeschlagen: `
                   + `${err instanceof Error ? err.message : String(err)}`,

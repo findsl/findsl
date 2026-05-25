@@ -55,6 +55,62 @@
           }
         }
       }
+    },
+    "commands": [
+      {
+        "command": "findsl.restartServer",
+        "title": "Sprachserver neu starten",
+        "category": "FinDSL"
+      },
+      {
+        "command": "findsl.runAllTests",
+        "title": "Alle Testfälle ausführen",
+        "category": "FinDSL"
+      },
+      {
+        "command": "findsl.generateDocs",
+        "title": "Dokumentation generieren",
+        "category": "FinDSL"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "findsl.generateDocs",
+          "when": "editorLangId == findsl"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "findsl.runAllTests",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t",
+        "when": "editorLangId == findsl"
+      }
+    ],
+    "configuration": {
+      "title": "FinDSL",
+      "properties": {
+        "findsl.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "LSP-Trace zwischen VS Code und dem FinDSL-Sprachserver (zur Diagnose)."
+        },
+        "findsl.test.runTimeout": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 1000,
+          "description": "Zeitlimit (ms) je prüfe-Lauf, bevor er als Zeitüberschreitung abgebrochen wird."
+        },
+        "findsl.doku.format": {
+          "type": "string",
+          "enum": ["markdown", "html"],
+          "default": "markdown",
+          "description": "Ausgabeformat für »FinDSL: Dokumentation generieren«."
+        }
+      }
     }
   },
   "activationEvents": [

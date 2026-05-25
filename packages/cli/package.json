@@ -12,6 +12,12 @@
   "bin": {
     "findsl": "./out/main.js"
   },
+  "files": [
+    "out"
+  ],
+  "scripts": {
+    "prepack": "test -d out || npm --prefix ../.. run build"
+  },
   "dependencies": {
     "@findsl/core": "1.0.0-rc.6",
     "commander": "14.0.3",

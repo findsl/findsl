@@ -42,9 +42,10 @@
       "matchUpdateTypes": ["major"]
     },
     {
-      "description": "@codingame/monaco-vscode-* werden im Lockstep publiziert und pinnen sich gegenseitig EXAKT — immer als EINE Gruppe aktualisieren (überschreibt die npm-Major-Regel). Einzel-PRs erzeugen sonst ETARGET, weil nicht jede Patch-Version für jedes Schwester-Paket existiert (z. B. quickaccess-service-override@33.0.7 fehlt, während 33.0.9 für alle existiert).",
+      "description": "@codingame/monaco-vscode-* werden im Lockstep publiziert und pinnen sich gegenseitig EXAKT — immer als EINE Gruppe aktualisieren (überschreibt die npm-Major-Regel). Einzel-PRs erzeugen sonst ETARGET, weil nicht jede Patch-Version für jedes Schwester-Paket existiert (z. B. quickaccess-service-override@33.0.7 fehlt, während 33.0.9 für alle existiert). allowedVersions hält sie auf 25.x: monaco-languageclient (Peer von @findsl/editor) zieht @codingame ^25.1.2, und es gibt KEINE mlc-Version für @codingame 33 — ein Bump auf 33 erzeugt zwei @codingame-Instanzen im Baum → Laufzeit-Deadlock ('Another version of monaco-vscode-api has already been loaded') + npm-ci-ERESOLVE. Beim Anheben monaco-languageclient und diese Grenze GEMEINSAM erhöhen.",
       "matchManagers": ["npm"],
       "matchPackageNames": ["@codingame/monaco-vscode-*"],
+      "allowedVersions": "<26.0.0",
       "groupName": "codingame monaco-vscode",
       "groupSlug": "codingame-monaco-vscode"
     },

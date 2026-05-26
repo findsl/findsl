@@ -106,13 +106,25 @@ beiden Stände in Sync bringen, neuen Tag setzen.
 
 ### 4. Beobachten
 
-`Actions → Release → <commit>` — alle fünf Job-Spuren müssen grün sein
-(`prepare`, `npm`, `vsix`, `binaries`, `release`).
+`Actions → Release → <commit>` — die Pflicht-Spuren `prepare`, `npm`,
+`binaries` und `release` müssen grün sein. `website-dispatch` (SPEC-Sync an
+findsl/website) hängt nur an `prepare` und feuert unabhängig.
 
-Bei Fehlern in einer einzelnen Spur (z. B. npm OK, vsix scheitert):
+**Teil-Entkopplung (Issue #175):** Der `release`-Job (GitHub-Release) läuft
+auch dann, wenn nur `vsix` scheitert — er erzeugt dann ein Release **ohne**
+`.vsix`, statt gar keines (`if: always() && npm + binaries == success`). Der
+`website-dispatch` ist ganz aus dem `release`-Job herausgelöst, damit ein
+VSIX-/Binary-Fehler den SPEC-Sync nicht mehr verhindert. **Pflicht bleiben
+npm + binaries**: scheitert eine davon, entsteht kein Release.
+
+Bei Fehlern in einer Pflicht-Spur (z. B. `npm` scheitert):
 - Spur einzeln nachfahren ist nicht vorgesehen (Lockstep-Annahme).
 - Den Release-Tag löschen (`git push origin :v0.1.1`, GH-Release manuell
   entfernen), Ursache fixen, **neue Patch-Version** taggen.
+
+Scheitert **nur `vsix`**: Release + npm + SPEC-Sync sind ausgeliefert; nur das
+`.vsix` fehlt. vsix-Ursache fixen und mit dem nächsten Tag nachziehen — kein
+Tag-Reset nötig.
 
 ## Dry-Run — Build-Pipeline ohne Veröffentlichung testen
 

@@ -497,9 +497,17 @@ jobs:
   # Sammelt vsix + alle Binaries, generiert eine aggregierte SHA256SUMS-
   # Datei (GPG-signiert) und legt das GitHub Release an. Bei Dry-Run wird
   # nur eine Zusammenfassung geloggt — kein Release erzeugt.
+  #
+  # Issue #175: vsix bleibt in `needs` (sonst Race — release liefe parallel,
+  # bevor das .vsix-Artefakt hochgeladen ist), aber sein Erfolg ist NICHT im
+  # `if`-Gate. `always()` lässt den Job auf alle needs WARTEN statt beim
+  # ersten Fehlschlag zu skippen; Pflicht-Spuren sind nur npm + binaries. Ein
+  # vsix-Fehlschlag erzeugt damit ein Release OHNE .vsix statt GAR KEIN
+  # Release — der Stage-Schritt sammelt vorhandene Artefakte tolerant ein.
   # -------------------------------------------------------------------------
   release:
     needs: [prepare, npm, vsix, binaries]
+    if: always() && needs.npm.result == 'success' && needs.binaries.result == 'success'
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
@@ -545,20 +553,37 @@ jobs:
           draft: false
           prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
 
-      # Issue #125: nach erfolgreichem Release die Website-Sprachreferenz
-      # benachrichtigen. Pull-basiert — das Event signalisiert nur; das
-      # Repo findsl/website holt `SPEC.md` selbst am Release-Tag (byte-genau,
-      # versionsgestempelt; Empfangs-Workflow ist ein eigener Task dort).
-      # Bei JEDEM Release inkl. pre-release/rc (kein prerelease-Gate).
+      - name: Dry-Run summary
+        if: needs.prepare.outputs.dry_run == 'true'
+        run: |
+          echo "::notice::Dry-Run abgeschlossen — folgende Artefakte waeren veroeffentlicht worden:"
+          ls -la release/
+
+  # -------------------------------------------------------------------------
+  # `website-dispatch` — SPEC-Sync-Signal an findsl/website (Issue #125 + #175)
+  #
+  # Eigenständiger Job mit `needs: [prepare]` — der Dispatch braucht NUR Tag +
+  # Version. findsl/website holt `SPEC.md` selbst am Git-Tag (existiert bereits
+  # beim Push = Trigger), byte-genau/versionsgestempelt. Daher KEINE Kopplung
+  # an npm/vsix/binaries/release: ein VSIX- oder Binary-Fehlschlag darf den
+  # SPEC-Sync NICHT verhindern (war die schwerwiegendere Folge in Issue #175,
+  # als der Dispatch noch im release-Job hing und mit dem vsix-Fehler entfiel).
+  # Bei JEDEM Release inkl. pre-release/rc (kein prerelease-Gate).
+  # -------------------------------------------------------------------------
+  website-dispatch:
+    needs: prepare
+    if: needs.prepare.outputs.dry_run == 'false'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
       - name: Website über neue SPEC informieren (repository_dispatch)
-        if: needs.prepare.outputs.dry_run == 'false'
         env:
           GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
-          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           # Graceful skip, solange das Secret (noch) nicht gesetzt ist: das
-          # Token + der Website-Empfänger sind separate Schritte; das Release
+          # Token + der Website-Empfänger sind separate Schritte; der Dispatch
           # darf daran NICHT scheitern. Sobald WEBSITE_DISPATCH_TOKEN existiert
           # (fine-grained PAT, Contents:write auf findsl/website), greift es
           # automatisch. (secrets.* ist in step-`if` nicht zuverlässig nutzbar
@@ -569,18 +594,12 @@ jobs:
           fi
           # Best-effort: ein fehlgeschlagener Dispatch (Token ohne Zugriff aufs
           # private findsl/website → 404, falsche Permission → 403, o. Ä.) darf
-          # das Release NICHT kippen — die SPEC-Benachrichtigung ist nachrangig.
+          # den Job NICHT kippen — die SPEC-Benachrichtigung ist nachrangig.
           if gh api repos/findsl/website/dispatches \
             -f event_type=spec-updated \
             -F "client_payload[version]=$VERSION" \
             -F "client_payload[tag]=v$VERSION"; then
             echo "::notice::repository_dispatch 'spec-updated' an findsl/website (v$VERSION) gesendet."
           else
-            echo "::warning::repository_dispatch an findsl/website fehlgeschlagen (Token-Zugriff/Repo prüfen) — Release nicht blockiert (Issue #125)."
+            echo "::warning::repository_dispatch an findsl/website fehlgeschlagen (Token-Zugriff/Repo prüfen) — nicht blockierend (Issue #125)."
           fi
-
-      - name: Dry-Run summary
-        if: needs.prepare.outputs.dry_run == 'true'
-        run: |
-          echo "::notice::Dry-Run abgeschlossen — folgende Artefakte waeren veroeffentlicht worden:"
-          ls -la release/

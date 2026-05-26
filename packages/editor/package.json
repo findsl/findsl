@@ -26,16 +26,16 @@
     "build:editor": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
-    "@codingame/monaco-vscode-api": "25.1.2",
-    "@codingame/monaco-vscode-configuration-service-override": "25.1.2",
-    "@codingame/monaco-vscode-editor-api": "25.1.2",
+    "@codingame/monaco-vscode-api": "33.0.9",
+    "@codingame/monaco-vscode-configuration-service-override": "33.0.9",
+    "@codingame/monaco-vscode-editor-api": "33.0.9",
     "@findsl/web": "1.0.0-rc.7",
     "monaco-languageclient": "^10.7.0"
   },
   "devDependencies": {
-    "@codingame/monaco-vscode-api": "25.1.2",
-    "@codingame/monaco-vscode-configuration-service-override": "25.1.2",
-    "@codingame/monaco-vscode-editor-api": "25.1.2",
+    "@codingame/monaco-vscode-api": "33.0.9",
+    "@codingame/monaco-vscode-configuration-service-override": "33.0.9",
+    "@codingame/monaco-vscode-editor-api": "33.0.9",
     "@findsl/web": "1.0.0-rc.7",
     "monaco-languageclient": "^10.7.0"
   }

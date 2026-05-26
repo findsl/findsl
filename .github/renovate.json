@@ -42,6 +42,13 @@
       "matchUpdateTypes": ["major"]
     },
     {
+      "description": "@codingame/monaco-vscode-* werden im Lockstep publiziert und pinnen sich gegenseitig EXAKT — immer als EINE Gruppe aktualisieren (überschreibt die npm-Major-Regel). Einzel-PRs erzeugen sonst ETARGET, weil nicht jede Patch-Version für jedes Schwester-Paket existiert (z. B. quickaccess-service-override@33.0.7 fehlt, während 33.0.9 für alle existiert).",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@codingame/monaco-vscode-*"],
+      "groupName": "codingame monaco-vscode",
+      "groupSlug": "codingame-monaco-vscode"
+    },
+    {
       "description": "npm-Versionen exakt pinnen (keine ^/~-Ranges) für dependencies/devDependencies. FinDSL setzt auf exakt reproduzierbare Build-Roundtrips (langium:generate→build→bundle→test, 778 Tests, Bundle-Smoke); Pinning macht package-lock.json ehrlich und jeden Patch zu einem expliziten Renovate-PR mit Changelog statt stillem Lockfile-Drift. Peer-/Bundled-Deps behalten ihre Ranges.",
       "matchManagers": ["npm"],
       "matchDepTypes": ["dependencies", "devDependencies"],

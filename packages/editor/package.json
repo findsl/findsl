@@ -1,6 +1,6 @@
 {
   "name": "@findsl/editor",
-  "version": "1.0.0-rc.7",
+  "version": "1.0.0",
   "license": "EUPL-1.2",
   "repository": {
     "type": "git",
@@ -29,14 +29,14 @@
     "@codingame/monaco-vscode-api": "33.0.9",
     "@codingame/monaco-vscode-configuration-service-override": "33.0.9",
     "@codingame/monaco-vscode-editor-api": "33.0.9",
-    "@findsl/web": "1.0.0-rc.7",
+    "@findsl/web": "1.0.0",
     "monaco-languageclient": "^10.7.0"
   },
   "devDependencies": {
     "@codingame/monaco-vscode-api": "33.0.9",
     "@codingame/monaco-vscode-configuration-service-override": "33.0.9",
     "@codingame/monaco-vscode-editor-api": "33.0.9",
-    "@findsl/web": "1.0.0-rc.7",
+    "@findsl/web": "1.0.0",
     "monaco-languageclient": "^10.7.0"
   }
 }

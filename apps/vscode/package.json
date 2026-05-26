@@ -2,7 +2,7 @@
   "name": "findsl",
   "displayName": "FinDSL",
   "description": "Domänenspezifische Sprache für die deutsche steuerliche Finanzverwaltung",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "findsl",
   "license": "EUPL-1.2",
   "type": "module",
@@ -131,7 +131,7 @@
     "vscode:prepublish": "cd ../.. && npm run langium:generate && npm run build && npm run bundle"
   },
   "dependencies": {
-    "@findsl/core": "1.0.0",
+    "@findsl/core": "1.0.1",
     "vscode-languageclient": "9.0.1"
   },
   "devDependencies": {

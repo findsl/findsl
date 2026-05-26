@@ -49,6 +49,12 @@
       "groupSlug": "codingame-monaco-vscode"
     },
     {
+      "description": "@types/vscode MUSS <= engines.vscode (apps/vscode) bleiben — vsce verweigert sonst das Packaging ('@types/vscode X greater than engines.vscode'). Auf 1.85.x begrenzt, passend zu engines.vscode ^1.85.0. Beim bewussten Anheben des VS-Code-Minimums BEIDE synchron erhöhen (engines.vscode + diese allowedVersions).",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@types/vscode"],
+      "allowedVersions": "<1.86.0"
+    },
+    {
       "description": "npm-Versionen exakt pinnen (keine ^/~-Ranges) für dependencies/devDependencies. FinDSL setzt auf exakt reproduzierbare Build-Roundtrips (langium:generate→build→bundle→test, 778 Tests, Bundle-Smoke); Pinning macht package-lock.json ehrlich und jeden Patch zu einem expliziten Renovate-PR mit Changelog statt stillem Lockfile-Drift. Peer-/Bundled-Deps behalten ihre Ranges.",
       "matchManagers": ["npm"],
       "matchDepTypes": ["dependencies", "devDependencies"],

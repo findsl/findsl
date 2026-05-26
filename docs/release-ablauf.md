@@ -45,7 +45,7 @@ GitHub-Repo-Secrets hinterlegt sein. Danach nie wieder.
 
 - [ ] **GPG-Key** erzeugt + auf `keys.openpgp.org` publiziert
 - [ ] **npm-Org `findsl`** angelegt, 2FA aktiv, Automation-Token erstellt
-- [ ] **VS-Marketplace-Publisher `findsl`** angelegt (über Azure DevOps)
+- [ ] **VS-Marketplace-Publisher `devtank42`** angelegt (über Azure DevOps)
 - [ ] **Open-VSX-Account** registriert
 
 ### Checkliste Secrets

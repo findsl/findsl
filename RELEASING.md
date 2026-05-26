@@ -18,7 +18,7 @@
 | `@findsl/web` | npm | `npm install @findsl/web` (Browser-Bundle: LSP-Worker + check/generate) |
 | `@findsl/editor` | npm | `npm install @findsl/editor` (einbettbarer Monaco-Editor) |
 | `@findsl/editor-react` | npm | `npm install @findsl/editor-react` (React-Komponente um `@findsl/editor`) |
-| VS Code Extension | VS Marketplace + Open VSX | Publisher `findsl`, Extension `findsl` |
+| VS Code Extension | VS Marketplace + Open VSX | Publisher `devtank42`, Extension `findsl` |
 | Native Binaries | GitHub Releases | `findsl-<v>-{darwin,linux,windows}-{x64,arm64}.{tar.gz,zip}` |
 
 > **Hinweis Java-Runtime:** Die Java-Runtime ist **kein** separates Maven-
@@ -49,7 +49,7 @@ Die folgenden GitHub-Repo-Secrets müssen unter
    gpg --send-keys --keyserver keys.openpgp.org <key-id>
    ```
 2. **npm-Org `findsl`** anlegen, 2FA aktivieren, Automation-Token erstellen.
-3. **VS Marketplace Publisher `findsl`** unter `marketplace.visualstudio.com/manage`
+3. **VS Marketplace Publisher `devtank42`** unter `marketplace.visualstudio.com/manage`
    anlegen (braucht Azure-DevOps-Account).
 4. **Open VSX Account** auf `open-vsx.org` registrieren (GitHub-OAuth).
 

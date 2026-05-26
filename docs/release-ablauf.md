@@ -61,6 +61,10 @@ Unter `Settings → Secrets and variables → Actions` im Repo `findsl/findsl`:
 > Woher jedes Token kommt, steht in [../RELEASING.md](../RELEASING.md)
 > (Abschnitt „Vorbereitung — einmalig pro Konto/Secret"). Fehlt ein Secret,
 > scheitert nur die betroffene Spur — die anderen laufen trotzdem.
+> `VSCE_PAT`/`OVSX_PAT` sind dabei **nicht blockierend**: fehlt eins, wird der
+> jeweilige Marktplatz mit Warnung übersprungen (der `vsix`-Job bleibt grün,
+> das `.vsix` hängt am GitHub-Release). So lässt sich z. B. nur Open VSX
+> bedienen, solange der VS-Marketplace-Publisher (Azure DevOps) noch fehlt.
 
 ### Empfehlung: erst ein Dry-Run
 

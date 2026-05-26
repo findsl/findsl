@@ -323,6 +323,15 @@ jobs:
         working-directory: apps/vscode
         run: |
           set -euo pipefail
+          # Graceful skip wenn das Secret fehlt — analog website-dispatch. Sonst
+          # bräche ein leeres VSCE_PAT den Job hart ab (TF400813) und der
+          # Open-VSX-Schritt DANACH käme nie dran. Das .vsix hängt ohnehin am
+          # GitHub-Release; der Marketplace-Publish ist nachrangig nachholbar.
+          # (secrets.* ist in step-`if` nicht zuverlässig → Prüfung hier.)
+          if [ -z "${VSCE_PAT:-}" ]; then
+            echo "::warning::VSCE_PAT nicht gesetzt — VS-Code-Marketplace-Publish uebersprungen. .vsix haengt am GitHub-Release, Open VSX wird separat publiziert."
+            exit 0
+          fi
           npx --yes @vscode/vsce publish --no-dependencies --packagePath "../../findsl-${VERSION}.vsix"
 
       - name: Publish to Open VSX
@@ -331,6 +340,11 @@ jobs:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: |
           set -euo pipefail
+          # Graceful skip wenn das Secret fehlt (unabhängig vom Marketplace-Schritt).
+          if [ -z "${OVSX_PAT:-}" ]; then
+            echo "::warning::OVSX_PAT nicht gesetzt — Open-VSX-Publish uebersprungen. Das .vsix haengt am GitHub-Release."
+            exit 0
+          fi
           npx --yes ovsx publish "findsl-${VERSION}.vsix" -p "$OVSX_PAT"
 
   # -------------------------------------------------------------------------

@@ -3,7 +3,7 @@
   "displayName": "FinDSL",
   "description": "Domänenspezifische Sprache für die deutsche steuerliche Finanzverwaltung",
   "version": "1.0.0",
-  "publisher": "findsl",
+  "publisher": "devtank42",
   "license": "EUPL-1.2",
   "type": "module",
   "repository": {

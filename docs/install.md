@@ -7,7 +7,7 @@ Anwendungsfall passende.
 
 | Variante | Zielgruppe | Bezugsquelle |
 |---|---|---|
-| **VS Code Extension** | Steuerberater\:innen, Anwender\:innen | [VS Marketplace](https://marketplace.visualstudio.com/items?itemName=findsl.findsl) / [Open VSX](https://open-vsx.org/extension/findsl/findsl) |
+| **VS Code Extension** | Steuerberater\:innen, Anwender\:innen | [VS Marketplace](https://marketplace.visualstudio.com/items?itemName=devtank42.findsl) / [Open VSX](https://open-vsx.org/extension/devtank42/findsl) |
 | **Natives CLI-Binary** | Kommandozeilen-Nutzung, CI-Skripte | [GitHub Releases](https://github.com/findsl/findsl/releases) |
 | **npm-Pakete** | Entwickler\:innen, eigene Tooling-Pipelines | `npm install @findsl/cli` |
 
@@ -25,11 +25,11 @@ Anwendungsfall passende.
 **Empfohlener Weg für die meisten Nutzer.**
 
 1. VS Code öffnen → Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
-2. Suche: `FinDSL` (Publisher: `findsl`)
+2. Suche: `FinDSL` (Publisher: `devtank42`)
 3. „Install"
 
 Alternativ über Open VSX (z. B. in VSCodium, Cursor):
-`code --install-extension findsl.findsl`
+`code --install-extension devtank42.findsl`
 
 Die Extension bringt den FinDSL-Sprachserver mit — kein separates CLI nötig.
 

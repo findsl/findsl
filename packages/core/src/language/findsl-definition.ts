@@ -38,6 +38,7 @@ import {
     isForceUnwrap,
     isFuerExpr,
     isFunktionDecl,
+    isImportItem,
     isKonstDecl,
     isLambda,
     isLetStmt,
@@ -48,6 +49,7 @@ import {
     type ChainOp,
     type Expr,
     type Field,
+    type ImportItem,
     type Program,
     type Type as TypeAnnotation,
 } from './generated/ast.js';
@@ -140,6 +142,14 @@ export function resolveTargetForIdToken(
     if (isField(ast)           && ast.name === text) return ast;
     if (isParam(ast)           && ast.name === text) return ast;
 
+    // Cursor auf einem `ImportItem`-Token im `verwende { … } aus "…"`-Block
+    // (Source-Name oder Alias) → Sprung zur Decl im Quellmodul. Vor dem
+    // FieldAccess/CallChain-Fallback, damit ein lokales gleichnamiges
+    // Symbol nicht fälschlich gewinnt.
+    if (isImportItem(ast) && (ast.name === text || ast.alias === text)) {
+        return resolveImportItemTarget(ast, program, documents);
+    }
+
     if ((isFieldAccess(ast) || isSafeFieldAccess(ast)) && ast.name === text) {
         return resolveFieldAccessTarget(ast, program, documents);
     }
@@ -178,6 +188,25 @@ function resolveCrossModuleTarget(
     const sourceProgram = findModuleInWorkspace(documents, binding.resolvedPath);
     if (!sourceProgram) return undefined;
     return sourceProgram.decls.find((d) => d.name === binding.sourceName);
+}
+
+/**
+ * Sprung von einem `ImportItem`-Token im `verwende { … } aus "…"`-Block
+ * zur Source-Decl im Quellmodul. Funktioniert für Source-Name **und**
+ * Alias (`Foo als Bar` — beide springen zu `Foo`). Nutzt `analyzeImports`
+ * für die Pfadauflösung; das Binding wird über die AST-Knoten-Identität
+ * gefunden, daher unabhängig davon, ob mehrere Items denselben Quellnamen
+ * tragen.
+ */
+function resolveImportItemTarget(
+    item: ImportItem, program: Program, documents: LangiumDocuments,
+): AstNode | undefined {
+    const { bindings } = analyzeImports(program);
+    const binding = bindings.find((b) => b.node === item);
+    if (!binding) return undefined;
+    const sourceProgram = findModuleInWorkspace(documents, binding.resolvedPath);
+    if (!sourceProgram) return undefined;
+    return sourceProgram.decls.find((d) => d.name === item.name);
 }
 
 /**

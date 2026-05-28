@@ -834,3 +834,60 @@ describe('Hover auf primitiven Typen in Annotationen', () => {
         expect(md).toContain('§ 11.5');
     });
 });
+
+describe('Hover auf importierten Elementen im verwende-Block', () => {
+    it('Cursor auf Source-Name → Cross-Decl-Karte mit Signatur, Doc, Source-Datei', async () => {
+        const lib = `--
+Datei-Dokumentation.
+--
+
+--
+Tariflicher Grundbetrag.
+--
+@Quelle("§ 32a EStG")
+fn kern(z: Euro): Euro = z
+`;
+        const app = `verwende { kern } aus "./lib"
+fn r(): Euro = kern(0 als Euro)
+`;
+        const h = await hoverInModules({ lib, app }, 'app', 'kern }');
+        const md = content(h);
+        expect(md).toContain('fn kern(z: Euro): Euro');
+        expect(md).toContain('Tariflicher Grundbetrag');
+        expect(md).toContain('§ 32a EStG');
+        expect(md).toMatch(/Importiert aus Datei/);
+    });
+
+    it('Cursor auf Alias → zeigt Quell-Decl-Karte (nicht den Alias)', async () => {
+        const lib = `fn foo(z: Euro): Euro = z
+`;
+        const app = `verwende { foo als bar } aus "./lib"
+fn r(): Euro = bar(0 als Euro)
+`;
+        const h = await hoverInModules({ lib, app }, 'app', 'bar }');
+        const md = content(h);
+        expect(md).toContain('fn foo(z: Euro): Euro');
+        expect(md).toMatch(/Importiert aus Datei/);
+    });
+
+    it('Importierte Konstante zeigt Konst-Hover', async () => {
+        const lib = `--
+Datei-Dokumentation.
+--
+
+--
+Grundfreibetrag.
+--
+@Quelle("§ 32a EStG")
+konst GFB: Euro = 12.096 als Euro
+`;
+        const app = `verwende { GFB } aus "./lib"
+konst R: Euro = GFB
+`;
+        const h = await hoverInModules({ lib, app }, 'app', 'GFB }');
+        const md = content(h);
+        expect(md).toContain('konst GFB');
+        expect(md).toContain('Grundfreibetrag');
+        expect(md).toMatch(/Importiert aus Datei/);
+    });
+});

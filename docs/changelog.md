@@ -2,6 +2,23 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-30 — **LSP: Cmd+Click + Hover für
+importierte Elemente im `verwende`-Block.** Issue #196. Die einzelnen
+Namen in `verwende { Foo, Bar als Baz, … } aus "./modul"` waren bislang
+**nicht navigierbar** und zeigten **keine Hover-Doc**; im restlichen Code
+funktionieren beide Features schon, nur in den Import-Direktiven selbst
+nicht — weil `findsl-definition.ts` und `findsl-hover.ts` den AST-Knoten
+`ImportItem` nicht dispatchten (bei Alias-Form gewann unfreiwillig nichts,
+beim Common Case zufällig die Code-Referenz-Logik). **Neu:** je ein
+expliziter `isImportItem`-Case in `resolveTargetForIdToken` und
+`resolveIdToken`; beide reichen das Binding über `analyzeImports` (AST-
+Knoten-Identität, nicht Name-Match) zur Quell-Decl auf. **Source-Name und
+Alias** zeigen jeweils auf dieselbe Source-Decl — `Foo als Bar` ist auf
+beiden Tokens navigierbar. Hover-Karte ist identisch zur Code-Referenz
+(Signatur, Doc, `*Importiert aus Datei: ./modul*`). **+7 neue Tests** (4
+definition, 3 hover). Verifikation: `npm run build && npm run bundle &&
+npm test` — 1303 Tests grün.*
+
 *Letzte Aktualisierung: 2026-05-29 — **LSP: Editor-Unterstützung für
 Builtin-Methoden (SPEC § 11) Tier 1.** Issue #193. Die Stdlib-Methoden
 sind jetzt im Editor vollständig sichtbar — vorher zeigten Hover,

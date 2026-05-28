@@ -46,6 +46,7 @@ import {
     isForceUnwrap,
     isFuerExpr,
     isFunktionDecl,
+    isImportItem,
     isKonstDecl,
     isLambda,
     isLetStmt,
@@ -216,6 +217,14 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
         if (isField(ast)           && ast.name === text) return { kind: 'decl', node: ast };
         if (isParam(ast)           && ast.name === text) return { kind: 'decl', node: ast };
 
+        // Cursor auf einem `ImportItem`-Token im `verwende { … } aus "…"`-
+        // Block (Source-Name oder Alias) → Cross-Decl-Hover-Karte (gleiche
+        // Form wie bei einer Code-Referenz auf dasselbe Symbol).
+        if (isImportItem(ast) && (ast.name === text || ast.alias === text)) {
+            const resolved = this.resolveImportItem(ast, program);
+            if (resolved) return resolved;
+        }
+
         // Cursor auf einem Field-Access-Identifier (z. B. `fall.tarifart`
         // oder `betrag.höchstens`). Erst auf Builtin-Methode prüfen (Geld/
         // Liste/Text/…), dann auf Datensatz-Feld — beide nutzen denselben
@@ -364,6 +373,25 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
     private resolveCrossModule(program: Program, localName: string): Resolved | undefined {
         const { bindings } = analyzeImports(program);
         const binding = bindings.find((b) => b.localName === localName);
+        if (!binding) return undefined;
+
+        const sourceProgram = this.findModuleInWorkspace(binding.resolvedPath);
+        if (!sourceProgram) return undefined;
+
+        const decl = sourceProgram.decls.find((d) => d.name === binding.sourceName);
+        if (!decl) return undefined;
+        return { kind: 'cross-decl', node: decl, sourceModule: binding.rawSource };
+    }
+
+    /**
+     * Cross-Decl-Hover für einen `ImportItem`-Token im `verwende`-Block —
+     * funktioniert für Source-Name **und** Alias (`Foo als Bar`: Hover auf
+     * beidem zeigt die Decl von `Foo`). Das Binding wird über die AST-
+     * Knoten-Identität aufgelöst, daher unabhängig vom Cursor-Text.
+     */
+    private resolveImportItem(item: AstNode, program: Program): Resolved | undefined {
+        const { bindings } = analyzeImports(program);
+        const binding = bindings.find((b) => b.node === item);
         if (!binding) return undefined;
 
         const sourceProgram = this.findModuleInWorkspace(binding.resolvedPath);

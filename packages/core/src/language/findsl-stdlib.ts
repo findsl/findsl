@@ -82,9 +82,30 @@ export const LIST_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
  * erwarteten Typ; `Dezimal` → `Ganzzahl`) lebt im Type-Checker
  * (`findsl-types.scalarRoundingMethod`). Dieser Katalog ist NUR die
  * Namens-/Doc-Quelle. */
+/** § 11.1 Rundungs-Methoden — NUR auf Werten mit Nachkommastellen
+ *  (`EuroCent`/`Dezimal`/`Prozent`); kontextgetriebene Zielauflösung. */
+export const ROUNDING_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
+    { name: 'abrunden',    signature: '() -> Euro|Cent|Ganzzahl',     property: false, doc: 'Rundet **ab** (Richtung −∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`). SPEC § 11.1.' },
+    { name: 'aufrunden',   signature: '() -> Euro|Cent|Ganzzahl',     property: false, doc: 'Rundet **auf** (Richtung +∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`); „je angefangene Einheit"-Tarife. SPEC § 11.1.' },
+];
+
+/** § 11.6 Grenzwert-/Stufen-Methoden — auf ALLEN numerischen Typen
+ *  (`Euro`/`Cent`/`EuroCent`/`Ganzzahl`/`Dezimal`/`Prozent`); typ-erhaltend,
+ *  kontextfrei. */
+export const LIMIT_STEP_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
+    { name: 'höchstens',   signature: '(grenze: T) -> T',             property: false, doc: 'Obergrenze: das **Minimum** aus Wert und `grenze` (für „höchstens jedoch …"). Typ-erhaltend, auf allen numerischen Typen. SPEC § 11.6.' },
+    { name: 'mindestens',  signature: '(grenze: T) -> T',             property: false, doc: 'Untergrenze: das **Maximum** aus Wert und `grenze` (für „mindestens jedoch …"; `.mindestens(0,00)` kappt Negatives). Typ-erhaltend. SPEC § 11.6.' },
+    { name: 'abrundenAuf', signature: '(vielfaches: T) -> T',         property: false, doc: 'Rundet **ab** auf das nächstkleinere Vielfache von `vielfaches` (z. B. § 11 GewStG: auf volle 100 €). Typ-erhaltend, `vielfaches` > 0. SPEC § 11.6.' },
+    { name: 'aufrundenAuf',signature: '(vielfaches: T) -> T',         property: false, doc: 'Rundet **auf** auf das nächstgrößere Vielfache von `vielfaches`. Typ-erhaltend, `vielfaches` > 0. SPEC § 11.6.' },
+];
+
+/** Alle Skalar-Methoden in Doku-Reihenfolge (§ 11.1 dann § 11.6) — für
+ *  Empfänger mit Nachkommastellen, die beide Gruppen anbieten. Die
+ *  Completion splittet via `ROUNDING_METHOD_DEFS`/`LIMIT_STEP_METHOD_DEFS`,
+ *  weil § 11.1 nur auf `EuroCent`/`Dezimal`/`Prozent` gilt. */
 export const SCALAR_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
-    { name: 'abrunden',  signature: '() -> Euro|Cent|Ganzzahl', property: false, doc: 'Rundet **ab** (Richtung −∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`). SPEC § 11.1.' },
-    { name: 'aufrunden', signature: '() -> Euro|Cent|Ganzzahl', property: false, doc: 'Rundet **auf** (Richtung +∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`); „je angefangene Einheit"-Tarife. SPEC § 11.1.' },
+    ...ROUNDING_METHOD_DEFS,
+    ...LIMIT_STEP_METHOD_DEFS,
 ];
 
 /** Text-Methoden (SPEC § 11.5). Properties (`länge`/`leer`/`alsText`)

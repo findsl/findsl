@@ -189,3 +189,91 @@ describe('§11.5 Interpreter — Text-Methoden', () => {
             .rejects.toThrow(/Text\.beginntMit: Text-Argument erwartet, erhalten keines/);
     });
 });
+
+describe('§11.6 Interpreter — Grenzwert (.höchstens/.mindestens)', () => {
+    it('höchstens kappt nach oben (min), Tag bleibt erhalten', async () => {
+        const v = await num('konst R: Euro = (100 als Euro).höchstens(80 als Euro)\n');
+        expect(v.value.toString()).toBe('80');
+        expect(v.tag).toBe('Euro');
+    });
+    it('höchstens lässt den kleineren Wert durch', async () => {
+        const v = await num('konst R: Euro = (50 als Euro).höchstens(80 als Euro)\n');
+        expect(v.value.toString()).toBe('50');
+    });
+    it('mindestens hebt auf Untergrenze (max), Tag EuroCent', async () => {
+        const v = await num('konst R: EuroCent = (2,00 als EuroCent).mindestens(5,00)\n');
+        expect(v.value.toString()).toBe('5');
+        expect(v.tag).toBe('EuroCent');
+    });
+    it('mindestens kappt negatives Zwischenergebnis auf 0 (Nicht-Negativ)', async () => {
+        const v = await num('konst N: Dezimal = 2,00 - 5,00\nkonst R: Dezimal = N.mindestens(0,00)\n');
+        expect(v.value.toString()).toBe('0');
+    });
+    it('Clamp-Verkettung: mindestens(0).höchstens(40)', async () => {
+        const v = await num(
+            'konst R: Euro = (50 als Euro).mindestens(0 als Euro).höchstens(40 als Euro)\n',
+        );
+        expect(v.value.toString()).toBe('40');
+    });
+    it('Ganzzahl.höchstens → Ganzzahl-Wert, Tag bleibt', async () => {
+        const v = await num('konst R: Ganzzahl = (7 als Ganzzahl).höchstens(3 als Ganzzahl)\n');
+        expect(v.value.toString()).toBe('3');
+        expect(v.tag).toBe('Ganzzahl');
+    });
+    it('Prozent.höchstens vergleicht intern auf Bruchbasis (40% vs 20% → 0,2)', async () => {
+        const v = await num('konst R: Prozent = (40%).höchstens(20%)\n');
+        expect(v.value.toString()).toBe('0.2');   // Prozent intern als Bruch
+        expect(v.tag).toBe('Prozent');
+    });
+    it('Aufruf-Methode ohne Argument → geordneter InterpretError', async () => {
+        await expect(evalConst('konst R: Euro = (50 als Euro).höchstens()\n'))
+            .rejects.toThrow(/höchstens.*Argument|Argument.*erhalten keines/);
+    });
+});
+
+describe('§11.6 Interpreter — Stufen (.abrundenAuf/.aufrundenAuf)', () => {
+    it('abrundenAuf volle 100 (EuroCent), Tag bleibt', async () => {
+        const v = await num(
+            'konst R: EuroCent = (12.345,67 als EuroCent).abrundenAuf(100,00 als EuroCent)\n',
+        );
+        expect(v.value.toString()).toBe('12300');
+        expect(v.tag).toBe('EuroCent');
+    });
+    it('aufrundenAuf volle 100 Richtung +∞', async () => {
+        const v = await num(
+            'konst R: EuroCent = (12.301,00 als EuroCent).aufrundenAuf(100,00 als EuroCent)\n',
+        );
+        expect(v.value.toString()).toBe('12400');
+    });
+    it('abrundenAuf vollen Zehner (Euro)', async () => {
+        const v = await num('konst R: Euro = (1.234 als Euro).abrundenAuf(10 als Euro)\n');
+        expect(v.value.toString()).toBe('1230');
+    });
+    it('exaktes Vielfaches bleibt unverändert (abrundenAuf)', async () => {
+        const v = await num('konst R: Euro = (1.200 als Euro).abrundenAuf(100 als Euro)\n');
+        expect(v.value.toString()).toBe('1200');
+    });
+    it('exaktes Vielfaches bleibt unverändert (aufrundenAuf)', async () => {
+        const v = await num('konst R: Euro = (1.200 als Euro).aufrundenAuf(100 als Euro)\n');
+        expect(v.value.toString()).toBe('1200');
+    });
+    it('Ganzzahl.abrundenAuf → Ganzzahl-Wert, Tag bleibt', async () => {
+        const v = await num('konst R: Ganzzahl = (125 als Ganzzahl).abrundenAuf(100 als Ganzzahl)\n');
+        expect(v.value.toString()).toBe('100');
+        expect(v.tag).toBe('Ganzzahl');
+    });
+    it('negativer Empfänger: abrundenAuf rundet Richtung −∞ (nicht Richtung 0)', async () => {
+        // floor(-150/100) = floor(-1,5) = -2 → -200 (nicht -100).
+        const v = await num('konst N: Dezimal = 0 - 150\nkonst R: Dezimal = N.abrundenAuf(100)\n');
+        expect(v.value.toString()).toBe('-200');
+    });
+    it('negativer Empfänger: aufrundenAuf rundet Richtung +∞', async () => {
+        // ceil(-150/100) = ceil(-1,5) = -1 → -100.
+        const v = await num('konst N: Dezimal = 0 - 150\nkonst R: Dezimal = N.aufrundenAuf(100)\n');
+        expect(v.value.toString()).toBe('-100');
+    });
+    it('vielfaches = 0 → InterpretError (Division durch null vermeiden)', async () => {
+        await expect(evalConst('konst R: Euro = (100 als Euro).abrundenAuf(0 als Euro)\n'))
+            .rejects.toThrow(/größer als 0|Vielfaches/);
+    });
+});

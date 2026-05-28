@@ -73,12 +73,14 @@ import {
     BUILTIN_ENUM_DEFS,
     BUILTIN_FUNCTION_DEFS,
     BUILTIN_PRIMITIVE_TYPES,
+    LIMIT_STEP_METHOD_DEFS,
     LIST_METHOD_DEFS,
     SCALAR_METHOD_DEFS,
     TEXT_METHOD_DEFS,
     isBuiltinName,
 } from './findsl-stdlib.js';
 import {
+    isNumeric,
     resolveTypeAnnotation,
     TNull,
     type Type,
@@ -370,10 +372,14 @@ export class FindslCompletionProvider extends DefaultCompletionProvider {
         if (unwrapped.kind === 'list') {
             offer(LIST_METHOD_DEFS);                       // § 11.2
         } else if (unwrapped.kind === 'primitive') {
-            // § 11.1 Skalar-Rundung auf EuroCent/Dezimal; § 11.5 Text.
+            // § 11.1 Rundung NUR auf Werten mit Nachkommastellen
+            // (EuroCent/Dezimal/Prozent); § 11.6 Grenzwert/Stufen auf ALLEN
+            // numerischen Typen; § 11.5 Text.
             if (unwrapped.name === 'EuroCent' || unwrapped.name === 'Dezimal'
                 || unwrapped.name === 'Prozent') {
-                offer(SCALAR_METHOD_DEFS);
+                offer(SCALAR_METHOD_DEFS);            // § 11.1 + § 11.6
+            } else if (isNumeric(unwrapped)) {
+                offer(LIMIT_STEP_METHOD_DEFS);        // Euro/Cent/Ganzzahl: nur § 11.6
             } else if (unwrapped.name === 'Text') {
                 offer(TEXT_METHOD_DEFS);
             }

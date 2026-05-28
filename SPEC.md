@@ -1975,6 +1975,45 @@ Siehe [§ 3.7](#37-aufzählungen).
   > v1.0 **noch nicht implementiert** und nicht endgültig fixiert
   > (eigene Designrunde offen).
 
+### 11.6 Grenzwert- und Stufen-Methoden
+
+Auf allen **numerischen** Typen (`Euro`, `Cent`, `EuroCent`, `Ganzzahl`,
+`Dezimal`, `Prozent`). Sie bilden die im Steuerrecht allgegenwärtigen
+Muster „höchstens jedoch …" / „mindestens jedoch …" und „auf volle … €
+abrunden" direkt ab.
+
+| Methode                        | Ergebnistyp | Bedeutung                                                    |
+| ------------------------------ | ----------- | ------------------------------------------------------------ |
+| `.höchstens(grenze)`           | Empfängertyp| Obergrenze — das **Minimum** aus Empfänger und `grenze`      |
+| `.mindestens(grenze)`          | Empfängertyp| Untergrenze — das **Maximum** aus Empfänger und `grenze`     |
+| `.abrundenAuf(vielfaches)`     | Empfängertyp| Nächstkleineres **Vielfaches** von `vielfaches` (Richtung −∞)|
+| `.aufrundenAuf(vielfaches)`    | Empfängertyp| Nächstgrößeres **Vielfaches** von `vielfaches` (Richtung +∞) |
+
+**Eigenschaften.** Alle vier sind **typ-erhaltend** (das Ergebnis hat den
+Typ des Empfängers) und **kontextfrei** — anders als die Rundung aus
+[§ 11.1](#111-rundungs-methoden) ist keine Zielbestimmung nötig, weil keine
+Einheit gewechselt wird. Das Argument trägt denselben numerischen Typ wie
+der Empfänger (ein nacktes Zahl-Literal übernimmt ihn bidirektional, wie bei
+einem Vergleich — `betrag.höchstens(0,00)`). Auf nicht-numerischen Typen
+(`Text`, `Liste`, `Wahrheitswert`, …) ist der Aufruf ein **Fehler**.
+
+```findsl
+freibetrag.höchstens(einkommen)       // „… höchstens jedoch in Höhe des Einkommens"
+spende.höchstens(höchstbetrag)        // § 9 Nr. 5 GewStG / § 24 KStG
+gewerbeertrag.mindestens(0,00)        // Nicht-Negativ-Kappung
+gewerbeertrag.abrundenAuf(100,00)     // § 11 Abs. 1 Satz 3 GewStG: volle 100 €
+```
+
+**Begrenzung („clamp")** entsteht durch Verkettung — eine Unter- und eine
+Obergrenze hintereinander:
+
+```findsl
+betrag.mindestens(untergrenze).höchstens(obergrenze)
+```
+
+**`vielfaches` muss größer als `0` sein** — andernfalls ist der Aufruf ein
+Laufzeitfehler (kein sinnvoller Rundungsschritt).
+
 ---
 
 ## 12. Code-Generierung

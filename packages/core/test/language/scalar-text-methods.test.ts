@@ -200,6 +200,58 @@ describe('§11.5 — Text-Methoden', () => {
     });
 });
 
+describe('§11.6 — Grenzwert-Methoden (.höchstens/.mindestens, typ-erhaltend, kontextfrei)', () => {
+    it('Euro.höchstens(Euro) → Euro', async () => {
+        const [t, errs] = await inCtx('Euro', '(100 als Euro).höchstens(80 als Euro)');
+        expect(t).toBe('Euro');
+        expect(errs).toEqual([]);
+    });
+    it('EuroCent.mindestens(0,00) → EuroCent (nacktes Literal promotet)', async () => {
+        const [t, errs] = await inCtx('EuroCent', '(5,00 als EuroCent).mindestens(0,00)');
+        expect(t).toBe('EuroCent');
+        expect(errs).toEqual([]);
+    });
+    it('Ganzzahl.höchstens(Ganzzahl) → Ganzzahl', async () => {
+        expect(await inferType('(7 als Ganzzahl).höchstens(3 als Ganzzahl)')).toBe('Ganzzahl');
+    });
+    it('Prozent.mindestens(Prozent) → Prozent', async () => {
+        expect(await inferType('(40%).mindestens(20%)')).toBe('Prozent');
+    });
+    it('Clamp-Verkettung mindestens().höchstens() erzeugt keinen Fehler', async () => {
+        expect(await diags(
+            'konst R: Euro = (50 als Euro).mindestens(0 als Euro).höchstens(40 als Euro)\n',
+        )).toEqual([]);
+    });
+    it('nicht-numerischer Empfänger (Text) → Empfänger-Fehler', async () => {
+        const errs = await diags('konst S: Text = "x"\nkonst Q: Text = S.höchstens("y")\n');
+        expect(errs.join(' ')).toMatch(/numerisch/);
+    });
+    it('Argument-Typ-Mismatch (Euro.höchstens(Prozent)) → Fehler', async () => {
+        const [, errs] = await inCtx('Euro', '(100 als Euro).höchstens(25%)');
+        expect(errs.length).toBeGreaterThan(0);
+    });
+});
+
+describe('§11.6 — Stufen-Methoden (.abrundenAuf/.aufrundenAuf, typ-erhaltend, kontextfrei)', () => {
+    it('EuroCent.abrundenAuf(EuroCent) → EuroCent (kein Kontext nötig)', async () => {
+        const [t, errs] = await inCtx(
+            'EuroCent', '(12.345,67 als EuroCent).abrundenAuf(100,00 als EuroCent)',
+        );
+        expect(t).toBe('EuroCent');
+        expect(errs).toEqual([]);
+    });
+    it('Euro.aufrundenAuf(Euro) → Euro', async () => {
+        expect(await inferType('(1.234 als Euro).aufrundenAuf(1 als Euro)')).toBe('Euro');
+    });
+    it('Ganzzahl.abrundenAuf(Ganzzahl) → Ganzzahl', async () => {
+        expect(await inferType('(125 als Ganzzahl).abrundenAuf(100 als Ganzzahl)')).toBe('Ganzzahl');
+    });
+    it('nicht-numerischer Empfänger (Text) → Empfänger-Fehler', async () => {
+        const errs = await diags('konst S: Text = "x"\nkonst Q: Text = S.abrundenAuf("y")\n');
+        expect(errs.join(' ')).toMatch(/numerisch/);
+    });
+});
+
 describe('§11.1/§11.5 — Teil-Parse-Robustheit', () => {
     it('unvollständige Rundung kippt Validierung nicht', async () => {
         await expect(diags('konst R: Euro = (1,5 als EuroCent).abrunden(\n')).resolves.toBeDefined();

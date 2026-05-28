@@ -55,8 +55,10 @@ import {
 } from './generated/ast.js';
 import {
     listMethod,
+    scalarArgMethod,
     scalarRoundingMethod,
     textMethod,
+    SCALAR_ARG_METHODS,
     type ListMethodCallOp,
 } from './findsl-method-inference.js';
 import { checkAgainstAnnotation } from './findsl-type-check.js';
@@ -740,6 +742,24 @@ function walkChain(
                 op as unknown as AstNode, report,
             );
             if (callOp) k++;                      // folgendes () konsumieren
+            continue;
+        }
+
+        // Grenzwert-/Stufen-Methoden (SPEC § 11.6): `.höchstens`/`.mindestens`
+        // (Min/Max) und `.abrundenAuf`/`.aufrundenAuf` (Rundung auf ein
+        // Vielfaches) auf numerischem Empfänger. Typ-erhaltend, kontextfrei.
+        // Vor dem Text-Zweig, damit `.höchstens` auf Text die präzise
+        // Empfänger-Diagnose („nur auf numerischen Typen") bekommt statt
+        // „Text hat keine Methode". Record-/Listen-Felder bleiben unberührt
+        // (nur `current.kind === 'primitive'`).
+        if (current.kind === 'primitive' && isFieldAccess(op) && op.name
+            && SCALAR_ARG_METHODS.has(op.name)) {
+            const next = chain[k + 1];
+            const callOp = next && isCall(next) ? next : undefined;
+            const r = scalarArgMethod(
+                current, op.name, callOp, op as unknown as AstNode, env, ctx, report);
+            current = r.type;
+            if (r.consumedCall && next && isCall(next)) k++;
             continue;
         }
 

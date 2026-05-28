@@ -2,6 +2,32 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-27 — **Stdlib: vier neue Skalar-Methoden
+(SPEC § 11.6) — Grenzwert & Rundung auf Vielfache.** `.höchstens(grenze)`
+(Minimum, „höchstens jedoch …"), `.mindestens(grenze)` (Maximum,
+„mindestens jedoch …" / Nicht-Negativ-Kappung mit `.mindestens(0,00)`),
+`.abrundenAuf(vielfaches)` / `.aufrundenAuf(vielfaches)` (Rundung auf ein
+Vielfaches, z. B. § 11 GewStG „volle 100 €"). Motivation: jedes Fachmodul
+(gewst, kst, kraftst) baute diese Muster bislang als lokale Helfer nach
+(`_Hoechstens`/`_Groesseres`/`_NichtNegativ`/`Begrenze`/`AbrundenAuf100`) —
+die Politik „Builtins ergänzen, sobald reale Beispiele sie nachfragen" ist
+erfüllt. **Semantik:** alle vier **typ-erhaltend** und **kontextfrei**
+(kein `expected`-Walk wie § 11.1 — keine Einheit gewechselt); Argument
+trägt den Empfängertyp (nacktes Literal promotet bidirektional); clamp =
+`.mindestens(u).höchstens(o)`; `vielfaches > 0` (sonst Laufzeitfehler);
+nicht-numerischer Empfänger → Fehler. **Implementierung (Sprachkern):**
+Single-Dispatch wie die bestehenden Methoden — `scalarArgMethod` +
+`SCALAR_ARG_METHODS` (`findsl-method-inference.ts`), Ketten-Walker-Zweig
+(`findsl-inference.ts`, vor dem Text-Zweig für präzise Empfänger-Diagnose),
+`SCALAR_METHOD_DEFS` (`findsl-stdlib.ts`, Completion/Hover), Interpreter
+`scalarLimitValue`/`scalarRoundToMultipleValue` (`interpreter.ts`,
+Euro-kanonisch, Tag bleibt). SPEC § 11.6 ergänzt. **Keine Grammatikänderung**
+(Methodenaufruf-Syntax bestand) → Trias unberührt. TDD: 21 neue Tests in
+`test/{language,interpret}/scalar-text-methods.test.ts`. **Bewusst offen:**
+Codegen (`emit-java`/`emit-ts`/`emit-js` + Runtimes) und Umstellung der
+Beispielmodule auf die neuen Methoden — getrennter Folgeschritt; `korpus-
+stdlib.findsl` (Codegen-Gate) bleibt vorerst unberührt.*
+
 *Letzte Aktualisierung: 2026-05-22 — **PAP-Generator: neues CLI-Subkommando
 `papgen` (Programmablaufpläne aus FinDSL, DIN-66001-nah). PR #106 / Issue
 #102.** FinDSL-Funktionen → Flussdiagramme; eine `fn` = ein Diagramm.

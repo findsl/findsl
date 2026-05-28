@@ -153,4 +153,45 @@ fn f(p: Person): Text = p.name
         const t = toks.find((x) => x.text === 'Person' && x.tokenType === 'class');
         expect(t).toBeDefined();
     });
+
+    it('User-Aufzählungs-Wert in Referenz → enumMember', async () => {
+        // Werte sind Strings in AufzaehlungDecl.values, keine eigenen
+        // Top-Level-Decls. Klassifizierung muss trotzdem `enumMember`
+        // liefern (Theme stylt sie unterstrichen, Issue zum
+        // Aufzählungs-Werte-Highlighting).
+        const toks = await decode(`aufzählung Farbe { Rot, Grün, Blau }
+konst K: Farbe = Rot
+`);
+        // Die Decl-Stelle (innerhalb der aufzählung) ist seit jeher
+        // enumMember; entscheidend ist die Referenz `= Rot` in Z.1.
+        const refs = toks.filter((t) => t.text === 'Rot' && t.tokenType === 'enumMember');
+        expect(refs.length).toBeGreaterThanOrEqual(2); // Decl + Referenz
+    });
+
+    it('User-Aufzählungs-Wert als wähle-Pattern → enumMember', async () => {
+        const toks = await decode(`aufzählung Stand { Aktiv, Pause }
+fn f(s: Stand): Ganzzahl = wähle (s) {
+    falls Aktiv -> 1
+    falls Pause -> 0
+}
+`);
+        expect(pick(toks, 'Aktiv', 'enumMember')).toBeDefined();
+        expect(pick(toks, 'Pause', 'enumMember')).toBeDefined();
+    });
+
+    it('Cross-Modul Aufzählungs-Wert via verwende → enumMember', async () => {
+        const toks = await decodeIn({
+            lib: `aufzählung Tarifart { Grund, Spez }
+`,
+            app: `verwende { Grund } aus "./lib"
+konst T: Ganzzahl = wähle (Grund) {
+    falls Grund -> 1
+    sonst       -> 0
+}
+`,
+        }, 'app');
+        // Mindestens der Pattern-Treffer `falls Grund` muss enumMember sein.
+        const grundRefs = toks.filter((t) => t.text === 'Grund' && t.tokenType === 'enumMember');
+        expect(grundRefs.length).toBeGreaterThanOrEqual(1);
+    });
 });

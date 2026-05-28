@@ -350,6 +350,12 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
         for (const decl of program.decls) {
             if (decl.name === name) return { kind: 'decl', node: decl };
         }
+        // 1b. Lokaler Aufzählungs-Wert: kein eigener Decl, sondern String
+        //     in `AufzaehlungDecl.values` → Hover zeigt die Aufzählung.
+        const localEnum = program.decls.find(
+            (d) => isAufzaehlungDecl(d) && d.values.includes(name),
+        );
+        if (localEnum) return { kind: 'decl', node: localEnum };
 
         // 2. Cross-Modul: schlage in den Imports nach.
         const crossResolved = this.resolveCrossModule(program, name);
@@ -378,7 +384,13 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
         const sourceProgram = this.findModuleInWorkspace(binding.resolvedPath);
         if (!sourceProgram) return undefined;
 
-        const decl = sourceProgram.decls.find((d) => d.name === binding.sourceName);
+        // Top-Level-Decl direkt; sonst ist `sourceName` ein Aufzählungs-
+        // Wert (String in `AufzaehlungDecl.values`) → Hover zeigt die
+        // umschließende Aufzählung.
+        const decl = sourceProgram.decls.find((d) => d.name === binding.sourceName)
+            ?? sourceProgram.decls.find(
+                (d) => isAufzaehlungDecl(d) && d.values.includes(binding.sourceName),
+            );
         if (!decl) return undefined;
         return { kind: 'cross-decl', node: decl, sourceModule: binding.rawSource };
     }

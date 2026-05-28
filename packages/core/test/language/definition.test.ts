@@ -303,3 +303,47 @@ konst R: Euro = GFB
         expect(links![0].targetUri).toMatch(/lib\.findsl$/);
     });
 });
+
+describe('Go-to-Definition: Aufzählungs-Wert als Code-Referenz', () => {
+    it('Lokal definiertes Enum, Wert im fn-Body → Sprung zur Aufzählungs-Decl', async () => {
+        const src = `aufzählung Farbe { Rot, Grün, Blau }
+fn f(c: Farbe): Ganzzahl = wähle (c) {
+    falls Rot -> 1
+    sonst     -> 0
+}
+`;
+        const links = await defAt(src, 'Rot -> 1');
+        expect(links).toBeDefined();
+        expect(links).toHaveLength(1);
+        // Aufzählung in Zeile 0
+        expect(links![0].targetRange.start.line).toBe(0);
+    });
+
+    it('Importierter Enum-Wert in fn-Body → Sprung zur Aufzählung im Quellmodul', async () => {
+        // Reproduziert den Bug aus dem kraftst-Beispiel:
+        //   falls f.antrieb == Elektro …
+        const lib = `aufzählung Antrieb { Fremdzuendung, Selbstzuendung, Elektro }
+`;
+        const app = `verwende { Antrieb, Elektro } aus "./lib"
+fn f(a: Antrieb): Ganzzahl = wähle {
+    falls a == Elektro -> 1
+    sonst              -> 0
+}
+`;
+        const links = await defInModules({ lib, app }, 'app', 'Elektro -> 1');
+        expect(links).toBeDefined();
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+        expect(links![0].targetRange.start.line).toBe(0);
+    });
+
+    it('Importierter Enum-Wert im Wert-Binding → Sprung zur Aufzählung', async () => {
+        const lib = `aufzählung Stand { Aktiv, Pause }
+`;
+        const app = `verwende { Stand, Aktiv } aus "./lib"
+konst K: Stand = Aktiv
+`;
+        const links = await defInModules({ lib, app }, 'app', 'Aktiv\n');
+        expect(links).toBeDefined();
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+    });
+});

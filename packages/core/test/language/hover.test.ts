@@ -916,3 +916,48 @@ aufzählung Fahrzeugart {
         expect(md).toMatch(/Importiert aus Datei/);
     });
 });
+
+describe('Hover auf Aufzählungs-Werten als Code-Referenz', () => {
+    it('Lokal definiert, Wert im fn-Body → Aufzählungs-Hover', async () => {
+        const src = `--
+Datei-Dokumentation.
+--
+
+--
+Antriebsart eines Fahrzeugs.
+--
+aufzählung Antrieb { Fremdzuendung, Elektro }
+fn f(a: Antrieb): Ganzzahl = wähle (a) {
+    falls Elektro -> 1
+    sonst         -> 0
+}
+`;
+        const h = await hoverAt(src, 'Elektro -> 1');
+        const md = content(h);
+        expect(md).toContain('aufzählung Antrieb');
+        expect(md).toContain('Antriebsart');
+    });
+
+    it('Importierter Wert im fn-Body → Cross-Decl-Karte', async () => {
+        const lib = `--
+Datei-Dokumentation.
+--
+
+--
+Antriebsart nach § 9 KraftStG.
+--
+aufzählung Antrieb { Fremdzuendung, Elektro }
+`;
+        const app = `verwende { Antrieb, Elektro } aus "./lib"
+fn f(a: Antrieb): Ganzzahl = wähle (a) {
+    falls Elektro -> 1
+    sonst         -> 0
+}
+`;
+        const h = await hoverInModules({ lib, app }, 'app', 'Elektro -> 1');
+        const md = content(h);
+        expect(md).toContain('aufzählung Antrieb');
+        expect(md).toContain('Antriebsart');
+        expect(md).toMatch(/Importiert aus Datei/);
+    });
+});

@@ -176,6 +176,13 @@ function resolveTopLevelTarget(
     for (const decl of program.decls) {
         if (decl.name === name) return decl;
     }
+    // Fallback: Aufzählungs-Wert ist kein eigener Decl-Knoten, sondern ein
+    // String in `AufzaehlungDecl.values` — Sprung zur umschließenden
+    // Aufzählung (spiegelt das Verhalten bei `verwende`-Import-Tokens).
+    const enumOwner = program.decls.find(
+        (d) => isAufzaehlungDecl(d) && d.values.includes(name),
+    );
+    if (enumOwner) return enumOwner;
     return resolveCrossModuleTarget(program, name, documents);
 }
 
@@ -187,7 +194,10 @@ function resolveCrossModuleTarget(
     if (!binding) return undefined;
     const sourceProgram = findModuleInWorkspace(documents, binding.resolvedPath);
     if (!sourceProgram) return undefined;
-    return sourceProgram.decls.find((d) => d.name === binding.sourceName);
+    return sourceProgram.decls.find((d) => d.name === binding.sourceName)
+        ?? sourceProgram.decls.find(
+            (d) => isAufzaehlungDecl(d) && d.values.includes(binding.sourceName),
+        );
 }
 
 /**

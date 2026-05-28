@@ -220,7 +220,36 @@ export class FindslSemanticTokenProvider extends AbstractSemanticTokenProvider {
             if (isDatensatzDecl(decl))   return { type: SemanticTokenTypes.class, modifier: withIntern(undefined, it) };
             if (isAufzaehlungDecl(decl)) return { type: SemanticTokenTypes.enum, modifier: withIntern(undefined, it) };
         }
+        // User-Aufzählungs-Werte: kein eigener Decl-Knoten, sondern String
+        // in `AufzaehlungDecl.values` (lokal oder via `verwende`). Spiegelt
+        // die Cross-Modul-Auflösung aus PR #197 (Definition/Hover).
+        const enumOwner = this.lookupEnumValueOwner(name, ctx);
+        if (enumOwner) {
+            const it = isInternalName((enumOwner as { name?: string }).name ?? '');
+            return { type: SemanticTokenTypes.enumMember, modifier: withIntern(undefined, it) };
+        }
         return undefined;
+    }
+
+    /**
+     * Findet die Aufzählungs-Decl, deren `values` `name` enthält — lokal
+     * im Modul oder über ein `verwende`-Binding. Für die semantische
+     * Klassifikation als `enumMember` in Referenzen außerhalb der Decl
+     * (Patterns, Wert-Bindings, Aufruf-Argumente).
+     */
+    private lookupEnumValueOwner(name: string, ctx: AstNode): AstNode | undefined {
+        const program = AstUtils.getDocument(ctx).parseResult?.value as Program | undefined;
+        if (!program) return undefined;
+        for (const d of program.decls) {
+            if (isAufzaehlungDecl(d) && d.values.includes(name)) return d;
+        }
+        const binding = analyzeImports(program).bindings.find((b) => b.localName === name);
+        if (!binding) return undefined;
+        const src = findModuleInWorkspace(this.docs, binding.resolvedPath);
+        if (!src) return undefined;
+        return src.decls.find(
+            (d) => isAufzaehlungDecl(d) && d.values.includes(binding.sourceName),
+        );
     }
 
     /**

@@ -2,6 +2,27 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-28 — **§ 11.6-Methoden in alle Codegen-
+Targets + Beispielmodule umgestellt** (Folgeschritt zum Sprachkern vom
+2026-05-27). Die vier Grenzwert-/Stufen-Methoden laufen jetzt auch durch
+**Java-, TypeScript- und JavaScript-Codegen**: neue IR-Knoten `scalarLimit`
+/`scalarRoundTo` (`ir/nodes.ts`), Lower-Dispatch (`lower/lower.ts`, ASCII-
+Transliteration `höchstens`→`hoechstens` wie `größtes`→`groesstes`),
+Emission in `emit-java`/`emit-ts` (emit-js strippt das TS-Generat), Runtime-
+Methoden `hoechstens`/`mindestens`/`abrundenAuf`/`aufrundenAuf` in
+`runtimes/java/FinDslNumber.java` + `runtimes/ts/findsl-number.ts` (Tag-
+erhaltend, Euro-kanonisch, `vielfaches > 0`). **Beispiele entschlackt:**
+gewst (`_NichtNegativ`/`_Hoechstens`/`_Groesseres` → 1-Zeilen-Methoden,
+`AbrundenAuf100` → `.abrundenAuf(ABRUNDUNG_11)`, `ABRUNDUNG_11` nun
+`EuroCent`), kst (`_BegrenzterFreibetrag24` → `.mindestens(0).höchstens(
+FREIBETRAG_24)` — Clamp-Verkettung), kraftst (`Begrenze` →
+`.höchstens(…)`); `korpus-stdlib(.test).findsl` um § 11.6 erweitert
+(Codegen-Gate-Abdeckung, ts-gate-Floor 116→126). **Verifikation:** 1253
+Tests grün (inkl. ts-gate gewst/kraftst durch ts+js mit ausgeführten
+Generaten), `javac` über das Java-Generat + neue `FinDslNumberTest`-Suite
+grün (JDK 21). Java-Tests laufen in CI (Gradle). `schritt` ist Keyword
+(Bereich-Konstruktor) → Parametername `vielfaches`.*
+
 *Letzte Aktualisierung: 2026-05-27 — **Stdlib: vier neue Skalar-Methoden
 (SPEC § 11.6) — Grenzwert & Rundung auf Vielfache.** `.höchstens(grenze)`
 (Minimum, „höchstens jedoch …"), `.mindestens(grenze)` (Maximum,

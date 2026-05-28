@@ -323,6 +323,8 @@ function emitExpr(e: IrExpr): string {
         case 'neg':             return `${emitExpr(e.value)}.neg()`;
         case 'not':             return `!(${emitExpr(e.value)})`;
         case 'round':           return `${emitExpr(e.receiver)}.${e.mode}(${tsString(e.target)})`;
+        case 'scalarLimit':     return `${emitExpr(e.receiver)}.${e.op}(${emitExpr(e.arg)})`;
+        case 'scalarRoundTo':   return `${emitExpr(e.receiver)}.${e.op}(${emitExpr(e.arg)})`;
         case 'cast':            return `${emitExpr(e.value)}.cast(${tsString(e.target)})`;
         case 'moneyAnno':
             return `${emitExpr(e.expr)}.withMoneyAnnotation(`

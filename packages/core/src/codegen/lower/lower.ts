@@ -674,6 +674,20 @@ function lowerChainOps(
                 const m = fname === 'summe' ? 'summe'
                     : fname === 'größtes' ? 'groesstes' : 'kleinstes';
                 cur = { kind: 'listMethod', receiver: cur, method: m };
+            } else if (fname === 'höchstens' || fname === 'mindestens'
+                    || fname === 'abrundenAuf' || fname === 'aufrundenAuf') {
+                // § 11.6 Grenzwert-/Stufen-Methoden — genau ein Argument,
+                // typ-erhaltend, kontextfrei (kein governingMoney nötig).
+                if (call.args.length !== 1) {
+                    throw new Error(`\`.${fname}(x)\` erwartet genau ein Argument.`);
+                }
+                const arg = lowerExpr(call.args[0].value, reg);
+                cur = fname === 'höchstens' || fname === 'mindestens'
+                    ? {
+                        kind: 'scalarLimit', receiver: cur,
+                        op: fname === 'höchstens' ? 'hoechstens' : 'mindestens', arg,
+                    }
+                    : { kind: 'scalarRoundTo', receiver: cur, op: fname, arg };
             } else if (fname === 'enthält') {
                 if (call.args.length !== 1) {
                     throw new Error('`.enthält(x)` erwartet genau ein Argument.');

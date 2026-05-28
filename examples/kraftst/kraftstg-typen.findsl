@@ -233,8 +233,5 @@ Höchstbetrags-Begrenzung („insgesamt jedoch nicht mehr als …",
 --
 @Quelle("§ 9 Absatz 1 KraftStG")
 fn Begrenze(betrag: EuroCent, hoechstens: EuroCent): EuroCent =
-    wähle {
-        falls betrag > hoechstens -> hoechstens
-        sonst                     -> betrag
-    }
+    betrag.höchstens(hoechstens)
 

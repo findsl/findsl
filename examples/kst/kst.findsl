@@ -192,11 +192,8 @@ vergrößern); ist es kleiner als 5.000 €, ist es selbst die Obergrenze.
            Ausschlusses nach § 24 Satz 2 KStG).
 --
 @Quelle("§ 24 Satz 1 KStG")
-fn _BegrenzterFreibetrag24(einkommen: Euro): Euro = wähle {
-    falls einkommen <= 0            -> 0
-    falls einkommen < FREIBETRAG_24 -> einkommen
-    sonst                           -> FREIBETRAG_24
-}
+fn _BegrenzterFreibetrag24(einkommen: Euro): Euro =
+    einkommen.mindestens(0).höchstens(FREIBETRAG_24)
 
 --
 Freibetrag nach § 24 KStG unter Berücksichtigung des Ausschlusses nach

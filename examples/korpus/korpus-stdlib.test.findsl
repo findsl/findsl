@@ -31,6 +31,11 @@ verwende {
     Kleinstes,
     Konkat,
     KonkatDrei,
+    HöchstensEuro,
+    MindestensEuroCent,
+    BegrenztEuro,
+    AbrundenAufVielfaches,
+    AufrundenAufVielfaches,
 } aus "./korpus-stdlib"
 
 prüfe "§ 11.1 Rundungs-Methoden (EuroCent → Euro)" {
@@ -103,5 +108,31 @@ prüfe "§ 11.5 Text-`+`-Konkatenation" {
     }
     testfall "Konkat mit leerem Suffix = Linke Seite" {
         Konkat("xyz", "") == "xyz"
+    }
+}
+
+prüfe "§ 11.6 Grenzwert-Methoden (.höchstens/.mindestens)" {
+    testfall "höchstens kappt nach oben (min)" { HöchstensEuro(100, 80) == 80 }
+    testfall "höchstens lässt kleineren durch" { HöchstensEuro(50, 80) == 50 }
+    testfall "mindestens hebt auf Untergrenze (max)" {
+        MindestensEuroCent(2,00, 5,00) == 5,00
+    }
+    testfall "mindestens lässt größeren durch" {
+        MindestensEuroCent(8,00, 5,00) == 8,00
+    }
+    testfall "Clamp greift an der Obergrenze" { BegrenztEuro(50, 0, 40) == 40 }
+    testfall "Clamp greift an der Untergrenze" { BegrenztEuro(0, 10, 40) == 10 }
+    testfall "Clamp lässt Wert im Intervall durch" { BegrenztEuro(25, 0, 40) == 25 }
+}
+
+prüfe "§ 11.6 Stufen-Methoden (.abrundenAuf/.aufrundenAuf)" {
+    testfall "abrundenAuf volle 100 €" {
+        AbrundenAufVielfaches(12.345,67, 100,00) == 12.300,00
+    }
+    testfall "exaktes Vielfaches bleibt unverändert" {
+        AbrundenAufVielfaches(12.300,00, 100,00) == 12.300,00
+    }
+    testfall "aufrundenAuf vollen Zehner" {
+        AufrundenAufVielfaches(1.234, 10) == 1.240
     }
 }

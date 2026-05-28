@@ -140,7 +140,7 @@ Abrundungsstufe: der Gewerbeertrag ist auf volle **100 €** nach unten
 abzurunden (§ 11 Abs. 1 Satz 3 GewStG).
 --
 @Quelle("§ 11 Absatz 1 Satz 3 GewStG")
-konst ABRUNDUNG_11: Ganzzahl = 100
+konst ABRUNDUNG_11: EuroCent = 100,00
 
 --
 Freibetrag bei **natürlichen Personen und Personengesellschaften**:
@@ -436,10 +436,7 @@ Betrag selbst (entspricht dem Maximum aus `0` und `betrag`).
 @param betrag Zu kappender Betrag.
 @rückgabe     `betrag`, mindestens jedoch `0,00`.
 --
-fn _NichtNegativ(betrag: EuroCent): EuroCent = wähle {
-    falls betrag <= 0,00 -> 0,00
-    sonst                -> betrag
-}
+fn _NichtNegativ(betrag: EuroCent): EuroCent = betrag.mindestens(0,00)
 
 --
 Höchstbetrags-Begrenzung: liefert den kleineren der beiden Beträge
@@ -449,10 +446,7 @@ Höchstbetrags-Begrenzung: liefert den kleineren der beiden Beträge
 @param hoechstens Obergrenze.
 @rückgabe         `betrag`, höchstens `hoechstens`.
 --
-fn _Hoechstens(betrag: EuroCent, hoechstens: EuroCent): EuroCent = wähle {
-    falls betrag > hoechstens -> hoechstens
-    sonst                     -> betrag
-}
+fn _Hoechstens(betrag: EuroCent, hoechstens: EuroCent): EuroCent = betrag.höchstens(hoechstens)
 
 --
 Liefert den größeren zweier Beträge (Maximum) — für die „… oder …"-
@@ -462,10 +456,7 @@ Alternative des § 9 Nr. 5 Höchstbetrags.
 @param b  Zweiter Betrag.
 @rückgabe Der größere der beiden Beträge.
 --
-fn _Groesseres(a: EuroCent, b: EuroCent): EuroCent = wähle {
-    falls a >= b -> a
-    sonst        -> b
-}
+fn _Groesseres(a: EuroCent, b: EuroCent): EuroCent = a.mindestens(b)
 
 // ===========================================================================
 // § 8 GewStG — Hinzurechnungen
@@ -686,8 +677,7 @@ Steuermessbetrag — siehe `berechneGewerbesteuer`).
 @rückgabe     Auf volle 100 € abgerundeter Betrag.
 --
 @Quelle("§ 11 Absatz 1 Satz 3 GewStG")
-fn AbrundenAuf100(betrag: EuroCent): EuroCent =
-    ((betrag / ABRUNDUNG_11).abrunden() * ABRUNDUNG_11) als EuroCent
+fn AbrundenAuf100(betrag: EuroCent): EuroCent = betrag.abrundenAuf(ABRUNDUNG_11)
 
 --
 Roher Freibetrag nach **§ 11 Abs. 1 Satz 3 GewStG** je Rechtsform —

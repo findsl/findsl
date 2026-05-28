@@ -499,6 +499,82 @@ public sealed class FinDslNumber
         };
     }
 
+    // --- Grenzwert-/Stufen-Methoden (interpreter.ts scalarLimitValue/
+    //     scalarRoundToMultipleValue; SPEC § 11.6) -------------------------
+    // Typ-erhaltend (Tag des Empfängers bleibt) und kontextfrei. Werte sind
+    // Euro-kanonisch, daher direkt über `value` vergleichbar/teilbar.
+
+    /**
+     * Obergrenze (FinDSL {@code .höchstens(grenze)}, SPEC § 11.6) — das
+     * Minimum aus Empfänger und {@code grenze}.
+     *
+     * @param grenze die Obergrenze.
+     * @return der kleinere der beiden Werte, mit dem Empfänger-Tag.
+     */
+    public FinDslNumber hoechstens(FinDslNumber grenze) {
+        BigDecimal chosen = value.compareTo(grenze.value) <= 0 ? value : grenze.value;
+        return new FinDslNumber(chosen, type);
+    }
+
+    /**
+     * Untergrenze (FinDSL {@code .mindestens(grenze)}, SPEC § 11.6) — das
+     * Maximum aus Empfänger und {@code grenze}.
+     *
+     * @param grenze die Untergrenze.
+     * @return der größere der beiden Werte, mit dem Empfänger-Tag.
+     */
+    public FinDslNumber mindestens(FinDslNumber grenze) {
+        BigDecimal chosen = value.compareTo(grenze.value) >= 0 ? value : grenze.value;
+        return new FinDslNumber(chosen, type);
+    }
+
+    /**
+     * Abrunden auf ein Vielfaches (FinDSL {@code .abrundenAuf(vielfaches)},
+     * SPEC § 11.6) — Richtung −∞.
+     *
+     * @param vielfaches Rundungsschritt (muss &gt; 0 sein).
+     * @return das nächstkleinere Vielfache, mit dem Empfänger-Tag.
+     */
+    public FinDslNumber abrundenAuf(FinDslNumber vielfaches) {
+        return roundToMultiple(vielfaches, RoundingMode.FLOOR);
+    }
+
+    /**
+     * Aufrunden auf ein Vielfaches (FinDSL {@code .aufrundenAuf(vielfaches)},
+     * SPEC § 11.6) — Richtung +∞.
+     *
+     * @param vielfaches Rundungsschritt (muss &gt; 0 sein).
+     * @return das nächstgrößere Vielfache, mit dem Empfänger-Tag.
+     */
+    public FinDslNumber aufrundenAuf(FinDslNumber vielfaches) {
+        return roundToMultiple(vielfaches, RoundingMode.CEILING);
+    }
+
+    /**
+     * Gemeinsame Mechanik für {@link #abrundenAuf}/{@link #aufrundenAuf}
+     * (Spiegel {@code scalarRoundToMultipleValue}): {@code stufen =
+     * round(value / vielfaches)} mit anschließendem {@code stufen *
+     * vielfaches}.
+     *
+     * <p>Die Division nutzt {@code divide(divisor, 0, mode)} (exakte
+     * Zwischengenauigkeit, direkt auf scale 0 gerundet) — nicht {@code
+     * MC_DIV}; für die realistischen Steuerwerte (&lt; 10^18) deckungsgleich
+     * mit der decimal.js-Seite ({@code div(...).toDecimalPlaces(0, mode)}).
+     *
+     * @param vielfaches Rundungsschritt (muss &gt; 0 sein).
+     * @param mode       Rundungsrichtung (FLOOR/CEILING).
+     * @return gerundetes Vielfaches mit dem Empfänger-Tag.
+     * @throws FinDslRuntimeError wenn {@code vielfaches <= 0}.
+     */
+    private FinDslNumber roundToMultiple(FinDslNumber vielfaches, RoundingMode mode) {
+        if (vielfaches.value.signum() <= 0) {
+            throw new FinDslRuntimeError("Vielfaches muss größer als 0 sein, erhalten "
+                    + germanFormat(vielfaches.value, null) + ".");
+        }
+        BigDecimal stufen = value.divide(vielfaches.value, 0, mode);
+        return new FinDslNumber(stufen.multiply(vielfaches.value), type);
+    }
+
     // --- Deutsche Darstellung (values.ts:297-371) -------------------------
 
     /**

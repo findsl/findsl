@@ -12,6 +12,9 @@ Java-Codegen verfügbar:
   `.größtes()` / `.kleinstes()`.
 - **§ 11.5 Text-`+`-Konkatenation** — verfügbar im Java-Codegen
   (Test in `Konkat`).
+- **§ 11.6 Grenzwert-/Stufen-Methoden** — `.höchstens`, `.mindestens`
+  (Min/Max, Clamp via Verkettung), `.abrundenAuf` / `.aufrundenAuf`
+  (Rundung auf ein Vielfaches); typ-erhaltend auf allen numerischen Typen.
 
 > **Hinweis:** Die weiteren § 11.5-Text-Methoden (`.alsText`,
 > `.alsGroßbuchstaben`/`.alsKleinbuchstaben`, `.beginntMit`,
@@ -52,6 +55,26 @@ fn AbrundenDezimal(d: Dezimal): Ganzzahl = d.abrunden()
 
 -- Dezimal.aufrunden() → Ganzzahl (typischer „je angefangene Einheit"-Tarif). --
 fn AufrundenDezimal(d: Dezimal): Ganzzahl = d.aufrunden()
+
+// ===========================================================================
+// § 11.6 Grenzwert- und Stufen-Methoden
+// ===========================================================================
+
+-- `.höchstens(grenze)` → Minimum (Obergrenze, „höchstens jedoch …"), typ-erhaltend. --
+fn HöchstensEuro(betrag: Euro, grenze: Euro): Euro = betrag.höchstens(grenze)
+
+-- `.mindestens(grenze)` → Maximum (Untergrenze); `.mindestens(0,00)` kappt Negatives. --
+fn MindestensEuroCent(betrag: EuroCent, grenze: EuroCent): EuroCent = betrag.mindestens(grenze)
+
+-- Clamp durch Verkettung: erst Unter-, dann Obergrenze. --
+fn BegrenztEuro(betrag: Euro, unten: Euro, oben: Euro): Euro =
+    betrag.mindestens(unten).höchstens(oben)
+
+-- `.abrundenAuf(vielfaches)` → nächstkleineres Vielfaches (z. B. volle 100 €, § 11 GewStG). --
+fn AbrundenAufVielfaches(betrag: EuroCent, vielfaches: EuroCent): EuroCent = betrag.abrundenAuf(vielfaches)
+
+-- `.aufrundenAuf(vielfaches)` → nächstgrößeres Vielfaches. --
+fn AufrundenAufVielfaches(betrag: Euro, vielfaches: Euro): Euro = betrag.aufrundenAuf(vielfaches)
 
 // ===========================================================================
 // § 11.2 Listen-Methoden

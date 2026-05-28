@@ -285,4 +285,98 @@ class FinDslNumberTest {
             assertEquals("-1.234", FinDslNumber.euro("-1234").asText());
         }
     }
+
+    @Nested
+    @DisplayName("§ 11.6 Grenzwert-/Stufen-Methoden")
+    class GrenzwertUndStufen {
+        @Test
+        @DisplayName("höchstens kappt nach oben (min), Tag bleibt")
+        void hoechstensKappt() {
+            assertValue(FinDslNumber.euro("100").hoechstens(FinDslNumber.euro("80")),
+                "80", FinDslNumber.Type.Euro);
+        }
+
+        @Test
+        @DisplayName("höchstens lässt kleineren durch")
+        void hoechstensDurch() {
+            assertValue(FinDslNumber.euro("50").hoechstens(FinDslNumber.euro("80")),
+                "50", FinDslNumber.Type.Euro);
+        }
+
+        @Test
+        @DisplayName("höchstens mit negativen Werten")
+        void hoechstensNegativ() {
+            assertValue(FinDslNumber.euro("-5").hoechstens(FinDslNumber.euro("-3")),
+                "-5", FinDslNumber.Type.Euro);
+        }
+
+        @Test
+        @DisplayName("mindestens hebt auf Untergrenze (max), Tag EuroCent")
+        void mindestensHebt() {
+            assertValue(FinDslNumber.euroCent("2").mindestens(FinDslNumber.euroCent("5")),
+                "5", FinDslNumber.Type.EuroCent);
+        }
+
+        @Test
+        @DisplayName("mindestens lässt größeren durch")
+        void mindestensDurch() {
+            assertValue(FinDslNumber.euroCent("8").mindestens(FinDslNumber.euroCent("5")),
+                "8", FinDslNumber.Type.EuroCent);
+        }
+
+        @Test
+        @DisplayName("mindestens(0) kappt Negatives auf 0 (Nicht-Negativ)")
+        void mindestensNichtNegativ() {
+            assertValue(FinDslNumber.euro("-7").mindestens(FinDslNumber.euro("0")),
+                "0", FinDslNumber.Type.Euro);
+        }
+
+        @Test
+        @DisplayName("abrundenAuf volle 100, Tag bleibt")
+        void abrundenAufVolle100() {
+            assertValue(
+                FinDslNumber.euroCent("12345.67").abrundenAuf(FinDslNumber.euroCent("100")),
+                "12300", FinDslNumber.Type.EuroCent);
+        }
+
+        @Test
+        @DisplayName("aufrundenAuf volle 100 Richtung +∞")
+        void aufrundenAufVolle100() {
+            assertValue(
+                FinDslNumber.euroCent("12301").aufrundenAuf(FinDslNumber.euroCent("100")),
+                "12400", FinDslNumber.Type.EuroCent);
+        }
+
+        @Test
+        @DisplayName("exaktes Vielfaches bleibt unverändert (ab-/aufrunden)")
+        void exaktesVielfaches() {
+            assertValue(FinDslNumber.euro("1200").abrundenAuf(FinDslNumber.euro("100")),
+                "1200", FinDslNumber.Type.Euro);
+            assertValue(FinDslNumber.euro("1200").aufrundenAuf(FinDslNumber.euro("100")),
+                "1200", FinDslNumber.Type.Euro);
+        }
+
+        @Test
+        @DisplayName("negativer Empfänger: abrundenAuf rundet Richtung −∞")
+        void abrundenAufNegativ() {
+            // floor(-150/100) = floor(-1,5) = -2 → -200 (nicht -100).
+            assertValue(FinDslNumber.dezimal("-150").abrundenAuf(FinDslNumber.dezimal("100")),
+                "-200", FinDslNumber.Type.Dezimal);
+        }
+
+        @Test
+        @DisplayName("negativer Empfänger: aufrundenAuf rundet Richtung +∞")
+        void aufrundenAufNegativ() {
+            // ceil(-150/100) = ceil(-1,5) = -1 → -100.
+            assertValue(FinDslNumber.dezimal("-150").aufrundenAuf(FinDslNumber.dezimal("100")),
+                "-100", FinDslNumber.Type.Dezimal);
+        }
+
+        @Test
+        @DisplayName("vielfaches = 0 → FinDslRuntimeError")
+        void vielfachesNull() {
+            assertThrows(FinDslRuntimeError.class,
+                () -> FinDslNumber.euro("100").abrundenAuf(FinDslNumber.euro("0")));
+        }
+    }
 }

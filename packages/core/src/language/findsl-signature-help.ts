@@ -31,10 +31,16 @@ import {
 import {
     isCall,
     isCallChain,
+    isFieldAccess,
+    isSafeFieldAccess,
+    isParenChain,
     isDatensatzDecl,
     isFunktionDecl,
     type Call,
+    type CallChain,
+    type ChainOp,
     type DeclPrefix,
+    type ParenChain,
     type Program,
     type Type as TypeAnnotation,
     type TypeAtom,
@@ -42,6 +48,11 @@ import {
 import { analyzeImports } from './findsl-scope.js';
 import { findModuleInWorkspace } from './findsl-definition.js';
 import { BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
+import { findMethodDef } from './findsl-method-defs.js';
+import { infer } from './findsl-inference.js';
+import { buildLocalScope, stepChainOp } from './findsl-local-scope.js';
+import { buildModuleHeader } from './findsl-scope.js';
+import { type Type } from './findsl-types.js';
 import type { FindslServices } from './findsl-module.js';
 
 interface Sig {
@@ -77,12 +88,17 @@ export class FindslSignatureHelpProvider implements SignatureHelpProvider {
         const call = this.enclosingCall(rootCst, offset);
         if (!call) return undefined;
         const chain = call.$container;
-        if (!isCallChain(chain) || chain.chain[0] !== call || !chain.name) {
-            return undefined;     // nur direkte Aufrufform name(args)
-        }
-
         const program = document.parseResult.value as Program;
-        const sig = this.resolveSignature(program, chain.name);
+
+        // Zwei Aufrufformen werden unterstützt:
+        //   A) `name(args)`        — freie Funktion / Datensatz-Konstruktor
+        //   B) `recv.methode(args)` — Builtin-Methode (SPEC § 11)
+        let sig: Sig | undefined;
+        if (isCallChain(chain) && chain.chain[0] === call && chain.name) {
+            sig = this.resolveSignature(program, chain.name);
+        } else if (isCallChain(chain) || isParenChain(chain)) {
+            sig = this.resolveBuiltinMethodSignature(chain, call, program);
+        }
         if (!sig) return undefined;
 
         const active = activeParameter(call, offset, document, sig.paramRanges.length);
@@ -97,6 +113,28 @@ export class FindslSignatureHelpProvider implements SignatureHelpProvider {
         if (docText) info.documentation = { kind: 'markdown', value: docText };
 
         return { signatures: [info], activeSignature: 0, activeParameter: active };
+    }
+
+    /**
+     * Builtin-Methoden-Signatur für `recv.methode(args)` — sucht den
+     * unmittelbar vor dem Call stehenden `FieldAccess`, inferiert den
+     * Empfänger-Typ und befragt `findMethodDef`. Liefert `undefined`,
+     * wenn keine Builtin-Methode (Record-Feld, unbekannter Name, …).
+     */
+    private resolveBuiltinMethodSignature(
+        chain: CallChain | ParenChain, call: Call, program: Program,
+    ): Sig | undefined {
+        const callIdx = chain.chain.indexOf(call);
+        const prev = callIdx > 0 ? chain.chain[callIdx - 1] : undefined;
+        if (!prev || (!isFieldAccess(prev) && !isSafeFieldAccess(prev)) || !prev.name) return undefined;
+
+        const receiverType = inferReceiverTypeAt(chain, callIdx - 1, program, this.documents);
+        if (!receiverType) return undefined;
+
+        const def = findMethodDef(receiverType, prev.name);
+        if (!def || def.property) return undefined;  // Properties haben keine Params
+
+        return { ...sigFromText(def.signature), doc: def.doc, quelle: def.quelle };
     }
 
     /**
@@ -206,17 +244,33 @@ function assemble(
 /** Parst Parameter aus einem fertigen Signatur-String (Builtins). */
 function sigFromText(signature: string): { label: string; paramRanges: Array<[number, number]> } {
     const open = signature.indexOf('(');
-    const close = signature.lastIndexOf(')');
+    const close = open >= 0 ? matchingClosingParen(signature, open) : -1;
     const ranges: Array<[number, number]> = [];
-    if (open < 0 || close < 0 || close < open) return { label: signature, paramRanges: ranges };
+    if (open < 0 || close < 0) return { label: signature, paramRanges: ranges };
     const inner = signature.slice(open + 1, close);
+    // Klammer-tief splitten — Lambda-Argumente wie `f: (A, T) -> A` sind
+    // sonst fälschlich drei Parameter (Bug für `.zusammenfassen` & Co.).
+    const parts: string[] = [];
+    let depth = 0;
+    let start = 0;
+    for (let i = 0; i < inner.length; i++) {
+        const c = inner[i];
+        if (c === '(' || c === '<' || c === '[') depth++;
+        else if (c === ')' || c === '>' || c === ']') depth--;
+        else if (c === ',' && depth === 0) {
+            parts.push(inner.slice(start, i));
+            start = i + 1;
+        }
+    }
+    parts.push(inner.slice(start));
+
     let cursor = open + 1;
-    for (const part of inner.split(',')) {
+    for (const part of parts) {
         const trimmed = part.trim();
         if (trimmed) {
-            const start = signature.indexOf(trimmed, cursor);
-            ranges.push([start, start + trimmed.length]);
-            cursor = start + trimmed.length;
+            const startIdx = signature.indexOf(trimmed, cursor);
+            ranges.push([startIdx, startIdx + trimmed.length]);
+            cursor = startIdx + trimmed.length;
         }
     }
     return { label: signature, paramRanges: ranges };
@@ -261,4 +315,58 @@ function typeAtomToString(atom: TypeAtom): string {
     const params = atom.paramTypes.map(typeToString).join(', ');
     const result = atom.returnType ? typeToString(atom.returnType) : '?';
     return `(${params}) -> ${result}`;
+}
+
+// ---------------------------------------------------------------------------
+// Empfänger-Typ vor einer Chain-Op bestimmen (für Builtin-Methoden-Sig)
+// ---------------------------------------------------------------------------
+
+/**
+ * Inferiert den Typ des Empfängers vor der Chain-Op an `idx` —
+ * funktioniert für `CallChain` (`a.b.c`) und `ParenChain` (`(a + b).c`).
+ *
+ * Bewusst eigenständige Funktion (nicht aus dem Hover wiederverwendet),
+ * weil hover.ts den Provider selbst für Cross-Modul-Lookup braucht;
+ * Signature-Help kommt mit dem LangiumDocuments-Workspace aus. Beide
+ * Provider könnten sich später eine zentrale Variante teilen.
+ */
+function inferReceiverTypeAt(
+    chain: CallChain | ParenChain,
+    untilIndex: number,
+    program: Program,
+    _documents: LangiumDocuments,
+): Type | undefined {
+    const header = buildModuleHeader(program);
+    const ctx = header.context;
+    const localEnv = buildLocalScope(chain, ctx, program, () => undefined);
+
+    let current: Type | undefined;
+    if (isCallChain(chain)) {
+        if (!chain.name) return undefined;
+        current = localEnv.lookup(chain.name);
+    } else {
+        if (!chain.receiver) return undefined;
+        current = infer(chain.receiver, localEnv, ctx, () => {});
+    }
+    for (let i = 0; i < untilIndex; i++) {
+        if (!current || current.kind === 'unknown') return undefined;
+        current = stepChainOp(current, chain.chain[i], true);
+    }
+    return current;
+}
+
+/** Index der zur `(` an `openIdx` passenden `)`, oder −1. Konsistent mit
+ *  `paramNamesFromSignature` (klammer-aware), anders als das frühere
+ *  `lastIndexOf(')')` — robust gegen verschachtelte Lambda-Klammern. */
+function matchingClosingParen(s: string, openIdx: number): number {
+    let depth = 0;
+    for (let i = openIdx; i < s.length; i++) {
+        const c = s[i];
+        if (c === '(') depth++;
+        else if (c === ')') {
+            depth--;
+            if (depth === 0) return i;
+        }
+    }
+    return -1;
 }

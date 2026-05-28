@@ -39,6 +39,7 @@ import {
     isBlockExpr,
     isCall,
     isCallChain,
+    isParenChain,
     isDatensatzDecl,
     isFieldAccess,
     isField,
@@ -78,7 +79,13 @@ import {
 } from './findsl-local-scope.js';
 import { renderDocForHover, type QuelleAnnotation } from './doc-hover-renderer.js';
 import * as path from 'node:path';
-import { BUILTIN_ENUM_DEFS, BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
+import {
+    BUILTIN_ENUM_DEFS,
+    BUILTIN_FUNCTION_DEFS,
+    BUILTIN_PRIMITIVE_DOCS,
+} from './findsl-stdlib.js';
+import { findMethodDef } from './findsl-method-defs.js';
+import type { BuiltinMethodDef } from './findsl-stdlib.js';
 import {
     infer,
     resolveTypeAnnotation,
@@ -140,11 +147,13 @@ const BUILTIN_ENUM_VALUES: ReadonlyMap<string, string> = (() => {
 // ---------------------------------------------------------------------------
 
 type Resolved =
-    | { kind: 'decl';          node: AstNode }
-    | { kind: 'cross-decl';    node: AstNode; sourceModule: string }
-    | { kind: 'builtin-fn';    name: string }
-    | { kind: 'builtin-enum';  name: string }
-    | { kind: 'builtin-value'; value: string; enumName: string };
+    | { kind: 'decl';              node: AstNode }
+    | { kind: 'cross-decl';        node: AstNode; sourceModule: string }
+    | { kind: 'builtin-fn';        name: string }
+    | { kind: 'builtin-enum';      name: string }
+    | { kind: 'builtin-value';     value: string; enumName: string }
+    | { kind: 'builtin-method';    def: BuiltinMethodDef }
+    | { kind: 'builtin-primitive'; name: string };
 
 // ---------------------------------------------------------------------------
 // HoverProvider
@@ -207,9 +216,13 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
         if (isField(ast)           && ast.name === text) return { kind: 'decl', node: ast };
         if (isParam(ast)           && ast.name === text) return { kind: 'decl', node: ast };
 
-        // Cursor auf einem Field-Access-Identifier (z. B. `fall.tarifart`):
-        // Typ der Base inferieren und das Feld im Datensatz nachschlagen.
+        // Cursor auf einem Field-Access-Identifier (z. B. `fall.tarifart`
+        // oder `betrag.höchstens`). Erst auf Builtin-Methode prüfen (Geld/
+        // Liste/Text/…), dann auf Datensatz-Feld — beide nutzen denselben
+        // Typ-Stepper, scheitern aber an unterschiedlichen Empfänger-Arten.
         if ((isFieldAccess(ast) || isSafeFieldAccess(ast)) && ast.name === text) {
+            const method = this.resolveBuiltinMethod(ast, program);
+            if (method) return method;
             const field = this.resolveFieldAccess(ast, program);
             if (field) return { kind: 'decl', node: field };
         }
@@ -221,6 +234,55 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
 
         // Fallback für sonstige Identifier-Stellen.
         return this.resolveName(program, text);
+    }
+
+    /**
+     * Findet eine Builtin-Methode (SPEC § 11), auf der der Cursor steht.
+     * Spiegelbild zu `resolveFieldAccess`: gleicher Typ-Stepper für den
+     * Empfänger-Typ, aber statt im Datensatz-Decl wird der zentrale
+     * `findMethodDef`-Dispatch befragt. Liefert `undefined`, wenn der
+     * Empfänger kein Builtin-Methoden-Träger ist (Record, unknown, …) —
+     * dann fällt der Aufrufer auf `resolveFieldAccess` zurück.
+     *
+     * Behandelt sowohl `CallChain` (`a.höchstens(…)`) als auch `ParenChain`
+     * (`(a + b).abrunden()`). Für ParenChain wird `infer` direkt auf den
+     * geklammerten Receiver-Ausdruck gerufen — `inferBaseTypeAt` braucht
+     * eine benannte Wurzel und passt dort nicht.
+     */
+    private resolveBuiltinMethod(field: ChainOp, program: Program): Resolved | undefined {
+        const container = field.$container;
+        const name = (field as { name?: string }).name;
+        if (!name) return undefined;
+
+        let baseType: Type | undefined;
+        if (isCallChain(container)) {
+            const idx = container.chain.indexOf(field);
+            if (idx < 0) return undefined;
+            baseType = inferBaseTypeAt(container, idx, program, this);
+        } else if (isParenChain(container) && container.receiver) {
+            const idx = container.chain.indexOf(field);
+            if (idx < 0) return undefined;
+            const header = buildModuleHeader(program);
+            const ctx = header.context;
+            const localEnv = buildLocalScope(
+                container, ctx, program,
+                (p, n) => this.resolveCrossModuleType(p, n),
+            );
+            let current: Type | undefined =
+                infer(container.receiver, localEnv, ctx, () => {});
+            for (let i = 0; i < idx; i++) {
+                if (!current || current.kind === 'unknown') return undefined;
+                current = stepChainOp(current, container.chain[i], true);
+            }
+            baseType = current;
+        } else {
+            return undefined;
+        }
+        if (!baseType) return undefined;
+
+        const def = findMethodDef(baseType, name);
+        if (!def) return undefined;
+        return { kind: 'builtin-method', def };
     }
 
     /**
@@ -285,10 +347,11 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
         if (crossResolved) return crossResolved;
 
         // 3. + 4. Builtins
-        if (BUILTIN_FUNCTIONS.has(name)) return { kind: 'builtin-fn',   name };
-        if (BUILTIN_ENUMS.has(name))     return { kind: 'builtin-enum', name };
+        if (BUILTIN_FUNCTIONS.has(name))      return { kind: 'builtin-fn',   name };
+        if (BUILTIN_ENUMS.has(name))          return { kind: 'builtin-enum', name };
+        if (BUILTIN_PRIMITIVE_DOCS.has(name)) return { kind: 'builtin-primitive', name };
         const enumName = BUILTIN_ENUM_VALUES.get(name);
-        if (enumName)                     return { kind: 'builtin-value', value: name, enumName };
+        if (enumName)                          return { kind: 'builtin-value', value: name, enumName };
         return undefined;
     }
 
@@ -376,11 +439,13 @@ function inferBaseTypeAt(
 
 async function formatResolved(r: Resolved): Promise<Hover | undefined> {
     switch (r.kind) {
-        case 'decl':          return formatDeclNode(r.node);
-        case 'cross-decl':    return formatCrossDeclNode(r.node, r.sourceModule);
-        case 'builtin-fn':    return formatBuiltinFn(r.name);
-        case 'builtin-enum':  return formatBuiltinEnum(r.name);
-        case 'builtin-value': return formatBuiltinEnumValue(r.value, r.enumName);
+        case 'decl':              return formatDeclNode(r.node);
+        case 'cross-decl':        return formatCrossDeclNode(r.node, r.sourceModule);
+        case 'builtin-fn':        return formatBuiltinFn(r.name);
+        case 'builtin-enum':      return formatBuiltinEnum(r.name);
+        case 'builtin-value':     return formatBuiltinEnumValue(r.value, r.enumName);
+        case 'builtin-method':    return formatBuiltinMethod(r.def);
+        case 'builtin-primitive': return formatBuiltinPrimitive(r.name);
     }
 }
 
@@ -532,6 +597,32 @@ function formatBuiltinEnumValue(value: string, enumName: string): Hover | undefi
     const sig = fence(`${value}: ${enumName}`);
     const body = `Wert der eingebauten Aufzählung **${enumName}**.\n\n${e.doc}`;
     return markdown(joinSections(sig, body, quelleLine(e.quelle)));
+}
+
+/**
+ * Hover-Karte für eine Builtin-Methode (SPEC § 11). Empfängertyp-spezifisch
+ * via `findMethodDef` aufgelöst; gleiches dreiteiliges Layout (Signatur ·
+ * Doc · Quelle) wie für freie Builtins. SPEC-§ kommt aus `def.quelle`,
+ * das die DEF-Listen via `withQuelle` einheitlich tragen.
+ *
+ * Properties (`.länge` etc.) tragen ihren Rückgabetyp als Signatur (kein
+ * `(...)` → `name: signature`); Aufruf-Methoden zeigen `.name(...) -> R`.
+ */
+function formatBuiltinMethod(def: BuiltinMethodDef): Hover {
+    const callForm = def.property
+        ? `${def.name}: ${def.signature}`
+        : `.${def.name}${def.signature}`;
+    return markdown(joinSections(fence(callForm), def.doc, quelleLine(def.quelle)));
+}
+
+/**
+ * Hover-Karte für einen primitiven Typ in einer Annotation (`: Euro`,
+ * `: EuroCent`, …). Doku-Inhalt aus `BUILTIN_PRIMITIVE_DOCS`.
+ */
+function formatBuiltinPrimitive(name: string): Hover | undefined {
+    const d = BUILTIN_PRIMITIVE_DOCS.get(name);
+    if (!d) return undefined;
+    return markdown(joinSections(fence(name), d.doc, quelleLine(d.quelle)));
 }
 
 // ---------------------------------------------------------------------------

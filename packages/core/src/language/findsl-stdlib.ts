@@ -39,6 +39,76 @@ export interface BuiltinFunctionDef {
 export const BUILTIN_PRIMITIVE_TYPES: ReadonlyArray<string> =
     builtins.primitiveTypes;
 
+/**
+ * Doku-Karten für die primitiven Typen — Hover-Inhalt, wenn der Cursor auf
+ * `Euro` / `Cent` / … in einer Typ-Annotation steht. Bewusst als TS-Konstante
+ * (nicht in `builtins.json`), weil mehrzeilige Markdown-Doc in JSON
+ * unergonomisch wäre und kein Konsument außerhalb des LSPs sie braucht
+ * (TextMate liest nur Namen aus der JSON).
+ */
+export interface BuiltinPrimitiveDoc {
+    readonly doc:     string;
+    readonly quelle?: string;
+}
+
+export const BUILTIN_PRIMITIVE_DOCS: ReadonlyMap<string, BuiltinPrimitiveDoc> = new Map([
+    ['Euro', {
+        doc: 'Geldbetrag in **vollen Euro** (keine Nachkommastellen). Geldtyp; '
+            + '`Euro − Euro` ⇒ Euro, `Euro * Ganzzahl` ⇒ Euro, `Euro * Prozent` ⇒ EuroCent.',
+        quelle: 'SPEC § 3.2',
+    }],
+    ['Cent', {
+        doc: 'Geldbetrag in **vollen Cent** (1/100 €). Geldtyp; Euro-kanonisch '
+            + 'gespeichert. `Cent − Euro` ⇒ Cent.',
+        quelle: 'SPEC § 3.2',
+    }],
+    ['EuroCent', {
+        doc: 'Geldbetrag mit **Cent-Genauigkeit** (bis zu 2 Nachkommastellen). '
+            + 'Geldtyp, Standard für Tarifrechnung. Ergebnis nicht-ganzzahliger '
+            + 'Operationen → `.abrunden()` / `.aufrunden()` mit Euro/Cent-Kontext.',
+        quelle: 'SPEC § 3.2',
+    }],
+    ['Ganzzahl', {
+        doc: 'Ganze Zahl ohne Nachkommastellen (Index, Anzahl, Stufen).',
+        quelle: 'SPEC § 3.2',
+    }],
+    ['Dezimal', {
+        doc: 'Dezimalzahl mit Nachkommastellen für **Zwischenrechnungen**. '
+            + 'Vor dem Binden an Geld auf eine Geld-Einheit casten oder '
+            + '`.abrunden()` mit Kontext.',
+        quelle: 'SPEC § 3.2',
+    }],
+    ['Prozent', {
+        doc: 'Prozentwert. Literal mit Suffix `%` (z. B. `5,5%`). '
+            + 'Multiplikation `Prozent * Geld` ⇒ EuroCent. `.abrunden()` / '
+            + '`.aufrunden()` auf volle Prozent.',
+        quelle: 'SPEC § 3.2',
+    }],
+    ['Wahrheit', {
+        doc: 'Wahrheitswert (`wahr` / `falsch`). Alias zu **Wahrheitswert**.',
+        quelle: 'SPEC § 3.3',
+    }],
+    ['Wahrheitswert', {
+        doc: 'Wahrheitswert (`wahr` / `falsch`).',
+        quelle: 'SPEC § 3.3',
+    }],
+    ['Text', {
+        doc: 'Zeichenkette. Konkatenation mit `+`, Interpolation `"…${ausdruck}…"`. '
+            + 'Methoden in SPEC § 11.5 (`.länge`, `.beginntMit`, `.geteiltAn`, …).',
+        quelle: 'SPEC § 3.6',
+    }],
+    ['Liste', {
+        doc: 'Generische, **immutable** Liste `Liste<T>`. Literal `[a, b, c]`; '
+            + 'Methoden in SPEC § 11.2 (`.länge`, `.zuordnen`, `.filtern`, `.summe`, …).',
+        quelle: 'SPEC § 3.5',
+    }],
+    ['Bereich', {
+        doc: 'Numerischer oder Aufzählungs-Bereich `a bis b [unter] [schritt s]`. '
+            + 'Materialisiert wie `Liste<T>` (alle § 11.2-Methoden anwendbar).',
+        quelle: 'SPEC § 11.3',
+    }],
+]);
+
 export const BUILTIN_ENUM_DEFS: ReadonlyArray<BuiltinEnumDef> =
     builtins.enums;
 
@@ -57,9 +127,20 @@ export interface BuiltinMethodDef {
     readonly doc:       string;
     /** `true` = Eigenschaft (ohne `()`), sonst Aufruf-Methode. */
     readonly property:  boolean;
+    /** SPEC-Sektion (z. B. `'SPEC § 11.2'`). Wird vom Hover separat als
+     *  `*Quelle:* …`-Zeile angezeigt; in Doc-Strings nicht dupliziert. */
+    readonly quelle?:   string;
 }
 
-export const LIST_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
+/** Versieht eine DEF-Liste mit einer gemeinsamen `quelle` (DRY). */
+function withQuelle(
+    defs: ReadonlyArray<Omit<BuiltinMethodDef, 'quelle'>>,
+    quelle: string,
+): ReadonlyArray<BuiltinMethodDef> {
+    return defs.map((d) => ({ ...d, quelle }));
+}
+
+export const LIST_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = withQuelle([
     { name: 'länge',          signature: 'Ganzzahl',                                property: true,  doc: 'Anzahl der Elemente.' },
     { name: 'leer',           signature: 'Wahrheitswert',                           property: true,  doc: 'wahr, wenn die Liste keine Elemente hat.' },
     { name: 'kopf',           signature: 'T',                                       property: true,  doc: 'Erstes Element (Laufzeitfehler bei leerer Liste).' },
@@ -73,7 +154,7 @@ export const LIST_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
     { name: 'summe',          signature: '() -> T',                                 property: false, doc: 'Summe der Elemente (numerisch); leere Liste → 0.' },
     { name: 'größtes',        signature: '() -> T',                                 property: false, doc: 'Größtes Element (Fehler bei leerer Liste).' },
     { name: 'kleinstes',      signature: '() -> T',                                 property: false, doc: 'Kleinstes Element (Fehler bei leerer Liste).' },
-];
+], 'SPEC § 11.2');
 
 /**
  * Skalar-Rundungs-Methoden (SPEC § 11.1) auf `EuroCent`/`Dezimal`.
@@ -84,20 +165,20 @@ export const LIST_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
  * Namens-/Doc-Quelle. */
 /** § 11.1 Rundungs-Methoden — NUR auf Werten mit Nachkommastellen
  *  (`EuroCent`/`Dezimal`/`Prozent`); kontextgetriebene Zielauflösung. */
-export const ROUNDING_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
-    { name: 'abrunden',    signature: '() -> Euro|Cent|Ganzzahl',     property: false, doc: 'Rundet **ab** (Richtung −∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`). SPEC § 11.1.' },
-    { name: 'aufrunden',   signature: '() -> Euro|Cent|Ganzzahl',     property: false, doc: 'Rundet **auf** (Richtung +∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`); „je angefangene Einheit"-Tarife. SPEC § 11.1.' },
-];
+export const ROUNDING_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = withQuelle([
+    { name: 'abrunden',    signature: '() -> Euro|Cent|Ganzzahl',     property: false, doc: 'Rundet **ab** (Richtung −∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`).' },
+    { name: 'aufrunden',   signature: '() -> Euro|Cent|Ganzzahl',     property: false, doc: 'Rundet **auf** (Richtung +∞). Nur auf `EuroCent` (Ziel `Euro`/`Cent` aus dem Kontext) oder `Dezimal` (→ `Ganzzahl`); „je angefangene Einheit"-Tarife.' },
+], 'SPEC § 11.1');
 
 /** § 11.6 Grenzwert-/Stufen-Methoden — auf ALLEN numerischen Typen
  *  (`Euro`/`Cent`/`EuroCent`/`Ganzzahl`/`Dezimal`/`Prozent`); typ-erhaltend,
  *  kontextfrei. */
-export const LIMIT_STEP_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
-    { name: 'höchstens',   signature: '(grenze: T) -> T',             property: false, doc: 'Obergrenze: das **Minimum** aus Wert und `grenze` (für „höchstens jedoch …"). Typ-erhaltend, auf allen numerischen Typen. SPEC § 11.6.' },
-    { name: 'mindestens',  signature: '(grenze: T) -> T',             property: false, doc: 'Untergrenze: das **Maximum** aus Wert und `grenze` (für „mindestens jedoch …"; `.mindestens(0,00)` kappt Negatives). Typ-erhaltend. SPEC § 11.6.' },
-    { name: 'abrundenAuf', signature: '(vielfaches: T) -> T',         property: false, doc: 'Rundet **ab** auf das nächstkleinere Vielfache von `vielfaches` (z. B. § 11 GewStG: auf volle 100 €). Typ-erhaltend, `vielfaches` > 0. SPEC § 11.6.' },
-    { name: 'aufrundenAuf',signature: '(vielfaches: T) -> T',         property: false, doc: 'Rundet **auf** auf das nächstgrößere Vielfache von `vielfaches`. Typ-erhaltend, `vielfaches` > 0. SPEC § 11.6.' },
-];
+export const LIMIT_STEP_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = withQuelle([
+    { name: 'höchstens',   signature: '(grenze: T) -> T',             property: false, doc: 'Obergrenze: das **Minimum** aus Wert und `grenze` (für „höchstens jedoch …"). Typ-erhaltend, auf allen numerischen Typen.' },
+    { name: 'mindestens',  signature: '(grenze: T) -> T',             property: false, doc: 'Untergrenze: das **Maximum** aus Wert und `grenze` (für „mindestens jedoch …"; `.mindestens(0,00)` kappt Negatives). Typ-erhaltend.' },
+    { name: 'abrundenAuf', signature: '(vielfaches: T) -> T',         property: false, doc: 'Rundet **ab** auf das nächstkleinere Vielfache von `vielfaches` (z. B. § 11 GewStG: auf volle 100 €). Typ-erhaltend, `vielfaches` > 0.' },
+    { name: 'aufrundenAuf',signature: '(vielfaches: T) -> T',         property: false, doc: 'Rundet **auf** auf das nächstgrößere Vielfache von `vielfaches`. Typ-erhaltend, `vielfaches` > 0.' },
+], 'SPEC § 11.6');
 
 /** Alle Skalar-Methoden in Doku-Reihenfolge (§ 11.1 dann § 11.6) — für
  *  Empfänger mit Nachkommastellen, die beide Gruppen anbieten. Die
@@ -112,7 +193,7 @@ export const SCALAR_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
  *  ohne `()`, sonst Aufruf-Methoden. Typ-Logik in
  *  `findsl-types.textMethod`. Die `.alsText(format = …)`-Variante ist in
  *  v1.0 NICHT enthalten (SPEC § 11.5 Status). */
-export const TEXT_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
+export const TEXT_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = withQuelle([
     { name: 'länge',              signature: 'Ganzzahl',                  property: true,  doc: 'Anzahl Unicode-Zeichen.' },
     { name: 'leer',               signature: 'Wahrheitswert',             property: true,  doc: 'wahr, wenn die Länge 0 ist.' },
     { name: 'alsText',            signature: 'Text',                      property: true,  doc: 'Identitäts-Konversion (Default-Formatierung).' },
@@ -123,7 +204,7 @@ export const TEXT_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
     { name: 'endetMit',           signature: '(suffix: Text) -> Wahrheitswert', property: false, doc: 'Suffix-Test.' },
     { name: 'enthält',            signature: '(teil: Text) -> Wahrheitswert',   property: false, doc: 'Substring-Test.' },
     { name: 'geteiltAn',          signature: '(trenner: Text) -> Liste<Text>',  property: false, doc: 'Split an der Trennzeichenfolge.' },
-];
+], 'SPEC § 11.5');
 
 /** Aufzählungs-Wert → enthaltender Aufzählungs-Name (`Grundtarif` → `Tarifart`). */
 export const BUILTIN_ENUM_VALUE_TO_ENUM: ReadonlyMap<string, string> = (() => {

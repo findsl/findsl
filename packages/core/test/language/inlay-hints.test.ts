@@ -617,3 +617,43 @@ describe('Inlay-Hints: Field-Zugriff aus Lambda-Param in HOF (Issue #65)', () =>
         expect(labelList).toContain('%');
     });
 });
+
+describe('Inlay-Hints: Parameter-Namen für Builtin-Methoden (SPEC § 11)', () => {
+    const params = (hs: InlayHint[]) => hs.filter((h) => h.kind === InlayHintKind.Parameter);
+
+    it('.höchstens(40) → Inlay `grenze:` vor dem Argument', async () => {
+        const hs = await hints(`konst B: Euro = 100
+konst R: Euro = B.höchstens(40)
+`);
+        expect(labels(params(hs))).toContain('grenze:');
+    });
+
+    it('.mindestens(0,00) → Inlay `grenze:`', async () => {
+        const hs = await hints(`konst N: Dezimal = 1,5 - 5,0
+konst R: Dezimal = N.mindestens(0,00)
+`);
+        expect(labels(params(hs))).toContain('grenze:');
+    });
+
+    it('.abrundenAuf(100,00) → Inlay `vielfaches:`', async () => {
+        const hs = await hints(`konst B: EuroCent = 12.345,67
+konst R: EuroCent = B.abrundenAuf(100,00)
+`);
+        expect(labels(params(hs))).toContain('vielfaches:');
+    });
+
+    it('.länge (Property, ohne Klammern) → KEIN Parameter-Inlay', async () => {
+        const hs = await hints(`konst XS: Liste<Ganzzahl> = [1, 2, 3]
+konst N: Ganzzahl = XS.länge
+`);
+        // Property hat keine Argumente — kein Parameter-Inlay erwartet.
+        expect(params(hs)).toHaveLength(0);
+    });
+
+    it('.beginntMit(prefix) auf Text → Inlay `prefix:`', async () => {
+        const hs = await hints(`konst S: Text = "Hallo"
+konst B: Wahrheitswert = S.beginntMit("Ha")
+`);
+        expect(labels(params(hs))).toContain('prefix:');
+    });
+});

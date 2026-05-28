@@ -2,6 +2,32 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-29 — **LSP: Editor-Unterstützung für
+Builtin-Methoden (SPEC § 11) Tier 1.** Issue #193. Die Stdlib-Methoden
+sind jetzt im Editor vollständig sichtbar — vorher zeigten Hover,
+Signature-Help und Inlay-Hints **nichts** für Methoden wie `.höchstens`,
+`.abrunden`, `.länge`, `.summe`, `.beginntMit`. **Neu:** zentraler
+Dispatch-Helper `getMethodDefs(recv)` / `findMethodDef(recv, name)` /
+`paramNamesFromSignature(sig)` in `findsl-method-defs.ts` (von Completion,
+Hover, SignatureHelp, Inlay-Hints geteilt — vorher dreifach dupliziert).
+**Hover** für Builtin-Methoden (alle § 11.1/.2/.5/.6 inkl. Properties)
+mit Signatur + Doc + SPEC-§-Quelle; für primitive Typen (`Euro`, `Cent`,
+`EuroCent`, `Ganzzahl`, `Dezimal`, `Prozent`, `Text`, `Liste`, `Bereich`,
+…) in Annotationen via `BUILTIN_PRIMITIVE_DOCS`. **Signature-Help** für
+Methoden-Aufrufe (`betrag.höchstens(│)` → Parameter-Hint mit Doc und
+SPEC-§). **Inlay-Hints** für positionale Methoden-Argumente
+(`.höchstens(40)` → Inlay `grenze:` vor `40`). Behandelt sowohl
+`CallChain` (`a.b(…)`) als auch `ParenChain` (`(a + b).c(…)`); auch
+`SafeFieldAccess` (`a?.b(…)`). `BuiltinMethodDef.quelle` neu — DEF-
+Listen werden via `withQuelle(…, 'SPEC § X.Y')` einheitlich annotiert.
+`sigFromText` und `BUILTIN_CALLABLES` jetzt klammer-aware (parsen
+`f: (A, T) -> A` als einen Parameter, nicht als drei). **+34 neue Tests
+(method-defs.test, hover, signature-help, inlay-hints).** Bewusst Tier
+2/3 offen: Completion-Snippets mit Parameter-Tabstops, SPEC-Tiefenlinks,
+Document-Link/Go-to-Definition für Builtins, Code-Actions (`wähle`-min →
+`.höchstens`). Verifikation: `npm run build && npm run bundle && npm test`
+— 1296 Tests grün.*
+
 *Letzte Aktualisierung: 2026-05-28 — **§ 11.6-Methoden in alle Codegen-
 Targets + Beispielmodule umgestellt** (Folgeschritt zum Sprachkern vom
 2026-05-27). Die vier Grenzwert-/Stufen-Methoden laufen jetzt auch durch

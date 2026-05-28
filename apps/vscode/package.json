@@ -53,11 +53,8 @@
           "*.internal": {
             "fontStyle": "italic"
           },
-          "enum": {
+          "enumMember": {
             "fontStyle": "underline"
-          },
-          "enum.internal": {
-            "fontStyle": "underline italic"
           }
         }
       }

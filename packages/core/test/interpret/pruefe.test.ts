@@ -71,7 +71,7 @@ const EXAMPLE_SUITES: ReadonlyArray<{
     {
         name: 'gewst — Gewerbesteuer',
         entry: 'gewst/gewst.test.findsl',
-        passed: 43,
+        passed: 39,
     },
     {
         name: 'est — Einkommensteuer § 2 Schema + § 32a Tarif (VZ 2026)',

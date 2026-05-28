@@ -18,7 +18,6 @@ verwende {
     PkwSchadstoffstufe,
     WohnmobilKlasse,
     Einheiten,
-    Begrenze,
     Fremdzuendung,
     Selbstzuendung,
     Elektro,
@@ -386,8 +385,8 @@ mit Höchstbetrag (Buchst. a/b) bzw. ohne (Buchst. c).
 @Quelle("§ 9 Absatz 1 Nummer 2a KraftStG")
 fn SteuerWohnmobil(gesamtgewichtKg: Ganzzahl, klasse: WohnmobilKlasse): EuroCent =
     wähle (klasse) {
-        falls MindestensS4 -> Begrenze(_WomoZweiStufen(gesamtgewichtKg, WOMO_S4_BIS_2000, WOMO_S4_UEBER_2000), WOMO_S4_MAX)
-        falls S1bisS3      -> Begrenze(_WomoZweiStufen(gesamtgewichtKg, WOMO_S1_BIS_2000, WOMO_S1_UEBER_2000), WOMO_S1_MAX)
+        falls MindestensS4 -> _WomoZweiStufen(gesamtgewichtKg, WOMO_S4_BIS_2000, WOMO_S4_UEBER_2000).höchstens(WOMO_S4_MAX)
+        falls S1bisS3      -> _WomoZweiStufen(gesamtgewichtKg, WOMO_S1_BIS_2000, WOMO_S1_UEBER_2000).höchstens(WOMO_S1_MAX)
         falls WomoSonst    -> _SteuerWohnmobilSonst(gesamtgewichtKg)
     }
 

@@ -182,20 +182,6 @@ fn KstSatz(veranlagungszeitraum: Ganzzahl): Prozent = wähle {
 // ===========================================================================
 
 --
-Begrenzung des Freibetrags nach § 24 Satz 1 KStG: 5.000 Euro,
-**höchstens jedoch in Höhe des Einkommens**. Ist das Einkommen 0 oder
-negativ, beträgt der Freibetrag 0 (er darf keinen Verlust schaffen oder
-vergrößern); ist es kleiner als 5.000 €, ist es selbst die Obergrenze.
-
-@param einkommen  Einkommen i.S.d. § 8 Abs. 1 KStG.
-@rückgabe  Der der Höhe nach begrenzte Freibetrag (vor Anwendung des
-           Ausschlusses nach § 24 Satz 2 KStG).
---
-@Quelle("§ 24 Satz 1 KStG")
-fn _BegrenzterFreibetrag24(einkommen: Euro): Euro =
-    einkommen.mindestens(0).höchstens(FREIBETRAG_24)
-
---
 Freibetrag nach § 24 KStG unter Berücksichtigung des Ausschlusses nach
 § 24 Satz 2 KStG: liegt ein Ausschlusstatbestand (Nr. 1–3) vor,
 entfällt der Freibetrag vollständig; andernfalls der nach Satz 1 der
@@ -208,7 +194,7 @@ Höhe nach begrenzte Betrag.
 @Quelle("§ 24 KStG")
 fn FreibetragNach24(einkommen: Euro, ausschluss: Freibetragsausschluss): Euro =
     wähle (ausschluss) {
-        falls Keiner                                                    -> _BegrenzterFreibetrag24(einkommen)
+        falls Keiner                                                    -> einkommen.mindestens(0).höchstens(FREIBETRAG_24)
         falls Nr1KapitalLeistungen, Nr2VereinNach25, Nr3Investmentfonds -> 0
     }
 

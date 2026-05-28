@@ -12,11 +12,14 @@ Emission in `emit-java`/`emit-ts` (emit-js strippt das TS-Generat), Runtime-
 Methoden `hoechstens`/`mindestens`/`abrundenAuf`/`aufrundenAuf` in
 `runtimes/java/FinDslNumber.java` + `runtimes/ts/findsl-number.ts` (Tag-
 erhaltend, Euro-kanonisch, `vielfaches > 0`). **Beispiele entschlackt:**
-gewst (`_NichtNegativ`/`_Hoechstens`/`_Groesseres` → 1-Zeilen-Methoden,
-`AbrundenAuf100` → `.abrundenAuf(ABRUNDUNG_11)`, `ABRUNDUNG_11` nun
-`EuroCent`), kst (`_BegrenzterFreibetrag24` → `.mindestens(0).höchstens(
-FREIBETRAG_24)` — Clamp-Verkettung), kraftst (`Begrenze` →
-`.höchstens(…)`); `korpus-stdlib(.test).findsl` um § 11.6 erweitert
+triviale Wrapper **komplett entfernt** — `_NichtNegativ`/`_Hoechstens`/
+`_Groesseres`/`AbrundenAuf100` (gewst), `_BegrenzterFreibetrag24` (kst),
+`Begrenze` (kraftst, inkl. cross-modul-Imports) — und an allen Call-Sites
+direkt durch die § 11.6-Methoden ersetzt (z. B. `einkommen.mindestens(0)
+.höchstens(FREIBETRAG_24)` als Clamp-Verkettung, `(gewichteteSumme -
+HINZURECHNUNG).mindestens(0,00)` ohne Wrapper). −89 Zeilen netto.
+`ABRUNDUNG_11` (gewst) nun `EuroCent`. `korpus-stdlib(.test).findsl`
+um § 11.6 erweitert
 (Codegen-Gate-Abdeckung, ts-gate-Floor 116→126). **Verifikation:** 1253
 Tests grün (inkl. ts-gate gewst/kraftst durch ts+js mit ausgeführten
 Generaten), `javac` über das Java-Generat + neue `FinDslNumberTest`-Suite

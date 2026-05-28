@@ -14,7 +14,6 @@ wählt der Orchestrator `kraftstg-steuer` nach Fahrzeugart aus.
 verwende {
     NfzKlasse,
     Einheiten,
-    Begrenze,
     MindestensS2,
     S1,
     G1,
@@ -336,10 +335,10 @@ max 914 €), c (G1, max 1.425 €), d (sonst, max 1.681 €).
 --
 @Quelle("§ 9 Absatz 1 Nummer 4 KraftStG")
 fn SteuerNr4(g: Ganzzahl, klasse: NfzKlasse): EuroCent = wähle (klasse) {
-    falls MindestensS2 -> Begrenze(_Nr4a(g), NR4A_MAX)
-    falls S1 -> Begrenze(_Nr4b(g), NR4B_MAX)
-    falls G1 -> Begrenze(_Nr4c(g), NR4C_MAX)
-    falls NfzSonst -> Begrenze(_Nr4d(g), NR4D_MAX)
+    falls MindestensS2 -> _Nr4a(g).höchstens(NR4A_MAX)
+    falls S1 -> _Nr4b(g).höchstens(NR4B_MAX)
+    falls G1 -> _Nr4c(g).höchstens(NR4C_MAX)
+    falls NfzSonst -> _Nr4d(g).höchstens(NR4D_MAX)
 }
 
 --
@@ -457,5 +456,5 @@ Kraftfahrzeuganhänger (§ 9 Abs. 1 Nr. 5 KraftStG): je angefangene
 --
 @Quelle("§ 9 Absatz 1 Nummer 5 KraftStG")
 fn SteuerAnhaenger(gesamtgewichtKg: Ganzzahl): EuroCent =
-    Begrenze(ANH_JE_200KG * Einheiten(gesamtgewichtKg, 200), ANH_MAX)
+    (ANH_JE_200KG * Einheiten(gesamtgewichtKg, 200)).höchstens(ANH_MAX)
 

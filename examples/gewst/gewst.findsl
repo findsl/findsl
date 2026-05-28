@@ -426,39 +426,6 @@ datensatz GewerbesteuerErgebnis(
 )
 
 // ===========================================================================
-// Allgemeine Begrenzungs-Helfer
-// ===========================================================================
-
---
-Nicht-negativ-Kappung: liefert `0,00` für negative Beträge, sonst den
-Betrag selbst (entspricht dem Maximum aus `0` und `betrag`).
-
-@param betrag Zu kappender Betrag.
-@rückgabe     `betrag`, mindestens jedoch `0,00`.
---
-fn _NichtNegativ(betrag: EuroCent): EuroCent = betrag.mindestens(0,00)
-
---
-Höchstbetrags-Begrenzung: liefert den kleineren der beiden Beträge
-(Minimum) — für „höchstens jedoch …"-Regelungen.
-
-@param betrag     Errechneter Betrag.
-@param hoechstens Obergrenze.
-@rückgabe         `betrag`, höchstens `hoechstens`.
---
-fn _Hoechstens(betrag: EuroCent, hoechstens: EuroCent): EuroCent = betrag.höchstens(hoechstens)
-
---
-Liefert den größeren zweier Beträge (Maximum) — für die „… oder …"-
-Alternative des § 9 Nr. 5 Höchstbetrags.
-
-@param a  Erster Betrag.
-@param b  Zweiter Betrag.
-@rückgabe Der größere der beiden Beträge.
---
-fn _Groesseres(a: EuroCent, b: EuroCent): EuroCent = a.mindestens(b)
-
-// ===========================================================================
 // § 8 GewStG — Hinzurechnungen
 // ===========================================================================
 
@@ -481,7 +448,7 @@ fn Hinzurechnung8Nr1(h: Hinzurechnungen8): EuroCent = {
         + (ANTEIL_BEWEGLICH_8_1D * h.mietePachtBeweglich) als EuroCent
         + (ANTEIL_UNBEWEGLICH_8_1E * h.mietePachtUnbeweglich) als EuroCent
         + (ANTEIL_RECHTE_8_1F * h.aufwendungenRechteUeberlassung) als EuroCent
-    var uebersteigend: EuroCent = _NichtNegativ(gewichteteSumme - HINZURECHNUNG_FREIBETRAG_8_1)
+    var uebersteigend: EuroCent = (gewichteteSumme - HINZURECHNUNG_FREIBETRAG_8_1).mindestens(0,00)
     var nr1: EuroCent = (ANTEIL_8_1 * uebersteigend) als EuroCent
     nr1
 }
@@ -534,7 +501,7 @@ fn SpendenHoechstbetrag9Nr5(
 ): EuroCent = {
     var nachGewinn: EuroCent = (SPENDEN_SATZ_GEWINN_9_5 * (gewinn + hinzurechnung8Nr9)) als EuroCent
     var nachUmsatzLohn: EuroCent = (SPENDEN_PROMILLE_9_5 * (umsaetze + loehneUndGehaelter)) als EuroCent
-    _NichtNegativ(_Groesseres(nachGewinn, nachUmsatzLohn))
+    nachGewinn.mindestens(nachUmsatzLohn).mindestens(0,00)
 }
 
 --
@@ -549,10 +516,9 @@ geleisteten Zuwendungen, höchstens jedoch der Höchstbetrag nach
 --
 @Quelle("§ 9 Nummer 5 GewStG")
 fn Kuerzung9Nr5(k: Kuerzungen9, gewinn: EuroCent, hinzurechnung8Nr9: EuroCent): EuroCent =
-    _Hoechstens(
-    k.geleisteteSpenden,
-    SpendenHoechstbetrag9Nr5(gewinn, hinzurechnung8Nr9, k.umsaetze, k.loehneUndGehaelter),
-)
+    k.geleisteteSpenden.höchstens(
+        SpendenHoechstbetrag9Nr5(gewinn, hinzurechnung8Nr9, k.umsaetze, k.loehneUndGehaelter)
+    )
 
 --
 Kürzung nach **§ 9 Nr. 1 GewStG**: regulär die als Betriebsausgabe
@@ -649,7 +615,7 @@ nach Sätzen 1 und 2.
 --
 @Quelle("§ 10a GewStG")
 fn Verlustabzug10a(gewerbeertrag: EuroCent, fehlbetrag: EuroCent): EuroCent =
-    _Hoechstens(fehlbetrag, VerlustVerrechnungsobergrenze10a(gewerbeertrag))
+    fehlbetrag.höchstens(VerlustVerrechnungsobergrenze10a(gewerbeertrag))
 
 --
 Maßgebender Gewerbeertrag **nach** dem Verlustabzug des § 10a GewStG.
@@ -667,17 +633,6 @@ fn GewerbeertragNachVerlust(gewerbeertrag: EuroCent, fehlbetrag: EuroCent): Euro
 // ===========================================================================
 // § 11 GewStG — Steuermesszahl und Steuermessbetrag
 // ===========================================================================
-
---
-Abrundung auf volle **100 €** nach unten (§ 11 Abs. 1 Satz 3 GewStG).
-Nur für nicht-negative Beträge vorgesehen (bei ≤ 0 entsteht kein
-Steuermessbetrag — siehe `berechneGewerbesteuer`).
-
-@param betrag Maßgebender Gewerbeertrag nach Verlustabzug.
-@rückgabe     Auf volle 100 € abgerundeter Betrag.
---
-@Quelle("§ 11 Absatz 1 Satz 3 GewStG")
-fn AbrundenAuf100(betrag: EuroCent): EuroCent = betrag.abrundenAuf(ABRUNDUNG_11)
 
 --
 Roher Freibetrag nach **§ 11 Abs. 1 Satz 3 GewStG** je Rechtsform —
@@ -708,7 +663,7 @@ erzeugen).
 --
 @Quelle("§ 11 Absatz 1 Satz 3 GewStG")
 fn Freibetrag11(rechtsform: Rechtsform, abgerundeterGewerbeertrag: EuroCent): EuroCent =
-    _Hoechstens(FreibetragRoh11(rechtsform), _NichtNegativ(abgerundeterGewerbeertrag))
+    FreibetragRoh11(rechtsform).höchstens(abgerundeterGewerbeertrag.mindestens(0,00))
 
 --
 Anzuwendende Steuermesszahl nach **§ 11 Abs. 2/3 GewStG**: regulär
@@ -819,7 +774,7 @@ fn BerechneGewerbesteuer(betrieb: Gewerbebetrieb): GewerbesteuerErgebnis = {
     var nachVerlust: EuroCent = ertrag - abzug
     var abgerundet: EuroCent = wähle {
         falls nachVerlust <= 0,00 -> 0,00
-        sonst                     -> AbrundenAuf100(nachVerlust)
+        sonst                     -> nachVerlust.abrundenAuf(ABRUNDUNG_11)
     }
     var fb: EuroCent = Freibetrag11(betrieb.rechtsform, abgerundet)
     var messzahl: Prozent = Steuermesszahl11(betrieb.messzahlermaessigung)

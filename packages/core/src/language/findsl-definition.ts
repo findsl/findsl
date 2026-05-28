@@ -197,6 +197,12 @@ function resolveCrossModuleTarget(
  * für die Pfadauflösung; das Binding wird über die AST-Knoten-Identität
  * gefunden, daher unabhängig davon, ob mehrere Items denselben Quellnamen
  * tragen.
+ *
+ * **Aufzählungs-Werte:** `Pkw` aus `aufzählung Fahrzeugart { Kraftrad,
+ * Pkw, … }` ist keine eigene Top-Level-Decl, sondern ein String in
+ * `AufzaehlungDecl.values`. In diesem Fall springen wir zur umschließenden
+ * Aufzählung — semantisch korrekt (das ist die Source-Decl) und das
+ * Verhalten, das Editor-Nutzer erwarten.
  */
 function resolveImportItemTarget(
     item: ImportItem, program: Program, documents: LangiumDocuments,
@@ -206,7 +212,11 @@ function resolveImportItemTarget(
     if (!binding) return undefined;
     const sourceProgram = findModuleInWorkspace(documents, binding.resolvedPath);
     if (!sourceProgram) return undefined;
-    return sourceProgram.decls.find((d) => d.name === item.name);
+    const direct = sourceProgram.decls.find((d) => d.name === item.name);
+    if (direct) return direct;
+    return sourceProgram.decls.find(
+        (d) => isAufzaehlungDecl(d) && d.values.includes(item.name),
+    );
 }
 
 /**

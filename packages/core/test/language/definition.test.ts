@@ -269,4 +269,37 @@ konst R: Euro = GFB
         expect(links).toBeDefined();
         expect(links![0].targetUri).toMatch(/lib\.findsl$/);
     });
+
+    it('Aufzählungs-Wert importieren → Sprung zur Aufzählungs-Decl', async () => {
+        // Bug aus Issue #196 nachgereicht: Werte INNERHALB einer
+        // aufzählung sind keine eigenen Top-Level-Decls, sondern Strings
+        // in `AufzaehlungDecl.values`. Sprung zur umschließenden Decl.
+        const lib = `aufzählung Fahrzeugart {
+    Kraftrad,
+    Pkw,
+    Wohnmobil,
+}
+`;
+        const app = `verwende { Pkw } aus "./lib"
+`;
+        const links = await defInModules({ lib, app }, 'app', 'Pkw }');
+        expect(links).toBeDefined();
+        expect(links).toHaveLength(1);
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+        // Aufzählung beginnt auf Zeile 0.
+        expect(links![0].targetRange.start.line).toBe(0);
+    });
+
+    it('Aufzählungs-Wert mit Alias importieren → Sprung zur Aufzählungs-Decl', async () => {
+        const lib = `aufzählung Status {
+    Aktiv,
+    Inaktiv,
+}
+`;
+        const app = `verwende { Aktiv als Live } aus "./lib"
+`;
+        const links = await defInModules({ lib, app }, 'app', 'Live }');
+        expect(links).toBeDefined();
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+    });
 });

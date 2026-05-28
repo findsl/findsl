@@ -388,6 +388,11 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
      * funktioniert für Source-Name **und** Alias (`Foo als Bar`: Hover auf
      * beidem zeigt die Decl von `Foo`). Das Binding wird über die AST-
      * Knoten-Identität aufgelöst, daher unabhängig vom Cursor-Text.
+     *
+     * Aufzählungs-Werte (`Pkw` aus `aufzählung Fahrzeugart { Kraftrad,
+     * Pkw, … }`) sind keine eigenen Top-Level-Decls, sondern Strings in
+     * `AufzaehlungDecl.values` — Hover zeigt dann die Karte der
+     * umschließenden Aufzählung.
      */
     private resolveImportItem(item: AstNode, program: Program): Resolved | undefined {
         const { bindings } = analyzeImports(program);
@@ -397,7 +402,10 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
         const sourceProgram = this.findModuleInWorkspace(binding.resolvedPath);
         if (!sourceProgram) return undefined;
 
-        const decl = sourceProgram.decls.find((d) => d.name === binding.sourceName);
+        const decl = sourceProgram.decls.find((d) => d.name === binding.sourceName)
+            ?? sourceProgram.decls.find(
+                (d) => isAufzaehlungDecl(d) && d.values.includes(binding.sourceName),
+            );
         if (!decl) return undefined;
         return { kind: 'cross-decl', node: decl, sourceModule: binding.rawSource };
     }

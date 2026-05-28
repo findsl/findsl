@@ -890,4 +890,29 @@ konst R: Euro = GFB
         expect(md).toContain('Grundfreibetrag');
         expect(md).toMatch(/Importiert aus Datei/);
     });
+
+    it('Importierter Aufzählungs-Wert zeigt Aufzählungs-Hover', async () => {
+        // Werte sind Strings in AufzaehlungDecl.values, keine eigenen
+        // Decls — Hover muss zur umschließenden Aufzählung fallen.
+        const lib = `--
+Datei-Dokumentation.
+--
+
+--
+Fahrzeug-Klassifikation nach § 9 KraftStG.
+--
+aufzählung Fahrzeugart {
+    Kraftrad,
+    Pkw,
+    Wohnmobil,
+}
+`;
+        const app = `verwende { Pkw } aus "./lib"
+`;
+        const h = await hoverInModules({ lib, app }, 'app', 'Pkw }');
+        const md = content(h);
+        expect(md).toContain('aufzählung Fahrzeugart');
+        expect(md).toContain('Fahrzeug-Klassifikation');
+        expect(md).toMatch(/Importiert aus Datei/);
+    });
 });

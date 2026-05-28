@@ -194,4 +194,48 @@ konst T: Ganzzahl = wähle (Grund) {
         const grundRefs = toks.filter((t) => t.text === 'Grund' && t.tokenType === 'enumMember');
         expect(grundRefs.length).toBeGreaterThanOrEqual(1);
     });
+
+    it('verwende { EnumWert } → Wert-Token im Import-Block ist enumMember', async () => {
+        // Der Token im `verwende { Grund }` muss dieselbe Klassifikation
+        // wie eine normale Wert-Referenz tragen, sonst greift das Theme-
+        // Underline für `enumMember` im Import-Block nicht.
+        const toks = await decodeIn({
+            lib: `aufzählung Tarifart { Grund, Spez }
+`,
+            app: `verwende { Grund } aus "./lib"
+`,
+        }, 'app');
+        expect(pick(toks, 'Grund', 'enumMember')).toBeDefined();
+    });
+
+    it('verwende { EnumWert als Alias } → beide Tokens enumMember', async () => {
+        const toks = await decodeIn({
+            lib: `aufzählung Stand { Aktiv, Pause }
+`,
+            app: `verwende { Aktiv als Live } aus "./lib"
+`,
+        }, 'app');
+        expect(pick(toks, 'Aktiv', 'enumMember')).toBeDefined();
+        expect(pick(toks, 'Live',  'enumMember')).toBeDefined();
+    });
+
+    it('verwende { fn-Name } → function im Import-Block', async () => {
+        const toks = await decodeIn({
+            lib: `fn kern(z: Euro): Euro = z
+`,
+            app: `verwende { kern } aus "./lib"
+`,
+        }, 'app');
+        expect(pick(toks, 'kern', 'function')).toBeDefined();
+    });
+
+    it('verwende { datensatz-Name } → class im Import-Block', async () => {
+        const toks = await decodeIn({
+            lib: `datensatz Fall(b: Euro)
+`,
+            app: `verwende { Fall } aus "./lib"
+`,
+        }, 'app');
+        expect(pick(toks, 'Fall', 'class')).toBeDefined();
+    });
 });

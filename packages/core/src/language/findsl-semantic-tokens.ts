@@ -39,6 +39,7 @@ import {
     isField,
     isFunktionDecl,
     isKonstDecl,
+    isImportItem,
     isLetStmt,
     isLambdaParam,
     isNamedType,
@@ -145,6 +146,21 @@ export class FindslSemanticTokenProvider extends AbstractSemanticTokenProvider {
             return;
         }
 
+        // --- verwende-Import-Item: name + alias kriegen den Token-Typ
+        //     des Source-Symbols (function/class/enum/enumMember/…), damit
+        //     Theme-Regeln wie `enumMember` → underline auch im Import-
+        //     Block greifen. Spiegelt das Cross-Modul-Lookup aus #197.
+        if (isImportItem(node)) {
+            const c = this.classifyImportItem(node);
+            if (c) {
+                acceptor({ node, property: 'name',  type: c.type, modifier: c.modifier });
+                if (node.alias !== undefined) {
+                    acceptor({ node, property: 'alias', type: c.type, modifier: c.modifier });
+                }
+            }
+            return;
+        }
+
         // --- Annotationen / abbruch ----------------------------------------
         if (node.$type === 'Annotation') {
             acceptor({ node, property: 'name', type: SemanticTokenTypes.decorator });
@@ -226,6 +242,42 @@ export class FindslSemanticTokenProvider extends AbstractSemanticTokenProvider {
         const enumOwner = this.lookupEnumValueOwner(name, ctx);
         if (enumOwner) {
             const it = isInternalName((enumOwner as { name?: string }).name ?? '');
+            return { type: SemanticTokenTypes.enumMember, modifier: withIntern(undefined, it) };
+        }
+        return undefined;
+    }
+
+    /**
+     * Klassifiziert einen `ImportItem`-Token im `verwende { … } aus "…"`-
+     * Block — Source-Decl im Workspace nachschlagen und den passenden
+     * Token-Typ zurückgeben (function/class/enum/enumMember/variable).
+     * Wert-Imports (Strings in `AufzaehlungDecl.values`) bekommen
+     * `enumMember`. Spiegelt die Cross-Modul-Auflösung aus #197.
+     */
+    private classifyImportItem(
+        item: AstNode & { name?: string },
+    ): { type: string; modifier?: string | string[] } | undefined {
+        const program = AstUtils.getDocument(item).parseResult?.value as Program | undefined;
+        if (!program) return undefined;
+        const binding = analyzeImports(program).bindings.find((b) => b.node === item);
+        if (!binding) return undefined;
+        const src = findModuleInWorkspace(this.docs, binding.resolvedPath);
+        if (!src) return undefined;
+
+        const direct = src.decls.find((d) => d.name === binding.sourceName);
+        if (direct) {
+            const it = isInternalName(binding.sourceName);
+            if (isFunktionDecl(direct))    return { type: SemanticTokenTypes.function, modifier: withIntern(undefined, it) };
+            if (isKonstDecl(direct))       return { type: SemanticTokenTypes.variable, modifier: withIntern(RO, it) };
+            if (isDatensatzDecl(direct))   return { type: SemanticTokenTypes.class, modifier: withIntern(undefined, it) };
+            if (isAufzaehlungDecl(direct)) return { type: SemanticTokenTypes.enum, modifier: withIntern(undefined, it) };
+        }
+        // Aufzählungs-Wert (kein eigener Decl, String in values).
+        const owner = src.decls.find(
+            (d) => isAufzaehlungDecl(d) && d.values.includes(binding.sourceName),
+        );
+        if (owner) {
+            const it = isInternalName((owner as { name?: string }).name ?? '');
             return { type: SemanticTokenTypes.enumMember, modifier: withIntern(undefined, it) };
         }
         return undefined;

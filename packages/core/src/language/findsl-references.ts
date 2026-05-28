@@ -74,10 +74,11 @@ export class FindslReferencesProvider implements ReferencesProvider {
         // 2. Workspace-Scan: jeden Identifier auflösen und mit target
         //    vergleichen. AST-Identität (===) reicht, weil wir Knoten direkt
         //    referenzieren — kein deep-equal nötig.
+        const cursorText = idNode.text;
         for (const doc of this.documents.all) {
             const docProgram = doc.parseResult?.value as Program | undefined;
             if (!docProgram) continue;
-            this.collectReferences(doc, docProgram, target, locations);
+            this.collectReferences(doc, docProgram, target, cursorText, locations);
         }
         return locations;
     }
@@ -94,7 +95,8 @@ export class FindslReferencesProvider implements ReferencesProvider {
      *     resolven)
      */
     private collectReferences(
-        doc: LangiumDocument, program: Program, target: AstNode, out: Location[],
+        doc: LangiumDocument, program: Program, target: AstNode,
+        cursorText: string, out: Location[],
     ): void {
         const uri = doc.uri.toString();
         for (const node of AstUtils.streamAllContents(program)) {
@@ -104,6 +106,12 @@ export class FindslReferencesProvider implements ReferencesProvider {
             else if (isSafeFieldAccess(node) && node.name)          name = node.name;
             else if (isNamedType(node) && node.name)                name = node.name;
             else                                                    continue;
+
+            // Token-Text muss zum Cursor passen — sonst würden Aufzählungs-
+            // Werte (alle auf dieselbe `AufzaehlungDecl` aufgelöst) und
+            // Aliasse fälschlich gemeinsam getroffen. Standardverhalten
+            // text-basierter Find-References-Implementationen.
+            if (name !== cursorText) continue;
 
             const idCst = findIdLeaf(node, name);
             if (!idCst) continue;

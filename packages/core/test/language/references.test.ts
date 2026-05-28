@@ -187,18 +187,18 @@ describe('Find References: Grenzfälle', () => {
         expect(refs).toEqual([]);
     });
 
-    it('Aufzählungs-Wert: Skelett-Limit — kein eigener AST-Knoten pro Wert', async () => {
+    it('Aufzählungs-Wert: findet alle gleichnamigen Vorkommen', async () => {
         const src = `aufzählung Farbe { Rot, Grün, Blau }
 fn f(): Farbe = Rot
 fn g(): Farbe = Rot
 `;
-        // SPEC § 3.7: Aufzählungs-Werte sind eigenständige Singletons. Im
-        // aktuellen AST stehen sie aber als String-Array auf AufzaehlungDecl
-        // — kein eigener AST-Knoten, keine `===`-Identität pro Wert. Refs
-        // sind daher (noch) leer. Behebung erfordert eine Grammatik-
-        // Erweiterung (eigener `AufzaehlungValue`-Knoten).
+        // Werte sind weiterhin Strings in `AufzaehlungDecl.values` (kein
+        // eigener AST-Knoten pro Wert). Find References funktioniert
+        // dennoch, weil der Provider auf den Cursor-Text filtert und nur
+        // gleichnamige Identifier-Tokens sammelt, die auf dieselbe
+        // Aufzählung auflösen — Grün/Blau/Farbe werden NICHT mitgenommen.
         const refs = await refsAt(src, 'Rot\n');
-        expect(refs).toEqual([]);
+        expect(refs.length).toBe(2);
     });
 
     it('Aufzählungs-Typ-Name findet alle Verwendungen in Type-Annotationen', async () => {

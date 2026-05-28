@@ -73,14 +73,10 @@ import {
     BUILTIN_ENUM_DEFS,
     BUILTIN_FUNCTION_DEFS,
     BUILTIN_PRIMITIVE_TYPES,
-    LIMIT_STEP_METHOD_DEFS,
-    LIST_METHOD_DEFS,
-    SCALAR_METHOD_DEFS,
-    TEXT_METHOD_DEFS,
     isBuiltinName,
 } from './findsl-stdlib.js';
+import { getMethodDefs } from './findsl-method-defs.js';
 import {
-    isNumeric,
     resolveTypeAnnotation,
     TNull,
     type Type,
@@ -354,35 +350,18 @@ export class FindslCompletionProvider extends DefaultCompletionProvider {
             return;
         }
 
-        // Empfänger ist `Liste<T>`/`Bereich<T>` (ggf. nullable) → die
-        // 12 §-11.2-Methoden anbieten (Auffindbarkeit).
-        const unwrapped = recv.kind === 'nullable' ? recv.inner : recv;
-        const offer = (defs: ReadonlyArray<typeof LIST_METHOD_DEFS[number]>) => {
-            for (const m of defs) {
-                acceptor(context, {
-                    label: m.name,
-                    kind: CompletionItemKind.Method,
-                    detail: `${m.name}: ${m.signature}`,
-                    documentation: m.doc,
-                    insertText: m.property ? m.name : `${m.name}(`,
-                    sortText: SORT_LOCAL + m.name,
-                });
-            }
-        };
-        if (unwrapped.kind === 'list') {
-            offer(LIST_METHOD_DEFS);                       // § 11.2
-        } else if (unwrapped.kind === 'primitive') {
-            // § 11.1 Rundung NUR auf Werten mit Nachkommastellen
-            // (EuroCent/Dezimal/Prozent); § 11.6 Grenzwert/Stufen auf ALLEN
-            // numerischen Typen; § 11.5 Text.
-            if (unwrapped.name === 'EuroCent' || unwrapped.name === 'Dezimal'
-                || unwrapped.name === 'Prozent') {
-                offer(SCALAR_METHOD_DEFS);            // § 11.1 + § 11.6
-            } else if (isNumeric(unwrapped)) {
-                offer(LIMIT_STEP_METHOD_DEFS);        // Euro/Cent/Ganzzahl: nur § 11.6
-            } else if (unwrapped.name === 'Text') {
-                offer(TEXT_METHOD_DEFS);
-            }
+        // Anwendbare §-11-Methoden je Empfänger-Typ (Liste/Geld/Zahl/Text)
+        // — Dispatch via zentralem Helper, der von Completion, Hover,
+        // Signature-Help und Inlay-Hints geteilt wird (findsl-method-defs).
+        for (const m of getMethodDefs(recv)) {
+            acceptor(context, {
+                label: m.name,
+                kind: CompletionItemKind.Method,
+                detail: `${m.name}: ${m.signature}`,
+                documentation: m.doc,
+                insertText: m.property ? m.name : `${m.name}(`,
+                sortText: SORT_LOCAL + m.name,
+            });
         }
     }
 

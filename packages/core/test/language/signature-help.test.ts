@@ -125,3 +125,65 @@ fn r(): Euro = estGrundtarif(‸)
         expect(h).toBeUndefined();
     });
 });
+
+describe('SignatureHelp: Builtin-Methoden (SPEC § 11)', () => {
+    it('.höchstens(grenze) auf Euro — Parameter + Doc + Quelle', async () => {
+        const h = await sig(`konst BETRAG: Euro = 100
+konst R: Euro = BETRAG.höchstens(‸)
+`);
+        expect(h).toBeDefined();
+        const s = h!.signatures[0];
+        expect(s.label).toContain('grenze');
+        expect(s.parameters).toHaveLength(1);
+        expect(h!.activeParameter).toBe(0);
+        const docu = s.documentation;
+        const text = typeof docu === 'string' ? docu : docu?.value ?? '';
+        expect(text).toContain('Minimum');
+        expect(text).toContain('§ 11.6');
+    });
+
+    it('.abrundenAuf(vielfaches) auf EuroCent', async () => {
+        const h = await sig(`konst B: EuroCent = 12.345,67
+konst R: EuroCent = B.abrundenAuf(‸)
+`);
+        expect(h).toBeDefined();
+        expect(h!.signatures[0].label).toContain('vielfaches');
+        expect(h!.activeParameter).toBe(0);
+    });
+
+    it('.zusammenfassen(start, f) auf Liste<T> — zwei Parameter, active=1', async () => {
+        const h = await sig(`konst XS: Liste<Ganzzahl> = [1, 2, 3]
+konst R: Ganzzahl = XS.zusammenfassen(0, ‸)
+`);
+        expect(h).toBeDefined();
+        const s = h!.signatures[0];
+        expect(s.parameters).toHaveLength(2);
+        expect(h!.activeParameter).toBe(1);
+        expect(s.label).toMatch(/start.*f/);
+    });
+
+    it('.beginntMit auf Text', async () => {
+        const h = await sig(`konst S: Text = "Hallo"
+konst B: Wahrheitswert = S.beginntMit(‸)
+`);
+        expect(h).toBeDefined();
+        expect(h!.signatures[0].label).toContain('prefix');
+    });
+
+    it('.abrunden auf ParenChain `(x als EuroCent).abrunden()` — keine Argumente, kein Sig', async () => {
+        // `.abrunden()` ist parameterlos → Signature-Help sinnvoll nicht
+        // anbietbar; muss aber sauber undefined liefern, nicht werfen.
+        const h = await sig(`konst R: Euro = (12,34 als EuroCent).abrunden(‸)
+`);
+        // Parameterlose Aufrufe: kein Parameter, aber Provider darf
+        // entweder undefined oder einen leeren Sig liefern.
+        if (h) expect(h.signatures[0].parameters?.length ?? 0).toBe(0);
+    });
+
+    it('Unbekannte Methode auf passendem Typ → undefined', async () => {
+        const h = await sig(`konst E: Euro = 100
+konst R: Euro = E.quatschMethode(‸)
+`);
+        expect(h).toBeUndefined();
+    });
+});

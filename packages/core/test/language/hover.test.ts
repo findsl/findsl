@@ -723,3 +723,114 @@ describe('Hover auf abbruch', () => {
         expect(md).toContain('§ 4.19');
     });
 });
+
+describe('Hover auf Builtin-Methoden (SPEC § 11)', () => {
+    it('.höchstens auf Euro (§ 11.6) — Signatur + Doc + Quelle', async () => {
+        const src = `konst BETRAG: Euro = 100
+konst R: Euro = BETRAG.höchstens(80)
+`;
+        const h = await hoverAt(src, 'höchstens');
+        const md = content(h);
+        expect(md).toContain('höchstens');
+        expect(md).toContain('grenze');           // Parameter-Name in Signatur
+        expect(md).toMatch(/Minimum|höchstens jedoch/);
+        expect(md).toContain('§ 11.6');
+    });
+
+    it('.abrunden auf EuroCent (§ 11.1)', async () => {
+        const src = `konst R: Euro = (12,34 als EuroCent).abrunden()
+`;
+        const h = await hoverAt(src, 'abrunden');
+        const md = content(h);
+        expect(md).toContain('abrunden');
+        expect(md).toContain('§ 11.1');
+        expect(md).toMatch(/Richtung −∞|ab/);
+    });
+
+    it('.länge auf Liste<T> (Property, § 11.2)', async () => {
+        const src = `konst XS: Liste<Ganzzahl> = [1, 2, 3]
+konst N: Ganzzahl = XS.länge
+`;
+        const h = await hoverAt(src, 'länge');
+        const md = content(h);
+        expect(md).toContain('länge');
+        expect(md).toMatch(/Anzahl|Elemente/);
+        expect(md).toContain('§ 11.2');
+    });
+
+    it('.zuordnen auf Liste<T> (HOF, § 11.2)', async () => {
+        const src = `konst XS: Liste<Ganzzahl> = [1, 2]
+konst YS: Liste<Ganzzahl> = XS.zuordnen({ x -> x * 2 })
+`;
+        const h = await hoverAt(src, 'zuordnen');
+        const md = content(h);
+        expect(md).toContain('zuordnen');
+        expect(md).toMatch(/Map|Abbild/);
+    });
+
+    it('.beginntMit auf Text (§ 11.5)', async () => {
+        const src = `konst S: Text = "Hallo Welt"
+konst B: Wahrheitswert = S.beginntMit("Ha")
+`;
+        const h = await hoverAt(src, 'beginntMit');
+        const md = content(h);
+        expect(md).toContain('beginntMit');
+        expect(md).toContain('§ 11.5');
+    });
+
+    it('.abrundenAuf auf EuroCent (§ 11.6)', async () => {
+        const src = `konst R: EuroCent = (12.345,67 als EuroCent).abrundenAuf(100,00)
+`;
+        const h = await hoverAt(src, 'abrundenAuf');
+        const md = content(h);
+        expect(md).toContain('abrundenAuf');
+        expect(md).toContain('§ 11.6');
+        expect(md).toContain('vielfaches');
+    });
+
+    it('Unbekannte Methode auf passendem Typ → kein Hover (kein Rauschen)', async () => {
+        const src = `konst R: Euro = (100 als Euro).quatschMethode()
+`;
+        const h = await hoverAt(src, 'quatschMethode');
+        // Darf keine falsche Doc-Karte zeigen
+        expect(content(h)).not.toContain('§ 11');
+    });
+});
+
+describe('Hover auf primitiven Typen in Annotationen', () => {
+    it('Cursor auf "Euro" in Konst-Annotation → Doc-Karte', async () => {
+        const src = `konst K: Euro = 5
+`;
+        const h = await hoverAt(src, 'Euro');
+        const md = content(h);
+        expect(md).toContain('Euro');
+        expect(md).toMatch(/Geld|Nachkommastellen/);
+    });
+
+    it('Cursor auf "EuroCent" in fn-Param', async () => {
+        const src = `fn f(betrag: EuroCent): Euro = betrag.abrunden()
+`;
+        const h = await hoverAt(src, 'EuroCent');
+        const md = content(h);
+        expect(md).toContain('EuroCent');
+        expect(md).toMatch(/Cent-Genauigkeit|2 Nachkommastellen/);
+    });
+
+    it('Cursor auf "Prozent" in fn-Return', async () => {
+        const src = `fn satz(): Prozent = 5%
+`;
+        const h = await hoverAt(src, 'Prozent');
+        const md = content(h);
+        expect(md).toContain('Prozent');
+        expect(md).toMatch(/Prozentwert|%/);
+    });
+
+    it('Cursor auf "Text" in Annotation', async () => {
+        const src = `konst K: Text = "x"
+`;
+        const h = await hoverAt(src, 'Text');
+        const md = content(h);
+        expect(md).toContain('Text');
+        expect(md).toContain('§ 11.5');
+    });
+});

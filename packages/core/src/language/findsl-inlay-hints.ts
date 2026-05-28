@@ -45,6 +45,8 @@ import {
     isCast,
     isDatensatzDecl,
     isField,
+    isFieldAccess,
+    isSafeFieldAccess,
     type FunktionBody,
     isFuerExpr,
     isFunktionDecl,
@@ -58,6 +60,9 @@ import {
     isUnaryOp,
     isWaehleExpr,
     isWennExpr,
+    type CallChain,
+    type ChainOp,
+    type ParenChain,
     type Program,
 } from './generated/ast.js';
 import {
@@ -66,6 +71,9 @@ import {
 } from './findsl-scope.js';
 import { findModuleInWorkspace } from './findsl-definition.js';
 import { BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
+import { findMethodDef, paramNamesFromSignature } from './findsl-method-defs.js';
+import { infer } from './findsl-inference.js';
+import { buildLocalScope, stepChainOp } from './findsl-local-scope.js';
 import { collectExpressionTypes, type Type, type ImportResolver } from './findsl-types.js';
 import type { FindslServices } from './findsl-module.js';
 
@@ -78,13 +86,9 @@ interface Callable {
 
 const BUILTIN_CALLABLES: ReadonlyMap<string, Callable> = new Map(
     BUILTIN_FUNCTION_DEFS.map((f) => {
-        // signature: "fn name(p: Typ, ...): R" → Parameter-Namen.
-        const inner = f.signature.slice(
-            f.signature.indexOf('(') + 1, f.signature.lastIndexOf(')'),
-        );
-        const names = inner.split(',').map((s) => s.trim()).filter(Boolean)
-            .map((part) => part.split(':')[0].trim());
-        return [f.name, { names }] as const;
+        // Klammer-tiefer Parser aus findsl-method-defs — vermeidet das
+        // Falsch-Splitten von Lambda-Argumenten (`f: (A, T) -> A`).
+        return [f.name, { names: paramNamesFromSignature(f.signature) }] as const;
     }),
 );
 
@@ -179,14 +183,40 @@ export class FindslInlayHintProvider extends AbstractInlayHintProvider {
             return;
         }
 
-        if (!isCallChain(node) || !node.name) return;
-        const call = node.chain[0];
-        if (!call || !isCall(call)) return;        // nur direkter Aufruf/Ctor
+        // Drei Aufrufformen für Inlay-Hints:
+        //   A) `name(args)`           — freie Funktion / Datensatz-Ctor.
+        //   B) `recv.methode(args)`   — Builtin-Methode am Anfang einer
+        //      CallChain (chain[0]=FieldAccess, chain[1]=Call).
+        //   C) `(...).methode(args)`  — Builtin-Methode auf ParenChain.
+        if (!isCallChain(node) && !isParenChain(node)) return;
 
         const program = AstUtils.getDocument(node).parseResult?.value as Program | undefined;
         if (!program) return;
-        const callable = this.resolveCallable(program, node.name);
-        if (!callable) return;
+
+        let call: AstNode | undefined;
+        let callable: Callable | undefined;
+
+        if (isCallChain(node) && node.name && node.chain[0] && isCall(node.chain[0])) {
+            // Form A: name(args)
+            call = node.chain[0];
+            callable = this.resolveCallable(program, node.name);
+        } else if (node.chain[0]
+                   && (isFieldAccess(node.chain[0]) || isSafeFieldAccess(node.chain[0]))
+                   && node.chain[0].name
+                   && node.chain[1] && isCall(node.chain[1])) {
+            // Form B/C: <recv>.methode(args) — Empfänger ist die Chain-Wurzel
+            //          (Name oder Paren-Receiver), Methode liegt an chain[0].
+            call = node.chain[1];
+            const recvType = inferReceiverTypeBeforeOp(node, 0, program);
+            if (recvType) {
+                const def = findMethodDef(recvType, node.chain[0].name);
+                if (def && !def.property) {
+                    callable = { names: paramNamesFromSignature(def.signature) };
+                }
+            }
+        }
+
+        if (!call || !isCall(call) || !callable) return;
 
         call.args.forEach((arg, i) => {
             const value = arg.value;
@@ -417,4 +447,35 @@ function bodyResultExpr(body: FunktionBody | undefined): Expr | undefined {
     const e = body.expr;
     if (e && isLambda(e)) return e.result;
     return e;
+}
+
+/**
+ * Empfänger-Typ vor der Chain-Op an `idx` — für Builtin-Methoden-Inlays.
+ * Behandelt `CallChain` (`a.b.c`) und `ParenChain` (`(a + b).c`). Sehr
+ * ähnlich zu der Variante in `findsl-signature-help.ts`; bleibt vorerst
+ * dupliziert, weil eine zentrale Variante einen geteilten Cross-Modul-
+ * Resolver-Callback bräuchte (anderer Bauplan pro Provider).
+ */
+function inferReceiverTypeBeforeOp(
+    chain: CallChain | ParenChain,
+    untilIndex: number,
+    program: Program,
+): Type | undefined {
+    const header = buildModuleHeader(program);
+    const ctx = header.context;
+    const localEnv = buildLocalScope(chain, ctx, program, () => undefined);
+
+    let current: Type | undefined;
+    if (isCallChain(chain)) {
+        if (!chain.name) return undefined;
+        current = localEnv.lookup(chain.name);
+    } else {
+        if (!chain.receiver) return undefined;
+        current = infer(chain.receiver, localEnv, ctx, () => {});
+    }
+    for (let i = 0; i < untilIndex; i++) {
+        if (!current || current.kind === 'unknown') return undefined;
+        current = stepChainOp(current, chain.chain[i], true);
+    }
+    return current;
 }

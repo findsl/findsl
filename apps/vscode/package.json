@@ -52,6 +52,12 @@
         "rules": {
           "*.internal": {
             "fontStyle": "italic"
+          },
+          "enum": {
+            "fontStyle": "underline"
+          },
+          "enum.internal": {
+            "fontStyle": "underline italic"
           }
         }
       }

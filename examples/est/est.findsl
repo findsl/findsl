@@ -255,27 +255,9 @@ fn EstSplitting(zve: Euro): Euro = wähle {
 // Allgemeine Helfer (modul-intern)
 // ===========================================================================
 
--- Begrenzt einen Euro-Betrag nach unten auf 0. --
-fn _NichtNegativ(betrag: Euro): Euro = wähle {
-    falls betrag < 0 als Euro -> 0
-    sonst                     -> betrag
-}
-
--- Kleineres zweier Euro-Beträge (Höchstbetrags-Kappung). --
-fn _Hoechstens(betrag: Euro, grenze: Euro): Euro = wähle {
-    falls betrag < grenze -> betrag
-    sonst                 -> grenze
-}
-
--- Größeres zweier Euro-Beträge. --
-fn _Groesseres(a: Euro, b: Euro): Euro = wähle {
-    falls a < b -> b
-    sonst       -> a
-}
-
 -- Anteil eines Euro-Betrags in der Staffel-Spanne [von, obereGrenze]. --
 fn _Spanne(betrag: Euro, von: Euro, obereGrenze: Euro): Euro =
-    _NichtNegativ(_Hoechstens(betrag, obereGrenze) - von)
+    (betrag.höchstens(obereGrenze) - von).mindestens(0)
 
 // ===========================================================================
 // Veranlagungsschema — § 2 EStG (Kaskade zu versteuerndes Einkommen)
@@ -456,7 +438,7 @@ fn ZumutbareBelastung(gde: Euro, kinderzahl: Ganzzahl, tarifart: Tarifart): Euro
     + _ZmbSatz(2, kinderzahl, tarifart)
     * _Spanne(gde, ZMB_STUFE_1, ZMB_STUFE_2)
     + _ZmbSatz(3, kinderzahl, tarifart)
-    * _NichtNegativ(gde - ZMB_STUFE_2)
+    * (gde - ZMB_STUFE_2).mindestens(0)
 
 -- Prozentsatz der zumutbaren Belastung für GdE-Stufe (1/2/3). --
 @Quelle("§ 33 Absatz 3 Satz 1 EStG")
@@ -496,12 +478,10 @@ zwangsläufigen Aufwendungen, soweit sie die zumutbare Belastung
 --
 @Quelle("§ 33 Absatz 1 EStG")
 fn AbziehbareAussergewoehnlicheBelastungen(fall: EinkommensteuerFall, gde: Euro): Euro =
-    _NichtNegativ(
     (
         (fall.aussergewoehnlicheAufwendungen.summe() als EuroCent)
             - ZumutbareBelastung(gde, fall.kinder.länge, fall.tarifart)
-    ).abrunden(),
-)
+    ).mindestens(0,00).abrunden()
 
 --
 Abziehbare Spenden (§ 10b Absatz 1 EStG): Summe der Zuwendungen,
@@ -515,11 +495,10 @@ Euro abgerundet.
 --
 @Quelle("§ 10b Absatz 1 EStG")
 fn AbziehbareSpenden(fall: EinkommensteuerFall, gde: Euro): Euro = {
-    var hoechstbetrag: Euro = _Groesseres(
-        (SPENDEN_HB_GDE * gde).abrunden(),
-        (SPENDEN_HB_UMSATZ * fall.umsaetzeUndLoehne).abrunden(),
-    )
-    _Hoechstens(fall.spenden.summe(), hoechstbetrag)
+    var grenzeGde:    Euro = (SPENDEN_HB_GDE    * gde).abrunden()
+    var grenzeUmsatz: Euro = (SPENDEN_HB_UMSATZ * fall.umsaetzeUndLoehne).abrunden()
+    var hoechstbetrag: Euro = grenzeGde.mindestens(grenzeUmsatz)
+    fall.spenden.summe().höchstens(hoechstbetrag)
 }
 
 --
@@ -565,8 +544,8 @@ Verlustabzug ist Verfahren, nicht modelliert).
 --
 @Quelle("§ 32a Absatz 1 und 5 EStG")
 fn TariflicheEinkommensteuer(zve: Euro, tarifart: Tarifart): Euro = wähle (tarifart) {
-    falls Grundtarif -> EstGrundtarif(_NichtNegativ(zve))
-    falls Splitting  -> EstSplitting(_NichtNegativ(zve))
+    falls Grundtarif -> EstGrundtarif(zve.mindestens(0))
+    falls Splitting  -> EstSplitting(zve.mindestens(0))
 }
 
 --

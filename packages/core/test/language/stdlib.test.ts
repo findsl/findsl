@@ -42,9 +42,13 @@ describe('Builtin-Methoden-Kataloge (seit 2026-05-18, § 11)', () => {
         expect(BUILTIN_FUNCTION_DEFS).toEqual([]);
     });
 
-    it('SCALAR_METHOD_DEFS deckt abrunden/aufrunden ab (§ 11.1)', () => {
+    it('SCALAR_METHOD_DEFS deckt Rundung (§ 11.1) + Grenzwert/Stufen (§ 11.6) ab', () => {
         const names = SCALAR_METHOD_DEFS.map((m) => m.name);
-        expect(names).toEqual(['abrunden', 'aufrunden']);
+        expect(names).toEqual([
+            'abrunden', 'aufrunden',                    // § 11.1
+            'höchstens', 'mindestens',                  // § 11.6 Grenzwert
+            'abrundenAuf', 'aufrundenAuf',              // § 11.6 Stufen
+        ]);
         expect(SCALAR_METHOD_DEFS.every((m) => m.property === false)).toBe(true);
     });
 

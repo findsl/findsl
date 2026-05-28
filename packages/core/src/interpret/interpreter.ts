@@ -748,6 +748,14 @@ function applyChainOp(base: Value, op: ChainOp, env: Environment): Value {
             && (op.name === 'abrunden' || op.name === 'aufrunden')) {
             return scalarRoundingValue(base, op.name, op);
         }
+        if (base.kind === 'numeric'
+            && (op.name === 'höchstens' || op.name === 'mindestens')) {
+            return scalarLimitValue(base, op.name);
+        }
+        if (base.kind === 'numeric'
+            && (op.name === 'abrundenAuf' || op.name === 'aufrundenAuf')) {
+            return scalarRoundToMultipleValue(base, op.name);
+        }
         if (base.kind === 'string') {
             const tm = textMethodValue(base, op.name);
             if (tm === undefined) {
@@ -992,6 +1000,55 @@ function scalarRoundingValue(
     const make = target === 'Cent' ? NumericValue.cent : NumericValue.euro;
     return new BuiltinValue(`${target}.${name}`, () =>
         make(recv.value.toDecimalPlaces(nk, mode)));
+}
+
+/**
+ * Grenzwert-Methoden (SPEC § 11.6): `.höchstens(grenze)` = Minimum,
+ * `.mindestens(grenze)` = Maximum. Liefert einen `BuiltinValue`, dessen
+ * folgendes `()`-Kettenglied das Grenz-Argument auswertet (gleiche Mechanik
+ * wie `scalarRoundingValue`). Typ-erhaltend: das Ergebnis behält den
+ * Empfänger-Tag; Werte sind Euro-kanonisch, also direkt vergleichbar.
+ */
+function scalarLimitValue(recv: NumericValue, name: string): Value {
+    return new BuiltinValue(`${recv.tag}.${name}`, (args) => {
+        const grenze = args[0];
+        if (grenze === undefined || grenze.kind !== 'numeric') {
+            throw new InterpretError(
+                `${recv.tag}.${name}: numerisches Argument erwartet, erhalten `
+                + `${grenze === undefined ? 'keines' : grenze.kind}.`);
+        }
+        const keepRecv = name === 'höchstens'
+            ? recv.value.lte(grenze.value)   // Minimum: kleineren behalten
+            : recv.value.gte(grenze.value);  // Maximum: größeren behalten
+        return new NumericValue(keepRecv ? recv.value : grenze.value, recv.tag);
+    });
+}
+
+/**
+ * Stufen-Methoden (SPEC § 11.6): `.abrundenAuf(vielfaches)` /
+ * `.aufrundenAuf(vielfaches)` runden auf das nächste Vielfache von
+ * `vielfaches` (floor/ceil). Typ-erhaltend (Empfänger-Tag bleibt; keine
+ * Einheit gewechselt). `vielfaches <= 0` → `InterpretError` (Division durch
+ * null bzw. unsinniger Schritt); statisch ist die Restriktion nicht
+ * prüfbar, daher Laufzeit-Netz.
+ */
+function scalarRoundToMultipleValue(recv: NumericValue, name: string): Value {
+    const mode = name === 'abrundenAuf' ? Decimal.ROUND_FLOOR : Decimal.ROUND_CEIL;
+    return new BuiltinValue(`${recv.tag}.${name}`, (args) => {
+        const vielfaches = args[0];
+        if (vielfaches === undefined || vielfaches.kind !== 'numeric') {
+            throw new InterpretError(
+                `${recv.tag}.${name}: numerisches Vielfaches erwartet, erhalten `
+                + `${vielfaches === undefined ? 'keines' : vielfaches.kind}.`);
+        }
+        if (vielfaches.value.lte(0)) {
+            throw new InterpretError(
+                `${recv.tag}.${name}: Vielfaches muss größer als 0 sein, erhalten `
+                + `${vielfaches.value.toString()}.`);
+        }
+        const stufen = recv.value.div(vielfaches.value).toDecimalPlaces(0, mode);
+        return new NumericValue(stufen.mul(vielfaches.value), recv.tag);
+    });
 }
 
 /**

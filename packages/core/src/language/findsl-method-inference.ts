@@ -18,6 +18,7 @@ import {
     TText,
     TUnknown,
     TWahrheit,
+    isNumeric,
     type FunctionType,
     type Reporter,
     type Type,
@@ -175,4 +176,43 @@ export function textMethod(
         default:
             return undefined;
     }
+}
+
+/** Methodennamen, die `scalarArgMethod` bedient (SPEC § 11.6). Der
+ *  Ketten-Walker gated darauf, bevor er die Funktion ruft. */
+export const SCALAR_ARG_METHODS: ReadonlySet<string> =
+    new Set(['höchstens', 'mindestens', 'abrundenAuf', 'aufrundenAuf']);
+
+/**
+ * Grenzwert- und Stufen-Methoden (SPEC § 11.6) auf numerischem Empfänger:
+ *  - `.höchstens(grenze)` / `.mindestens(grenze)` — Min/Max (Ober-/Untergrenze).
+ *  - `.abrundenAuf(vielfaches)` / `.aufrundenAuf(vielfaches)` — Rundung auf ein
+ *    Vielfaches.
+ *
+ * Alle vier sind **typ-erhaltend** (Ergebnis = Empfängertyp) und
+ * **kontextfrei** — anders als `scalarRoundingMethod` ist kein `expected`-
+ * Walk nötig, weil keine Einheit gewechselt wird. Das Argument wird via
+ * `checkAgainstAnnotation` gegen den Empfängertyp geprüft (löst dieselbe
+ * Geld-Literal-Promotion aus wie ein Vergleich, so dass `betrag.höchstens(0,00)`
+ * mit nacktem Literal trägt). Nicht-numerischer Empfänger → Empfänger-Fehler
+ * (analog `scalarRoundingMethod`). Der Aufrufer gated bereits auf
+ * `SCALAR_ARG_METHODS`, daher kein `undefined`-Rückgabezweig.
+ */
+export function scalarArgMethod(
+    recv: Type, name: string,
+    callOp: ListMethodCallOp | undefined,
+    node: AstNode,
+    env: TypeEnv, ctx: TypeContext, report: Reporter,
+): { type: Type; consumedCall: boolean } {
+    const had = !!callOp;
+    if (recv.kind === 'unknown') return { type: TUnknown, consumedCall: had };
+    if (!isNumeric(recv)) {
+        report(node,
+            `\`.${name}()\` nur auf numerischen Typen (Geld, Ganzzahl, `
+            + `Dezimal, Prozent), erhalten ${typeToString(recv)} (SPEC § 11.6).`);
+        return { type: TUnknown, consumedCall: had };
+    }
+    const arg = callOp?.args[0];
+    if (arg) checkAgainstAnnotation(arg.value, recv, env, ctx, report);
+    return { type: recv, consumedCall: had };
 }

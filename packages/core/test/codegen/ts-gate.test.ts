@@ -65,9 +65,9 @@ const GEN_TSCONFIG = JSON.stringify({
 const MODULES: ReadonlyArray<{ dir: string; minTests: number; note: string }> = [
     { dir: 'kst',     minTests: 23, note: 'Basis: konst/fn/wähle/Rundung/§7' },
     { dir: 'kraftst', minTests: 34, note: 'mehrdateilig: Intra-Package-ESM-Imports' },
-    { dir: 'gewst',   minTests: 43, note: 'String-Interpolation' },
+    { dir: 'gewst',   minTests: 39, note: 'String-Interpolation' },
     { dir: 'est',     minTests: 22, note: 'Listen + Lambda (.zuordnen/.summe)' },
-    { dir: 'korpus',  minTests: 116, note: 'SPEC-Vollbreite inkl. Nullable (?./!!/Elvis), #117' },
+    { dir: 'korpus',  minTests: 126, note: 'SPEC-Vollbreite inkl. Nullable (?./!!/Elvis), #117; § 11.6 Grenzwert/Stufen' },
 ];
 
 /** Die beiden Script-Targets; `tsc=true` → AK1-Typecheck (nur TS). */

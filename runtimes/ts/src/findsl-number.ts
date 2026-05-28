@@ -199,6 +199,38 @@ export class FinDslNumber {
         }
     }
 
+    // --- Grenzwert-/Stufen-Methoden (interpreter.ts; SPEC § 11.6) ----------
+    // Typ-erhaltend (Tag bleibt) und kontextfrei; Werte Euro-kanonisch →
+    // direkt vergleichbar/teilbar. Methodennamen ASCII (höchstens →
+    // hoechstens), passend zum Emitter-`op` (lower.ts).
+
+    hoechstens(grenze: FinDslNumber): FinDslNumber {
+        const chosen = this.value.cmp(grenze.value) <= 0 ? this.value : grenze.value;
+        return new FinDslNumber(chosen, this.type);
+    }
+
+    mindestens(grenze: FinDslNumber): FinDslNumber {
+        const chosen = this.value.cmp(grenze.value) >= 0 ? this.value : grenze.value;
+        return new FinDslNumber(chosen, this.type);
+    }
+
+    abrundenAuf(vielfaches: FinDslNumber): FinDslNumber {
+        return this.roundToMultiple(vielfaches, Decimal.ROUND_FLOOR);
+    }
+
+    aufrundenAuf(vielfaches: FinDslNumber): FinDslNumber {
+        return this.roundToMultiple(vielfaches, Decimal.ROUND_CEIL);
+    }
+
+    private roundToMultiple(vielfaches: FinDslNumber, mode: Decimal.Rounding): FinDslNumber {
+        if (vielfaches.value.lte(0)) {
+            throw new FinDslRuntimeError('Vielfaches muss größer als 0 sein, erhalten '
+                + germanFormat(vielfaches.value, null) + '.');
+        }
+        const stufen = this.value.div(vielfaches.value).toDecimalPlaces(0, mode);
+        return new FinDslNumber(stufen.times(vielfaches.value), this.type);
+    }
+
     // --- Deutsche Darstellung (values.ts:297-371) -------------------------
 
     asText(): string {

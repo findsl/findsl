@@ -26,7 +26,6 @@ verwende {
     VerlustVerrechnungsobergrenze10a,
     Verlustabzug10a,
     GewerbeertragNachVerlust,
-    AbrundenAuf100,
     FreibetragRoh11,
     Freibetrag11,
     Steuermesszahl11,
@@ -156,21 +155,6 @@ prüfe "§ 10a GewStG — Gewerbeverlust (Mindestbesteuerung 1 Mio. + 60 %)" {
     }
     testfall "GE 800.000 (≤ 1 Mio.), Fehlbetrag 5 Mio. → Abzug nur 800.000, danach 0" {
         GewerbeertragNachVerlust(800.000,00, 5.000.000,00) == 0,00
-    }
-}
-
-prüfe "§ 11 Abs. 1 Satz 3 GewStG — Abrundung auf volle 100 €" {
-    testfall "12.345,67 → 12.300" {
-        AbrundenAuf100(12.345,67) == 12.300,00
-    }
-    testfall "exakt 12.300,00 bleibt 12.300" {
-        AbrundenAuf100(12.300,00) == 12.300,00
-    }
-    testfall "99,99 → 0" {
-        AbrundenAuf100(99,99) == 0,00
-    }
-    testfall "250.099,00 → 250.000" {
-        AbrundenAuf100(250.099,00) == 250.000,00
     }
 }
 

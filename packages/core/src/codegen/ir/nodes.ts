@@ -168,6 +168,20 @@ export type IrExpr =
     | { readonly kind: 'not'; readonly value: IrExpr }
     /** `(receiver).abrunden()/.aufrunden()` — Ziel beim Lowering fixiert. */
     | { readonly kind: 'round'; readonly receiver: IrExpr; readonly mode: 'abrunden' | 'aufrunden'; readonly target: ZielTyp }
+    /**
+     * § 11.6 Grenzwert-Methode `.höchstens(grenze)` / `.mindestens(grenze)`
+     * (Min/Max). `op` ist der ASCII-Runtime-Methodenname (`höchstens` →
+     * `hoechstens`, Konvention wie `größtes` → `groesstes`); typ-erhaltend.
+     */
+    | { readonly kind: 'scalarLimit'; readonly receiver: IrExpr; readonly op: 'hoechstens' | 'mindestens'; readonly arg: IrExpr }
+    /**
+     * § 11.6 Stufen-Methode `.abrundenAuf(vielfaches)` /
+     * `.aufrundenAuf(vielfaches)` (Rundung auf ein Vielfaches); typ-erhaltend.
+     * `op` ist zugleich der Runtime-Methodenname — anders als `scalarLimit`
+     * keine Transliteration nötig (`abrundenAuf`/`aufrundenAuf` sind bereits
+     * umlautfrei).
+     */
+    | { readonly kind: 'scalarRoundTo'; readonly receiver: IrExpr; readonly op: 'abrundenAuf' | 'aufrundenAuf'; readonly arg: IrExpr }
     /** `abbruch(grund)` → `throw new FinDslAbort(grund)` (grund i. d. R. `strInterp`). */
     | { readonly kind: 'abort'; readonly reason: IrExpr }
     /** `konst`/`var`-Geld-Annotation → `expr.withMoneyAnnotation(Type.X, "what")`. */

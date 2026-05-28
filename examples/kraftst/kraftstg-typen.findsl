@@ -223,18 +223,3 @@ fn Einheiten(wert: Ganzzahl, teiler: Ganzzahl): Ganzzahl =
         sonst           -> ((wert / teiler) als Dezimal).aufrunden()
     }
 
---
-Höchstbetrags-Begrenzung („insgesamt jedoch nicht mehr als …",
-§ 9 Abs. 1 KraftStG).
-
-@param betrag    errechneter Tarifbetrag.
-@param hoechstens gesetzlicher Höchstbetrag.
-@rückgabe  `betrag`, höchstens `hoechstens`.
---
-@Quelle("§ 9 Absatz 1 KraftStG")
-fn Begrenze(betrag: EuroCent, hoechstens: EuroCent): EuroCent =
-    wähle {
-        falls betrag > hoechstens -> hoechstens
-        sonst                     -> betrag
-    }
-

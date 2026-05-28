@@ -217,3 +217,89 @@ konst R: Euro = X
         expect(links![0].targetRange.start.line).toBe(0);
     });
 });
+
+describe('Go-to-Definition: importierte Elemente im verwende-Block', () => {
+    it('Cursor auf Source-Name im verwende-Block → Decl im Quellmodul', async () => {
+        const lib = `fn kern(z: Euro): Euro = z
+`;
+        const app = `verwende { kern } aus "./lib"
+fn r(): Euro = kern(0 als Euro)
+`;
+        const links = await defInModules({ lib, app }, 'app', 'kern }');
+        expect(links).toBeDefined();
+        expect(links).toHaveLength(1);
+        // Sprung in die `lib`-Datei
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+        // Auf die fn-Decl (Zeile 0)
+        expect(links![0].targetRange.start.line).toBe(0);
+    });
+
+    it('Cursor auf Alias → springt zur Source-Decl (nicht zum Alias)', async () => {
+        const lib = `fn foo(z: Euro): Euro = z
+`;
+        const app = `verwende { foo als bar } aus "./lib"
+fn r(): Euro = bar(0 als Euro)
+`;
+        const links = await defInModules({ lib, app }, 'app', 'bar }');
+        expect(links).toBeDefined();
+        expect(links).toHaveLength(1);
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+        expect(links![0].targetRange.start.line).toBe(0);
+    });
+
+    it('Cursor auf Source-Name in `Foo als Bar`-Form → ebenfalls Quell-Decl', async () => {
+        const lib = `fn foo(z: Euro): Euro = z
+`;
+        const app = `verwende { foo als bar } aus "./lib"
+fn r(): Euro = bar(0 als Euro)
+`;
+        const links = await defInModules({ lib, app }, 'app', 'foo als');
+        expect(links).toBeDefined();
+        expect(links).toHaveLength(1);
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+    });
+
+    it('Konstante importieren → Sprung zur Konst-Decl', async () => {
+        const lib = `konst GFB: Euro = 12.096 als Euro
+`;
+        const app = `verwende { GFB } aus "./lib"
+konst R: Euro = GFB
+`;
+        const links = await defInModules({ lib, app }, 'app', 'GFB }');
+        expect(links).toBeDefined();
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+    });
+
+    it('Aufzählungs-Wert importieren → Sprung zur Aufzählungs-Decl', async () => {
+        // Bug aus Issue #196 nachgereicht: Werte INNERHALB einer
+        // aufzählung sind keine eigenen Top-Level-Decls, sondern Strings
+        // in `AufzaehlungDecl.values`. Sprung zur umschließenden Decl.
+        const lib = `aufzählung Fahrzeugart {
+    Kraftrad,
+    Pkw,
+    Wohnmobil,
+}
+`;
+        const app = `verwende { Pkw } aus "./lib"
+`;
+        const links = await defInModules({ lib, app }, 'app', 'Pkw }');
+        expect(links).toBeDefined();
+        expect(links).toHaveLength(1);
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+        // Aufzählung beginnt auf Zeile 0.
+        expect(links![0].targetRange.start.line).toBe(0);
+    });
+
+    it('Aufzählungs-Wert mit Alias importieren → Sprung zur Aufzählungs-Decl', async () => {
+        const lib = `aufzählung Status {
+    Aktiv,
+    Inaktiv,
+}
+`;
+        const app = `verwende { Aktiv als Live } aus "./lib"
+`;
+        const links = await defInModules({ lib, app }, 'app', 'Live }');
+        expect(links).toBeDefined();
+        expect(links![0].targetUri).toMatch(/lib\.findsl$/);
+    });
+});

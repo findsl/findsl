@@ -245,10 +245,11 @@ datensatz EinkommensteuerBescheid(
         expect(await format(out)).toBe(out);          // idempotent, kein Kaskadieren
     });
 
-    it('datensatz MIT Trailing-//: Name/Typ-Spalte normalisiert, Kommentar-Abstand erhalten', async () => {
+    it('datensatz MIT Trailing-//: Name/Typ-Spalte normalisiert, Kommentar-Spalte ausgerichtet (Issue #202)', async () => {
         // Vormals § 4.15-geschützt; jetzt erzeugt der Formatter die
-        // Ausrichtung selbst. Der Abstand `,`→`//` bleibt unangetastet
-        // (Hidden-Token, keine Regel), nur die Name/Typ-Spalte fluchtet.
+        // Ausrichtung selbst. Seit Issue #202 wird ZUSÄTZLICH die
+        // Kommentar-Spalte gepaddet — gleicher Typ ⇒ mindestens 1 Space
+        // zwischen `,` und `//`, alle `//` auf einer Spalte.
         const out = await format(`datensatz E(
     anp: Euro,    // Arbeitnehmer-Pauschbetrag (§ 9a EStG)
     sonderausgaben: Euro,    // § 10c EStG
@@ -256,8 +257,8 @@ datensatz EinkommensteuerBescheid(
 `);
         expect(out).toContain(
             'datensatz E(\n'
-            + '    anp:            Euro,    // Arbeitnehmer-Pauschbetrag (§ 9a EStG)\n'
-            + '    sonderausgaben: Euro,    // § 10c EStG\n'
+            + '    anp:            Euro, // Arbeitnehmer-Pauschbetrag (§ 9a EStG)\n'
+            + '    sonderausgaben: Euro, // § 10c EStG\n'
             + ')',
         );
         expect(await format(out)).toBe(out);          // idempotent
@@ -339,6 +340,9 @@ describe('Formatter: erzwingt 4 Blanks (Tabs → Spaces, unabh. Client-Optionen)
 
 describe('Formatter: datensatz Zwei-Spalten-Layout', () => {
     it('Typen fluchten auf einer Spalte (Breite = längster Feldname + 1)', async () => {
+        // Seit Issue #202: Kommentar-Spalte ist zusätzlich ausgerichtet
+        // — `Prozent,` (kürzerer Typ) bekommt 2 Spaces vor `//`,
+        // `EuroCent,` 1 Space — beide `//` fluchten auf Spalte 22.
         const out = await format(`@Quelle("§ 7 GewStG")
 datensatz E(
   kurz: EuroCent,   // a
@@ -348,8 +352,8 @@ datensatz E(
 `);
         expect(out).toContain(
             'datensatz E(\n'
-            + '    kurz:           EuroCent,   // a\n'
-            + '    sehrLangerName: Prozent,   // b\n'
+            + '    kurz:           EuroCent, // a\n'
+            + '    sehrLangerName: Prozent,  // b\n'
             + '    mittel:         EuroCent,\n'
             + ')',
         );
@@ -698,5 +702,88 @@ describe('Formatter: @formatter:off / @formatter:on (SPEC § 2.3.1)', () => {
             '--\n@param x erstes\n@rückgabe ergebnis\n--\nfn f(x: Euro): Euro = x\n',
         );
         expect(outside).not.toContain('@param x erstes\n@rückgabe ergebnis'); // ausgerichtet
+    });
+});
+
+describe('Formatter: datensatz-Felder als 4-Spalten-Tabelle (Issue #202)', () => {
+    it('Felder ohne Default — Typ-Spalte irrelevant, `,` klebt am Typ', async () => {
+        const out = await format(
+            'datensatz Fall(\n'
+            + '    art: Fahrzeugart,\n'
+            + '    antrieb: Antrieb,\n'
+            + ')\n',
+        );
+        // Spalte 1: `art:` und `antrieb:` fluchten (bestehende Logik).
+        expect(out).toMatch(/^    art:     Fahrzeugart,$/m);
+        expect(out).toMatch(/^    antrieb: Antrieb,$/m);
+    });
+
+    it('Mit Default — `=` fluchtet, `,` direkt nach Default-Wert', async () => {
+        const out = await format(
+            'datensatz Fall(\n'
+            + '    hubraumCcm: Ganzzahl = 0,\n'
+            + '    erstzulassung: Erstzulassungsregime = AbJan2021,\n'
+            + '    pkwStufe: PkwSchadstoffstufe = Ee,\n'
+            + ')\n',
+        );
+        // Alle `=` in derselben Spalte: maxTypeLen('Erstzulassungsregime')=20
+        //  → kürzere Typen werden mit zusätzlichen Spaces gepaddet.
+        const lines = out.split('\n');
+        const eqCols = lines
+            .filter((l) => l.includes(' = '))
+            .map((l) => l.indexOf(' = '));
+        expect(new Set(eqCols).size).toBe(1);     // alle gleichmäßig
+    });
+
+    it('Gemischt: Default + kein Default → `,` an verschiedenen Positionen', async () => {
+        const out = await format(
+            'datensatz Fall(\n'
+            + '    art: Fahrzeugart,\n'
+            + '    hubraumCcm: Ganzzahl = 0,\n'
+            + ')\n',
+        );
+        // Feld ohne Default: `,` klebt direkt am Typ (kein Padding-Komma).
+        expect(out).toMatch(/Fahrzeugart,/);
+        expect(out).not.toMatch(/Fahrzeugart\s+,/);
+        // Feld mit Default: `= 0,`.
+        expect(out).toMatch(/= 0,/);
+    });
+
+    it('Inline-Kommentare — `//` fluchtet über alle Felder', async () => {
+        const out = await format(
+            'datensatz Fall(\n'
+            + '    art: Fahrzeugart, // Auswahl\n'
+            + '    hubraumCcm: Ganzzahl = 0, // cm³\n'
+            + '    erstzulassung: Erstzulassungsregime = AbJan2021, // PKW\n'
+            + ')\n',
+        );
+        const lines = out.split('\n');
+        const commentCols = lines
+            .filter((l) => l.includes('//'))
+            .map((l) => l.indexOf('//'));
+        expect(new Set(commentCols).size).toBe(1);
+    });
+
+    it('Kein trailing-Kommentar → keine Trailing-Spaces eingefügt', async () => {
+        const out = await format(
+            'datensatz Fall(\n'
+            + '    art: Fahrzeugart,\n'
+            + '    hubraumCcm: Ganzzahl = 0,\n'
+            + ')\n',
+        );
+        for (const line of out.split('\n')) {
+            expect(line).not.toMatch(/\s+$/);   // kein trailing whitespace
+        }
+    });
+
+    it('Idempotenz — zweimal formatieren ergibt identischen Output', async () => {
+        const src = 'datensatz Fall(\n'
+            + '    art: Fahrzeugart, // Auswahl\n'
+            + '    hubraumCcm: Ganzzahl = 0, // cm³\n'
+            + '    erstzulassung: Erstzulassungsregime = AbJan2021, // PKW\n'
+            + ')\n';
+        const once = await format(src);
+        const twice = await format(once);
+        expect(twice).toBe(once);
     });
 });

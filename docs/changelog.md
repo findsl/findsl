@@ -2,6 +2,19 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-29 — **Formatter: fn-Parameter als
+4-Spalten-Tabelle (Folge zu #202).** Mehrzeilige `fn`-Signaturen
+fluchten jetzt analog zu mehrzeiligen Datensätzen — Name · Typ · `=
+default` · Inline-`//`-Kommentar. Bislang ließ der fn-Handler die
+Parameterliste bewusst unangetastet (Oszillations-Sorge bei Trailing-
+Komma); seit diesem PR wird sie wie ein Datensatz-Block behandelt
+(`f.interior` indent, `,`-noSpace, `)`-newLine), und die bestehende
+isParam/isField-Spalten-Logik greift dank `fnParamsIstMehrzeilig`-Gate
+auch für fn-Params. `inlineCommentEdits` extrahiert die Spalten-
+Berechnung in einen geteilten Helper `alignInlineComments`, der über
+`fields` oder `params` läuft. **+6 Tests**; idempotent; 1330 Tests
+grün.*
+
 *Letzte Aktualisierung: 2026-05-29 — **Formatter: `datensatz`-Felder
 als 4-Spalten-Tabelle.** Issue #202. Felder mehrzeiliger Datensätze
 fluchten jetzt durchgängig in vier Spalten — Feldname, Typ, `= default`,

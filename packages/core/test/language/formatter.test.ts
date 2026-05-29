@@ -787,3 +787,75 @@ describe('Formatter: datensatz-Felder als 4-Spalten-Tabelle (Issue #202)', () =>
         expect(twice).toBe(once);
     });
 });
+
+describe('Formatter: fn-Parameter als 4-Spalten-Tabelle (Folge zu #202)', () => {
+    it('Mehrzeilige fn-Signatur — Params fluchten (Spalte 1 Name, Spalte 2 Typ)', async () => {
+        const out = await format(
+            'fn berechne(\n'
+            + '    zve: Euro,\n'
+            + '    tarifart: Tarifart,\n'
+            + '): Euro = 0 als Euro\n',
+        );
+        // Spalte 1 (Name + `:`) fluchtet
+        expect(out).toMatch(/^    zve:      Euro,$/m);
+        expect(out).toMatch(/^    tarifart: Tarifart,$/m);
+    });
+
+    it('Mit Default — `=` fluchtet über alle Default-Params', async () => {
+        const out = await format(
+            'fn f(\n'
+            + '    x: Euro = 0 als Euro,\n'
+            + '    art: Tarifart = Grundtarif,\n'
+            + '    klasse: Steuerklasse = I,\n'
+            + '): Euro = 0 als Euro\n',
+        );
+        const lines = out.split('\n');
+        const eqCols = lines
+            .filter((l) => l.includes(' = ') && !l.includes('): Euro = 0'))
+            .map((l) => l.indexOf(' = '));
+        expect(new Set(eqCols).size).toBe(1);     // alle Param-`=` fluchten
+    });
+
+    it('Gemischt: Default + kein Default → `,` direkt am Typ ohne Default', async () => {
+        const out = await format(
+            'fn f(\n'
+            + '    a: Euro,\n'
+            + '    b: Euro = 0 als Euro,\n'
+            + '): Euro = a\n',
+        );
+        // `Euro,` direkt nach Typ bei Param ohne Default
+        expect(out).toMatch(/^    a:[ ]+Euro,$/m);
+        // Param mit Default hat `=`-Padding
+        expect(out).toMatch(/^    b:[ ]+Euro\s+= 0 als Euro,$/m);
+    });
+
+    it('Inline-Kommentare in fn-Params — `//` fluchtet', async () => {
+        const out = await format(
+            'fn f(\n'
+            + '    a: Euro, // erstes\n'
+            + '    b: Euro = 0 als Euro, // zweites\n'
+            + '): Euro = a\n',
+        );
+        const lines = out.split('\n');
+        const commentCols = lines
+            .filter((l) => l.match(/^    [a-z]/) && l.includes('//'))
+            .map((l) => l.indexOf('//'));
+        expect(commentCols.length).toBe(2);
+        expect(new Set(commentCols).size).toBe(1);
+    });
+
+    it('Idempotenz — zweimal formatieren ergibt identischen Output', async () => {
+        const src = 'fn f(\n'
+            + '    a: Euro, // erstes\n'
+            + '    b: Euro = 0 als Euro, // zweites\n'
+            + '): Euro = a\n';
+        const once = await format(src);
+        const twice = await format(once);
+        expect(twice).toBe(once);
+    });
+
+    it('Einzeilige fn bleibt kompakt (kein Spalten-Padding)', async () => {
+        const out = await format('fn f(a: Euro, b: Euro): Euro = a + b\n');
+        expect(out).toContain('fn f(a: Euro, b: Euro): Euro = a + b');
+    });
+});

@@ -30,7 +30,11 @@
         "extensions": [
           ".findsl"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/findsl-light.svg",
+          "dark": "./icons/findsl-dark.svg"
+        }
       }
     ],
     "grammars": [

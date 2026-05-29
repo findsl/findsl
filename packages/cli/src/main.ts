@@ -26,7 +26,7 @@ import { runPruefe } from '@findsl/core/interpret/pruefe.js';
 import { loadModuleGraph, type ParseFile } from '@findsl/core/interpret/module-loader.js';
 import { asImportResolver, buildHeaderRegistry } from '@findsl/core/language/findsl-scope.js';
 import { typeCheckProgram } from '@findsl/core/language/findsl-types.js';
-import type { Program } from '@findsl/core/language/generated/ast.js';
+import { type Program, isProgram } from '@findsl/core/language/generated/ast.js';
 import { AstUtils } from 'langium';
 
 const program = new Command();
@@ -170,10 +170,13 @@ Beispiele:
             }));
 
             // Cross-Module-Pass: nur wenn das Eingangs-Modul parsefähig war.
+            // `isProgram` narrowt zugleich `value` (AstNode | undefined) auf
+            // Program — kein rohes Cast, das undefined durchreichen könnte.
+            const entry = document.parseResult.value;
             const crossDiags = (document.parseResult.lexerErrors.length === 0
-                && document.parseResult.parserErrors.length === 0)
-                ? await crossModuleDiagnostics(
-                    fullPath, document.parseResult.value as Program, services)
+                && document.parseResult.parserErrors.length === 0
+                && isProgram(entry))
+                ? await crossModuleDiagnostics(fullPath, entry, services)
                 : [];
 
             const all = mergeDiagnostics(singleDiags, crossDiags);
@@ -239,7 +242,11 @@ async function crossModuleDiagnostics(
             URI.file(absPath),
         );
         await services.shared.workspace.DocumentBuilder.build([document], { validation: false });
-        const program = document.parseResult.value as Program;
+        const program = document.parseResult.value;
+        if (!isProgram(program)) {
+            throw new Error(
+                `Modul ${absPath} konnte nicht als FinDSL-Programm geparst werden.`);
+        }
         parsedFiles.set(absPath, program);
         return program;
     };
@@ -354,7 +361,11 @@ Beispiele:
                     // Batch nicht abbrechen — diese Datei zählt als Fehler.
                     throw new Error('parse-error');
                 }
-                const program = document.parseResult.value as Program;
+                const program = document.parseResult.value;
+                if (!isProgram(program)) {
+                    console.error(`✗ ${disp(absPath)}: kein gültiges FinDSL-Programm — prüfe abgebrochen.`);
+                    throw new Error('parse-error');
+                }
                 parsedFiles.set(absPath, program);
                 return program;
             };
@@ -608,7 +619,13 @@ Beispiele:
                 failures++;
                 continue;
             }
-            const program = document.parseResult.value as Program;
+            const program = document.parseResult.value;
+            if (!isProgram(program)) {
+                console.error(`✗ ${disp(absFile)}: kein gültiges FinDSL-Programm `
+                    + `— Codegen übersprungen.`);
+                failures++;
+                continue;
+            }
             // ADR8: Package = sanierter relativer Verzeichnispfad zur
             // Basis; Klassenname = PascalCase des Datei-Basenamens
             // (`kst.test` → `KstTest`). Wurzeldatei → unbenanntes Package.

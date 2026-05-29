@@ -118,6 +118,31 @@ describe('CLI-Bundle-Smoke (self-contained)', () => {
         expect(out).toContain('bestanden');
     });
 
+    // Issue #207: kaputte Eingabe muss kontrolliert mit Exit 1 + Diagnose
+    // enden — NICHT mit unbehandeltem Node-Stacktrace (der frühere rohe
+    // `parseResult.value as Program`-Cast hätte undefined durchgereicht).
+    it('test bricht bei kaputter Datei kontrolliert ab (kein Crash, Issue #207)', () => {
+        const bad = path.join(os.tmpdir(), `findsl-bad-${process.pid}.findsl`);
+        fs.writeFileSync(bad, 'datensatz {{{ kaputt\n');
+        try {
+            let status = 0;
+            let stderr = '';
+            try {
+                execFileSync('node', [cliBundle, 'test', bad], { cwd: os.tmpdir() });
+            } catch (e) {
+                const err = e as { status?: number; stderr?: Buffer };
+                status = err.status ?? -1;
+                stderr = err.stderr?.toString() ?? '';
+            }
+            expect(status).toBe(1);
+            expect(stderr).toContain('✗');
+            // Kein durchgereichter Node-Stacktrace (= sauber behandelt).
+            expect(stderr).not.toMatch(/^\s+at .+\(.*:\d+:\d+\)/m);
+        } finally {
+            fs.rmSync(bad, { force: true });
+        }
+    });
+
     it('docgen -f pdf erzeugt valides PDF (§7-Divergenz + pdfkit-AFM)', () => {
         const outBase = path.join(os.tmpdir(), `findsl-cli-smoke-${process.pid}`);
         ex(['docgen', path.join(repoRoot, 'examples', 'kst'), '-f', 'pdf', '-o', outBase]);

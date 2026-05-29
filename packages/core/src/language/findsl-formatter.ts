@@ -221,9 +221,13 @@ function armLinkeBreite(
 function arrowPad(arm: AstNode): number | undefined {
     const c = (arm as { $container?: AstNode }).$container;
     if (!c || !isWaehleExpr(c)) return undefined;
-    const arms = (c as { arms?: ReadonlyArray<{ $cstNode?: { text: string } }> }).arms ?? [];
+    const arms = (c as { arms?: ReadonlyArray<AstNode> }).arms ?? [];
     if (arms.length === 0) return undefined;
-    const max = Math.max(...arms.map((a) => armLinkeBreite(a)));
+    // Bricht die Linke DIESES Arms um, steht das `->` inline hinter
+    // der letzten Fortsetzungszeile (ein Space) — NICHT in der Spalte.
+    if (armLinkeUmbricht(arm)) return 1;
+    const max = maxArmLinkeOhneUmbruch(arms);
+    if (max === undefined) return undefined;
     return max - armLinkeBreite(arm) + 1;
 }
 
@@ -291,8 +295,26 @@ function declPrefixWidth(chainRoot: AstNode): number | undefined {
         if (!we || !isWaehleExpr(we)) return undefined;
         const arms = (we as { arms?: ReadonlyArray<{ $cstNode?: { text: string } }> }).arms ?? [];
         if (arms.length === 0) return undefined;
-        const maxLeft = Math.max(...arms.map((a) => armLinkeBreite(a)));
-        return indentDepth(c) * INDENT_SIZE + maxLeft + 4;
+        const base = indentDepth(c) * INDENT_SIZE;
+        // Bedingung (`patterns`, LINKS vom `->`) beginnt nach `falls ` an der
+        // Arm-Einrückung — NICHT an der (variabel gepolsterten) `->`-Spalte.
+        // Sonst übernähme eine kurze Bedingung die Breite der LÄNGSTEN Arm-
+        // Linken und bräche grundlos um. Mehrere `patterns` sind komma-
+        // getrennt: jede Vorgänger-Breite + `, ` (=2) aufaddieren.
+        if (isFallArm(c)) {
+            const idx = c.patterns.findIndex((p) => p === chainRoot);
+            if (idx >= 0) {
+                const before = c.patterns
+                    .slice(0, idx)
+                    .reduce((w, p) => w + flat(p.$cstNode?.text).length + 2, 0);
+                return base + 'falls '.length + before;
+            }
+        }
+        // RHS (Arm-Resultat): deterministische `->`-Spalte aus dem Layout
+        // — nur Arme OHNE Bedingungs-Umbruch bestimmen die Spalte.
+        const maxLeft = maxArmLinkeOhneUmbruch(arms as ReadonlyArray<AstNode>);
+        if (maxLeft === undefined) return undefined;
+        return base + maxLeft + 4;
     }
     return undefined;
 }
@@ -329,6 +351,41 @@ function chainExceedsMax(node: AstNode): boolean {
     const pw = declPrefixWidth(root);
     if (pw === undefined) return false;
     return pw + flat(root.$cstNode?.text).length > MAX_LINE;
+}
+
+/**
+ * Erstreckt sich die Arm-Linke (`falls …` bis vor das `->`) über mehrere
+ * Zeilen in der AUSGABE? Zwei Quellen:
+ *
+ *  1. Auto-Umbruch: eine `patterns`-Kette ist zu lang (`chainExceedsMax`)
+ *     ⇒ der `BinaryOp`-Regelzweig erzwingt `indent()` vor jedem Operator.
+ *  2. Autor-Umbruch: die Quell-Linke enthält bereits einen Zeilenumbruch
+ *     ⇒ der `fit(oneSpace, indent)`-Zweig BEWAHRT ihn.
+ *
+ * In beiden Fällen sitzt das `->` inline hinter der letzten Fortsetzungs-
+ * zeile; ein solcher Arm darf die gemeinsame `->`-Spalte NICHT mit seiner
+ * (flach gerechneten) Gesamtbreite aufblähen. `sonst` hat keine Bedingung
+ * ⇒ nie. Beide Kriterien sind über Format-Läufe stabil (Quell-Newline
+ * bleibt erhalten, `chainExceedsMax` ist `flat()`-basiert) ⇒ idempotent.
+ */
+function armLinkeUmbricht(arm: AstNode): boolean {
+    const t = (arm as { $cstNode?: { text: string } }).$cstNode?.text ?? '';
+    const i = t.indexOf('->');
+    if ((i >= 0 ? t.slice(0, i) : t).includes('\n')) return true;   // Autor-Umbruch
+    if (!isFallArm(arm)) return false;
+    return arm.patterns.some((p) => isBinaryOp(p) && chainExceedsMax(p)); // Auto-Umbruch
+}
+
+/**
+ * Spaltenbreite für die `->`-Ausrichtung = längste Arm-Linke unter den
+ * Armen, deren Linke NICHT umbricht. Umbrechende Arme setzen ihr `->`
+ * inline hinter die letzte Fortsetzungszeile und dürfen die gemeinsame
+ * Spalte daher nicht aufblähen. `undefined`, wenn alle Arme umbrechen
+ * (kein Spaltenlayout). `flat()`-basiert ⇒ idempotent.
+ */
+function maxArmLinkeOhneUmbruch(arms: ReadonlyArray<AstNode>): number | undefined {
+    const widths = arms.filter((a) => !armLinkeUmbricht(a)).map((a) => armLinkeBreite(a));
+    return widths.length > 0 ? Math.max(...widths) : undefined;
 }
 
 /** Erstreckt sich die Argumentliste eines Aufrufs über mehrere Zeilen? */

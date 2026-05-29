@@ -178,6 +178,28 @@ fn S(a: Euro, b: Euro, c: Euro): Euro = wähle {
         expect(await format(out)).toBe(out);          // idempotent
     });
 
+    it('falls-Bedingung bricht NICHT an der gepolsterten ->-Spalte um', async () => {
+        // Lange Arm-Linke treibt die `->`-Ausrichtspalte hoch. Eine
+        // Bedingung darf NICHT diese Spalte als Startbreite annehmen
+        // (sonst kettenartiger Über-Umbruch je `und`); sie beginnt real
+        // nach `falls ` an der Arm-Einrückung und bleibt unter MAX_LINE
+        // (120) einzeilig.
+        const out = await format(`konst A: Wahrheitswert = wahr
+konst B: Wahrheitswert = wahr
+fn T(): Ganzzahl = wähle {
+falls A und B -> 1
+falls A und B und A und B und A und B und A und B und A und B und A und B und A und B und A und B -> 2
+sonst -> 3
+}
+`);
+        // Beide Bedingungen je auf EINER Zeile (kein `und`-pro-Zeile-Bruch).
+        expect(out).toContain(
+            '    falls A und B und A und B und A und B und A und B und A und B und A und B und A und B und A und B ',
+        );
+        expect(out).not.toMatch(/\n\s+und A\n/);
+        expect(await format(out)).toBe(out);          // idempotent
+    });
+
     it('Arithmetik, Cast, Nullcheck, Bereich', async () => {
         const out = await format(`konst A: Euro? = nichts
 konst R: Euro = (A   oder   0) als Euro  +  1 als Euro

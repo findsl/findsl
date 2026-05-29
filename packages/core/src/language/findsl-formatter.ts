@@ -291,8 +291,24 @@ function declPrefixWidth(chainRoot: AstNode): number | undefined {
         if (!we || !isWaehleExpr(we)) return undefined;
         const arms = (we as { arms?: ReadonlyArray<{ $cstNode?: { text: string } }> }).arms ?? [];
         if (arms.length === 0) return undefined;
+        const base = indentDepth(c) * INDENT_SIZE;
+        // Bedingung (`patterns`, LINKS vom `->`) beginnt nach `falls ` an der
+        // Arm-Einrückung — NICHT an der (variabel gepolsterten) `->`-Spalte.
+        // Sonst übernähme eine kurze Bedingung die Breite der LÄNGSTEN Arm-
+        // Linken und bräche grundlos um. Mehrere `patterns` sind komma-
+        // getrennt: jede Vorgänger-Breite + `, ` (=2) aufaddieren.
+        if (isFallArm(c)) {
+            const idx = c.patterns.findIndex((p) => p === chainRoot);
+            if (idx >= 0) {
+                const before = c.patterns
+                    .slice(0, idx)
+                    .reduce((w, p) => w + flat(p.$cstNode?.text).length + 2, 0);
+                return base + 'falls '.length + before;
+            }
+        }
+        // RHS (Arm-Resultat): deterministische `->`-Spalte aus dem Layout.
         const maxLeft = Math.max(...arms.map((a) => armLinkeBreite(a)));
-        return indentDepth(c) * INDENT_SIZE + maxLeft + 4;
+        return base + maxLeft + 4;
     }
     return undefined;
 }

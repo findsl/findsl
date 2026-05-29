@@ -76,6 +76,12 @@ fn AbrundenAufVielfaches(betrag: EuroCent, vielfaches: EuroCent): EuroCent = bet
 -- `.aufrundenAuf(vielfaches)` → nächstgrößeres Vielfaches. --
 fn AufrundenAufVielfaches(betrag: Euro, vielfaches: Euro): Euro = betrag.aufrundenAuf(vielfaches)
 
+-- Dezimal-Stufung (typ-erhaltend); deckt die Präzisionsgrenze des Divisionsschritts ab, Issue #206. --
+fn AbrundenAufVielfachesDez(betrag: Dezimal, vielfaches: Dezimal): Dezimal = betrag.abrundenAuf(vielfaches)
+
+-- Gegenrichtung zur Dezimal-Stufung (aufrunden auf Vielfaches), Issue #206. --
+fn AufrundenAufVielfachesDez(betrag: Dezimal, vielfaches: Dezimal): Dezimal = betrag.aufrundenAuf(vielfaches)
+
 // ===========================================================================
 // § 11.2 Listen-Methoden
 // ===========================================================================

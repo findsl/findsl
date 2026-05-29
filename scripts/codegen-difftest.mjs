@@ -24,10 +24,13 @@
  * fehlt es, scheitert der Gradle-Task `generateFindslJava` mit klarer
  * Meldung (NICHT still grün).
  *
- * ADR10-Regel: Fehlt eine JDK-Toolchain (Node-only-CI), wird sauber
- * **übersprungen** mit klarer Meldung und Exit 0 — kein CI-Fail im
- * Node-Job. Der eigenständige JDK-21-CI-Job macht `./gradlew check`
- * dann zum harten Gate.
+ * ADR10-Regel: Fehlt eine JDK-Toolchain, wird **lokal** sauber
+ * übersprungen (klare Meldung, Exit 0) — kein Fail beim Entwickeln ohne
+ * JDK. Der eigenständige JDK-21-CI-Job macht `./gradlew check` zum harten
+ * Gate. In CI (`process.env.CI`) ist eine fehlende Toolchain hingegen ein
+ * **harter Fehler** (Exit 1, Issue #213): JDK 21 ist dort Pflicht (ADR9);
+ * ein stiller Exit 0 würde eine Java-Codegen-Regression maskieren, falls
+ * dieses Skript je in einen Node-only-Job verdrahtet wird.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -48,9 +51,16 @@ function hasJdk() {
 }
 
 if (!hasJdk()) {
+    if (process.env.CI) {
+        console.error('✗ codegen:difftest abgebrochen — keine JDK-Toolchain '
+            + '(javac) gefunden. In CI ist JDK 21 Pflicht (ADR9); der Java-'
+            + 'Codegen-Gate darf nicht still übersprungen werden (Issue #213). '
+            + 'JDK bereitstellen (siehe .github/workflows/ci.yml, Job „java").');
+        process.exit(1);
+    }
     console.log('⏭  codegen:difftest übersprungen — keine JDK-Toolchain '
-        + 'gefunden (ADR10: kein Fail im Node-Job). Lokal mit JDK 21 '
-        + 'ausführen oder via separatem JDK-CI-Job.');
+        + 'gefunden (ADR10: lokal kein Fail). Mit JDK 21 ausführen für den '
+        + 'vollen Codegen-Gate; in CI erzwingt ihn der separate JDK-Job.');
     process.exit(0);
 }
 

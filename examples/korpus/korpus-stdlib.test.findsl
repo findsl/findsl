@@ -36,6 +36,8 @@ verwende {
     BegrenztEuro,
     AbrundenAufVielfaches,
     AufrundenAufVielfaches,
+    AbrundenAufVielfachesDez,
+    AufrundenAufVielfachesDez,
 } aus "./korpus-stdlib"
 
 prüfe "§ 11.1 Rundungs-Methoden (EuroCent → Euro)" {
@@ -134,5 +136,17 @@ prüfe "§ 11.6 Stufen-Methoden (.abrundenAuf/.aufrundenAuf)" {
     }
     testfall "aufrundenAuf vollen Zehner" {
         AufrundenAufVielfaches(1.234, 10) == 1.240
+    }
+    // Präzisionsgrenze (#206): Wert mit 20 Nachkomma-Neunen. Zwischenrundung
+    // auf 20 Stellen (HALF_UP) → 21, dann floor → 21. Eine direkte
+    // scale-0-Division (alter Java-Pfad) ergäbe 20 und divergierte vom Orakel.
+    testfall "abrundenAuf an der 20-Stellen-Präzisionsgrenze" {
+        AbrundenAufVielfachesDez(20,99999999999999999999, 1) == 21
+    }
+    // Gegenrichtung (#206): Wert knapp über 21 (20 Nullen, dann 1).
+    // Zwischenrundung auf 20 Stellen → 21, dann ceil → 21. Direkte
+    // scale-0-Division ergäbe 22.
+    testfall "aufrundenAuf an der 20-Stellen-Präzisionsgrenze" {
+        AufrundenAufVielfachesDez(21,00000000000000000001, 1) == 21
     }
 }

@@ -99,7 +99,6 @@ import {
     type FuerExpr,
     type FunktionBody,
     type FunktionDecl,
-    type Lambda,
     type Program,
     type PruefeDecl,
     type Range,
@@ -1070,7 +1069,7 @@ function scalarRoundToMultipleValue(recv: NumericValue, name: string): Value {
 function governingMoneyTarget(node: AstNode): 'Euro' | 'Cent' | undefined {
     let cur: AstNode = node;
     for (;;) {
-        const c = cur.$container as AstNode | undefined;
+        const c = cur.$container;
         if (!c) return undefined;
         if (isCast(c) && c.value === cur) {
             const m = moneyAnnotationName(c.targetType);

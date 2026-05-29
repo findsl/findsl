@@ -183,7 +183,7 @@ prüfe "Zweit" { testfall "y" { f() == 2 } }
     });
 
     it('unbekannte URI → kein Report', async () => {
-        const { run } = await setup({ m: 'konst K: Euro = 1 als Euro\n' });
+        await setup({ m: 'konst K: Euro = 1 als Euro\n' });
         const services = createFindslServices(NodeFileSystem);
         const handler = services.shared.lsp.ExecuteCommandHandler!;
         const r = await handler.executeCommand('findsl.pruefe.run', ['file:///nope.findsl', 0]);

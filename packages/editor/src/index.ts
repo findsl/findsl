@@ -320,6 +320,8 @@ export async function mountFindslEditor(
         playMarkers.set(decos);
     };
     const mouseDown = editor?.onMouseDown((e) => {
+        // Monaco-eigener Enum-Vergleich (MouseTargetType) — Typen korrekt.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
         if (e.target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN) return;
         const line = e.target.position?.lineNumber;
         if (line && testfallLines.has(line)) fireRun();
@@ -400,7 +402,8 @@ export async function mountFindslEditor(
             changeListeners.clear();
             await lcWrapper.dispose(true);
             await editorApp.dispose();
-            await apiWrapper.dispose();
+            // dispose() ist hier synchron (void) — kein await.
+            apiWrapper.dispose();
         },
         advanced: { client, uri },
     };

@@ -29,6 +29,15 @@ import { deriveClassName } from '../codegen/path-naming.js';
 import { RUN_PRUEFE_COMMAND } from './findsl-codelens.js';
 
 /**
+ * LSP-Command-Argumente kommen als JSON-`unknown[]` herein. Strings sicher
+ * extrahieren statt blind `String()` — letzteres würde ein versehentlich
+ * übergebenes Objekt zu `[object Object]` stringifizieren.
+ */
+function argAsString(value: unknown, fallback = ''): string {
+    return typeof value === 'string' ? value : fallback;
+}
+
+/**
  * Server-Kommando (LSP `workspace/executeCommand`): rendert die Doku des
  * übergebenen Dokuments und liefert sie als String zurück; der Client öffnet
  * sie in einem ungespeicherten Editor. Rein in-process — kein Datei-I/O,
@@ -66,8 +75,8 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
      * Folge: einzelne Gutter-Play-Pfeile sollen nicht den ganzen Block
      * runnen).
      */
-    private async runPruefe(args: unknown[]): Promise<PruefeReport | undefined> {
-        const uri = String(args?.[0] ?? '');
+    private runPruefe(args: unknown[]): PruefeReport | undefined {
+        const uri = argAsString(args?.[0]);
         const index = Number(args?.[1] ?? 0);
         const testfallIndex = args?.[2] === undefined || args?.[2] === null
             ? undefined
@@ -78,7 +87,9 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
         const doc = documents.getDocument(URI.parse(uri));
         const entry = doc?.parseResult?.value as Program | undefined;
         if (!entry) {
-            await connection?.window.showErrorMessage(
+            // Fire-and-forget wie unten (showErrorMessage ist klebrig und
+            // blockiert sonst die executeCommand-Antwort).
+            void connection?.window.showErrorMessage(
                 'FinDSL: Dokument nicht geladen — bitte erneut öffnen.');
             return undefined;
         }
@@ -100,7 +111,7 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
         const pruefeDecls = entry.decls.filter(isPruefeDecl);
         const testDiags = buildPruefeDiagnostics(pruefeDecls[index], report, testfallIndex);
         const base = (doc?.diagnostics ?? []) as Diagnostic[];
-        connection?.sendDiagnostics({
+        void connection?.sendDiagnostics({
             uri,
             diagnostics: [...base, ...testDiags],
         });
@@ -127,10 +138,10 @@ export class FindslExecuteCommandHandler extends AbstractExecuteCommandHandler {
      * der Extension-Host öffnet den Inhalt in einem ungespeicherten Editor.
      * Der Modulname folgt derselben `deriveClassName`-Regel wie CLI/Web.
      */
-    private async runDoku(args: unknown[]): Promise<DokuResult | undefined> {
-        const uri = String(args?.[0] ?? '');
+    private runDoku(args: unknown[]): DokuResult | undefined {
+        const uri = argAsString(args?.[0]);
         const format: 'markdown' | 'html' =
-            String(args?.[1] ?? 'markdown') === 'html' ? 'html' : 'markdown';
+            argAsString(args?.[1], 'markdown') === 'html' ? 'html' : 'markdown';
 
         const doc = this.shared.workspace.LangiumDocuments.getDocument(URI.parse(uri));
         const program = doc?.parseResult?.value as Program | undefined;

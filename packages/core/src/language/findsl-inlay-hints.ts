@@ -61,7 +61,6 @@ import {
     isWaehleExpr,
     isWennExpr,
     type CallChain,
-    type ChainOp,
     type ParenChain,
     type Program,
 } from './generated/ast.js';

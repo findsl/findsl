@@ -17,7 +17,6 @@ import {
     type LangiumDocument,
     type LangiumDocuments,
     type MaybePromise,
-    AstUtils,
     CstUtils,
     type GrammarConfig,
 } from 'langium';
@@ -38,7 +37,6 @@ import {
     isFunktionDecl,
     type Call,
     type CallChain,
-    type ChainOp,
     type DeclPrefix,
     type ParenChain,
     type Program,

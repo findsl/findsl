@@ -302,11 +302,15 @@ export function texToPlain(tex: string): string {
         .replace(/\\\}/g, '\x03')
         .replace(/\\_/g,  '\x04')
         .replace(/\\([%&#$ ])/g, (_, c: string) => (c === ' ' ? ' ' : c));
+    // Sentinel-Rückübersetzung: \x01–\x04 sind die oben absichtlich gesetzten
+    // Kontrollzeichen-Platzhalter (s. Kommentar), hier in regex erwartet.
+    /* eslint-disable no-control-regex */
     const walked = walkTex(s0)
         .replace(/\x01/g, ' ')
         .replace(/\x02/g, '{')
         .replace(/\x03/g, '}')
         .replace(/\x04/g, '_');
+    /* eslint-enable no-control-regex */
     // Doppel-Whitespace nur in reinen Inline-Ausdrücken zu einem Space
     // collapsen. Mehrzeilige Strukturen (cases/matrix/aligned via
     // `renderEnvironment`) enthalten Padding-Spaces zur Spalten-

@@ -223,8 +223,8 @@ export async function ensureMathJax(): Promise<void> {
     );
     const tex = new TeX({ packages: SAFE_PACKAGES });
     const svg = new SVG({ fontCache: 'none' });
-    mjAdaptor = adaptor as unknown as MathjaxAdaptor;
-    mjDoc = mathjax.document('', { InputJax: tex, OutputJax: svg }) as unknown as MathjaxConverter;
+    mjAdaptor = adaptor as MathjaxAdaptor;
+    mjDoc = mathjax.document('', { InputJax: tex, OutputJax: svg }) as MathjaxConverter;
 }
 
 /** Geometrie eines gerenderten Formel-SVG (pt-skaliert für pdfmake). */

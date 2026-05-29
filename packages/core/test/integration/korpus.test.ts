@@ -21,7 +21,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, mkdtempSync, rmSync, mkdirSync } from 'node:fs';
+import { readdirSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { URI } from 'langium';

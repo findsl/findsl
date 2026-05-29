@@ -19,9 +19,6 @@ import { lowerProgram, lowerTestProgram } from '../../src/codegen/lower/lower.js
 import { emitTsModule, emitTsTestModule, irTypeToTs } from '../../src/codegen/emit-ts/emitter.js';
 import type { IrType } from '../../src/codegen/ir/nodes.js';
 
-/** Whitespace-insensitiver Substring-Test (Formatierung ist nicht das Ziel). */
-const flat = (s: string): string => s.replace(/\s+/g, '');
-const hasFlat = (hay: string, needle: string): boolean => flat(hay).includes(flat(needle));
 
 // ---------------------------------------------------------------------------
 // irTypeToTs — reines Typ-Mapping (Deklarationsgrenze)

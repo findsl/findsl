@@ -714,8 +714,8 @@ describe('Formatter: datensatz-Felder als 4-Spalten-Tabelle (Issue #202)', () =>
             + ')\n',
         );
         // Spalte 1: `art:` und `antrieb:` fluchten (bestehende Logik).
-        expect(out).toMatch(/^    art:     Fahrzeugart,$/m);
-        expect(out).toMatch(/^    antrieb: Antrieb,$/m);
+        expect(out).toMatch(/^ {4}art: {5}Fahrzeugart,$/m);
+        expect(out).toMatch(/^ {4}antrieb: Antrieb,$/m);
     });
 
     it('Mit Default — `=` fluchtet, `,` direkt nach Default-Wert', async () => {
@@ -797,8 +797,8 @@ describe('Formatter: fn-Parameter als 4-Spalten-Tabelle (Folge zu #202)', () => 
             + '): Euro = 0 als Euro\n',
         );
         // Spalte 1 (Name + `:`) fluchtet
-        expect(out).toMatch(/^    zve:      Euro,$/m);
-        expect(out).toMatch(/^    tarifart: Tarifart,$/m);
+        expect(out).toMatch(/^ {4}zve: {6}Euro,$/m);
+        expect(out).toMatch(/^ {4}tarifart: Tarifart,$/m);
     });
 
     it('Mit Default — `=` fluchtet über alle Default-Params', async () => {
@@ -824,9 +824,9 @@ describe('Formatter: fn-Parameter als 4-Spalten-Tabelle (Folge zu #202)', () => 
             + '): Euro = a\n',
         );
         // `Euro,` direkt nach Typ bei Param ohne Default
-        expect(out).toMatch(/^    a:[ ]+Euro,$/m);
+        expect(out).toMatch(/^ {4}a:[ ]+Euro,$/m);
         // Param mit Default hat `=`-Padding
-        expect(out).toMatch(/^    b:[ ]+Euro\s+= 0 als Euro,$/m);
+        expect(out).toMatch(/^ {4}b:[ ]+Euro\s+= 0 als Euro,$/m);
     });
 
     it('Inline-Kommentare in fn-Params — `//` fluchtet', async () => {
@@ -838,7 +838,7 @@ describe('Formatter: fn-Parameter als 4-Spalten-Tabelle (Folge zu #202)', () => 
         );
         const lines = out.split('\n');
         const commentCols = lines
-            .filter((l) => l.match(/^    [a-z]/) && l.includes('//'))
+            .filter((l) => l.match(/^ {4}[a-z]/) && l.includes('//'))
             .map((l) => l.indexOf('//'));
         expect(commentCols.length).toBe(2);
         expect(new Set(commentCols).size).toBe(1);

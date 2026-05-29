@@ -259,7 +259,6 @@ describe('Cross-Modul-Komposition (Phase 3, Inkrement 2)', () => {
         return lowerProgram(nutzerProg, ctx);
     }
     const fn = (ir: ReturnType<typeof lowerProgram>, name: string) =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (ir.decls.find((d) => d.kind === 'fn' && d.name === name) as any);
 
     it('lowert Cross-Symbole korrekt (crossCall/enumVal-owner/ctor/crossRef/enumCmp)', async () => {

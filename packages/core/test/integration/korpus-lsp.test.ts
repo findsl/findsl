@@ -18,7 +18,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
-import { resolve, join, basename } from 'node:path';
+import { resolve, join } from 'node:path';
 import { URI } from 'langium';
 import { NodeFileSystem } from 'langium/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';

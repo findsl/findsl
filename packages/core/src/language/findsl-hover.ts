@@ -36,20 +36,14 @@ import {
     isAbbruchExpr,
     isAusgabeStmt,
     isAufzaehlungDecl,
-    isBlockExpr,
-    isCall,
     isCallChain,
     isParenChain,
     isDatensatzDecl,
     isFieldAccess,
     isField,
-    isForceUnwrap,
-    isFuerExpr,
     isFunktionDecl,
     isImportItem,
     isKonstDecl,
-    isLambda,
-    isLetStmt,
     isParam,
     isSafeFieldAccess,
     isStringLiteral,
@@ -58,7 +52,6 @@ import {
     type ChainOp,
     type DatensatzDecl,
     type DeclPrefix,
-    type Expr,
     type Field,
     type FunktionDecl,
     type KonstDecl,
@@ -71,11 +64,6 @@ import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
 import { parseDocTags, stripDocMarkers as stripMarkersShared } from './doc-tags.js';
 import {
     buildLocalScope,
-    elementOfListLike,
-    inferExprQuiet,
-    inferHOFElementType,
-    inferReceiverElementType,
-    resolveAnnotationWithImports,
     stepChainOp,
 } from './findsl-local-scope.js';
 import { renderDocForHover, type QuelleAnnotation } from './doc-hover-renderer.js';
@@ -89,12 +77,7 @@ import { findMethodDef } from './findsl-method-defs.js';
 import type { BuiltinMethodDef } from './findsl-stdlib.js';
 import {
     infer,
-    resolveTypeAnnotation,
-    TNull,
-    TUnknown,
-    TypeEnv,
     type Type,
-    type TypeContext,
 } from './findsl-types.js';
 import type { FindslServices } from './findsl-module.js';
 

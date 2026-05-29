@@ -69,6 +69,15 @@ jobs:
           npm run -w @findsl/editor build:editor
           npm run -w @findsl/editor-react build:editor-react
 
+      # Lint NACH den Builds: der typ-bewusste Web-Block (packages/web/src)
+      # prüft über `tsconfig.check.json`, das `@findsl/core` über dessen
+      # gebaute `out/**/*.d.ts` auflöst — vor dem Build fehlen diese Typen
+      # und der no-unsafe-*-Regelsatz schlägt flächig an. ESLint ignoriert
+      # `**/generated/**` und Build-Output selbst (siehe eslint.config.js).
+      # Issue #208.
+      - name: Lint (ESLint Flat-Config)
+        run: npm run lint
+
       - name: Bundle
         run: npm run bundle
 

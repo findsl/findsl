@@ -556,10 +556,13 @@ public sealed class FinDslNumber
      * round(value / vielfaches)} mit anschließendem {@code stufen *
      * vielfaches}.
      *
-     * <p>Die Division nutzt {@code divide(divisor, 0, mode)} (exakte
-     * Zwischengenauigkeit, direkt auf scale 0 gerundet) — nicht {@code
-     * MC_DIV}; für die realistischen Steuerwerte (&lt; 10^18) deckungsgleich
-     * mit der decimal.js-Seite ({@code div(...).toDecimalPlaces(0, mode)}).
+     * <p>Die Division läuft zweistufig — {@code divide(divisor, MC_DIV)}
+     * (Zwischenpräzision 20 signifikante Stellen, HALF_UP) gefolgt von
+     * {@code setScale(0, mode)} — und spiegelt damit bit-genau die
+     * decimal.js-Seite ({@code div(...).toDecimalPlaces(0, mode)}, precision
+     * 20). Eine direkte {@code divide(divisor, 0, mode)} würde den exakten
+     * Quotienten runden und bei Werten mit &gt; 20 signifikanten Stellen vom
+     * Interpreter-Orakel abweichen (Issue #206).
      *
      * @param vielfaches Rundungsschritt (muss &gt; 0 sein).
      * @param mode       Rundungsrichtung (FLOOR/CEILING).
@@ -571,7 +574,7 @@ public sealed class FinDslNumber
             throw new FinDslRuntimeError("Vielfaches muss größer als 0 sein, erhalten "
                     + germanFormat(vielfaches.value, null) + ".");
         }
-        BigDecimal stufen = value.divide(vielfaches.value, 0, mode);
+        BigDecimal stufen = value.divide(vielfaches.value, MC_DIV).setScale(0, mode);
         return new FinDslNumber(stufen.multiply(vielfaches.value), type);
     }
 

@@ -28,10 +28,10 @@
    vorgeben.
 
 5. **Nächste Aufgaben** — Sprache, Interpreter, Validator, volle
-   LSP-Provider-Suite und **Doc-Generator (Phase 1)** sind fertig
-   (Status s. § 5). Offen ist v. a. **Codegen** (Java/TS/JS,
-   `src/codegen/` leer) sowie die Stdlib-Diskussion und der optionale
-   Starlight-Export (§ 8 b/c). Vor jeder Sprach-/Provider-Änderung:
+   LSP-Provider-Suite, **Doc-Generator (Phase 1)** und **Codegen
+   (Java/TS/JS, `src/codegen/`)** sind fertig (Status s. § 5). Offen
+   ist v. a. die Stdlib-Diskussion und der optionale Starlight-Export
+   (§ 8 b/c). Vor jeder Sprach-/Provider-Änderung:
    Grammatik-Duo-Sync (SPEC.md Anhang A · findsl.langium) +
    `langium:generate` + `build` + `bundle` + `npm test` + Bundle-Smoke.
 

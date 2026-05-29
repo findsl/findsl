@@ -47,18 +47,35 @@ FinDSL/                                 ← npm-Workspace-Wurzel (privat)
 │   │       │               module-loader/pruefe …)
 │   │       ├── docgen/    (Doku-Generator: model/markdown/html/pdf/
 │   │       │               kopf/quelle/findsl-tokens — war „docs")
-│   │       └── codegen/   (LEER — TODO Java/TS/JS)
+│   │       ├── codegen/   (Codegen-Pipeline: lower/ → ir/ → emit/
+│   │       │               Pretty-Printer → emit-java/emit-ts/emit-js;
+│   │       │               path-naming + eingebettete Java-/TS-Runtimes)
+│   │       └── papgen/    (PAP-Generator: model/mermaid/html — Programm-
+│   │                       ablaufpläne als Mermaid + self-contained HTML)
 │   ├── lsp/    @findsl/lsp — src/main.ts (LSP-Server-Entry → @findsl/core)
-│   └── cli/    @findsl/cli — src/main.ts (bin `findsl`: parse/test/docgen)
-└── apps/
-    └── vscode/ Extension — src/main.ts + package.json (VS-Code-Manifest)
-                 + language-configuration.json + syntaxes/ (für .vsix)
+│   ├── cli/    @findsl/cli — src/main.ts (bin `findsl`: parse/test/docgen)
+│   ├── web/    @findsl/web — Browser-Bundle (Langium-LSP-Worker +
+│   │            check/generate-API; Single Source → @findsl/core)
+│   ├── editor/ @findsl/editor — einbettbarer Monaco-Editor (mountFindsl-
+│   │            Editor() + @findsl/web-Worker; ohne Preview-/Ergebnis-UI)
+│   └── editor-react/ @findsl/editor-react — React-<FindslEditor> um
+│                @findsl/editor (Ref-API check/generate)
+├── apps/
+│   └── vscode/ Extension — src/main.ts + package.json (VS-Code-Manifest)
+│                + language-configuration.json + syntaxes/ (für .vsix)
+└── runtimes/                          ← als Codegen-Output eingebettet
+    ├── java/   Java-Laufzeit (Gradle; FinDslNumber u. a.)
+    └── ts/     TypeScript-Laufzeit (Quelle für emit-ts/emit-js)
 ```
 
 Modul-Graph (azyklisch): `lsp → @findsl/core`, `cli → @findsl/core`,
+`web → @findsl/core`, `editor → @findsl/web`, `editor-react → @findsl/editor`;
 `apps/vscode` bündelt `lsp` (esbuild → `apps/vscode/out/{extension,
-language}/main.cjs`; kein TS-Import von core). `language ↔ interpret`
-und `language ↔ docs` sind bewusst **paketintern** in `core` (Variante A).
+language}/main.cjs`; kein TS-Import von core). `language ↔ interpret`,
+`language ↔ docgen` und `language → codegen` sind bewusst **paketintern**
+in `core` (Variante A); `codegen` wird vom CLI-Subkommando `codegen`
+(`--lang java|ts|js`) konsumiert; die `runtimes/{java,ts}` werden von
+`codegen` als eingebettete Laufzeit-Outputs ausgeliefert.
 
 **Zwei Artefakte halten die Sprache zusammen — bei Sprachänderungen MÜSSEN beide synchron gepflegt werden:**
 

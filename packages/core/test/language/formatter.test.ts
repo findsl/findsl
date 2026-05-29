@@ -364,6 +364,23 @@ describe('Formatter: verwende-Block', () => {
         const out = await format('verwende { A } aus "./x"\nkonst K: Euro = 1 als Euro\n');
         expect(await errorCount(out)).toBe(0);
     });
+
+    it('Items werden alphabetisch sortiert (Nutzer-Fall)', async () => {
+        const out = await format(
+            'verwende { Fahrzeug, Kraftrad, Pkw, Anhaenger, Elektro, Befreit3aAbs1 }'
+            + ' aus "./kraftstg-typen"\nkonst K: Euro = 1 als Euro\n');
+        expect(out).toContain(
+            'verwende {\n    Anhaenger,\n    Befreit3aAbs1,\n    Elektro,\n'
+            + '    Fahrzeug,\n    Kraftrad,\n    Pkw\n} aus "./kraftstg-typen"');
+        expect(await format(out)).toBe(out);          // idempotent
+    });
+
+    it('Sortierung nach Quell-Namen vor `als`-Alias; Trailing-Komma bleibt', async () => {
+        const out = await format('verwende {\nZeta als a,\nFoo als z,\nAlpha,\n} aus "./x"\n');
+        expect(out).toContain(
+            'verwende {\n    Alpha,\n    Foo als z,\n    Zeta als a,\n} aus "./x"');
+        expect(await format(out)).toBe(out);          // idempotent
+    });
 });
 
 describe('Formatter: erzwingt 4 Blanks (Tabs → Spaces, unabh. Client-Optionen)', () => {

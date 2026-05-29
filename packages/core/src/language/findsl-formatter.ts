@@ -475,9 +475,29 @@ export class FindslFormatter extends AbstractFormatter {
         // Analog: Inline-Kommentare (`//` nach `,` in mehrzeiligen
         // Datensatz-Feldern) werden auf eine gemeinsame Spalte
         // ausgerichtet (Issue #202).
+        // `verwende { … }`-Items alphabetisch sortieren (reine Umordnung —
+        // Langiums Whitespace-Formatter kann AST-Knoten nicht umstellen).
+        // Der Sortier-Edit ersetzt den Block-Innenraum komplett; die
+        // Basis-Whitespace-Edits IN diesem Innenraum werden daher verworfen
+        // (sonst Konflikt — dieser Edit besitzt den Innenraum).
+        const { edits: importEdits, interiors } = this.importSortEdits(document, range);
+        // Basis-Whitespace-Edits IM Block-Innenraum verwerfen — per
+        // Offset-Containment (inklusiv), damit auch Null-breite Einfügungen
+        // GENAU an den Grenzen (`interior.prepend(indent)` bei interiorStart,
+        // `close.prepend(newLine)` bei close) erfasst werden; `rangesOverlap`
+        // erwischt diese Rand-Insertionen sonst nicht.
+        const td = document.textDocument;
+        const baseKept = interiors.length === 0
+            ? edits
+            : edits.filter((e) => {
+                const s = td.offsetAt(e.range.start);
+                const en = td.offsetAt(e.range.end);
+                return !interiors.some(([a, b]) => s >= a && en <= b);
+            });
         const all = [
-            ...edits,
-            ...this.docTagEdits(document, edits, range),
+            ...baseKept,
+            ...importEdits,
+            ...this.docTagEdits(document, baseKept, range),
             ...this.inlineCommentEdits(document),
         ];
         // `// @formatter:off`…`// @formatter:on` (SPEC § 2.3.1): jeden
@@ -489,6 +509,69 @@ export class FindslFormatter extends AbstractFormatter {
         return regions.length === 0
             ? all
             : all.filter((e) => !regions.some((p) => rangesOverlap(e.range, p)));
+    }
+
+    /**
+     * Sortiert die Items eines `verwende { … }`-Blocks alphabetisch nach
+     * Quell-Namen (`name`, vor einem evtl. `als`-Alias). Reine Umordnung:
+     * ersetzt den Block-Innenraum zwischen `{` und `}` durch die kanonische,
+     * sortierte Mehrzeilen-Form (ein Item je Zeile, 4er-Einrückung) — genau
+     * das Layout, das die Whitespace-Regeln sonst erzeugen. Das
+     * Trailing-Komma wird quell-abhängig beibehalten (wie der übrige
+     * Formatter: vorhanden → bleibt, fehlend → bleibt fehlend). Alias-
+     * Items (`Foo als bar`) werden über die flache Item-Schreibweise
+     * mit-normalisiert.
+     *
+     * Idempotent: ist der Innenraum bereits kanonisch UND sortiert, ist
+     * `newInterior === currentInterior` ⇒ kein Edit. `@formatter:off`
+     * schützt der finale Overlap-Filter in `doDocumentFormat`.
+     */
+    private importSortEdits(
+        document: LangiumDocument, range?: Range,
+    ): { edits: TextEdit[]; interiors: Array<readonly [number, number]> } {
+        const program = document.parseResult?.value as {
+            imports?: ReadonlyArray<{
+                $cstNode?: { offset: number };
+                items?: ReadonlyArray<{ name?: string; $cstNode?: { offset: number; end: number; text: string } }>;
+            }>;
+        } | undefined;
+        if (!program?.imports) return { edits: [], interiors: [] };
+        const text = document.textDocument.getText();
+        const edits: TextEdit[] = [];
+        const interiors: Array<readonly [number, number]> = [];
+
+        for (const imp of program.imports) {
+            const items = imp.items;
+            if (!items || items.length < 2 || imp.$cstNode === undefined) continue;
+            const lastCst = items[items.length - 1].$cstNode;
+            if (!lastCst) continue;
+
+            const open = text.indexOf('{', imp.$cstNode.offset);
+            const close = text.indexOf('}', lastCst.end);
+            if (open < 0 || close < 0) continue;
+            const interiorStart = open + 1;
+            const currentInterior = text.slice(interiorStart, close);
+            const trailingComma = currentInterior.trimEnd().endsWith(',');
+
+            const sorted = [...items].sort((a, b) => {
+                const an = a.name ?? '', bn = b.name ?? '';
+                return an < bn ? -1 : an > bn ? 1 : 0;
+            });
+            const n = sorted.length;
+            const lines = sorted.map((it, i) =>
+                `    ${flat(it.$cstNode?.text)}${trailingComma || i < n - 1 ? ',' : ''}`);
+            const newInterior = `\n${lines.join('\n')}\n`;
+            if (newInterior === currentInterior) continue;     // idempotent
+
+            const r: Range = {
+                start: document.textDocument.positionAt(interiorStart),
+                end: document.textDocument.positionAt(close),
+            };
+            if (range && !rangeContains(range, r)) continue;    // Range-Format
+            edits.push({ range: r, newText: newInterior });
+            interiors.push([interiorStart, close] as const);
+        }
+        return { edits, interiors };
     }
 
     /** Replace-Edits, die `@param`/`@rückgabe` in Doc-Kommentaren ausrichten. */

@@ -679,7 +679,7 @@ export function inferParenChain(
  * Typ des Empfängers; `node` dient nur der Diagnose-Verortung beim
  * Aufruf-Glied.
  */
-function walkChain(
+export function walkChain(
     start: Type,
     chain: ReadonlyArray<AstNode & { $type: string }>,
     node: AstNode,

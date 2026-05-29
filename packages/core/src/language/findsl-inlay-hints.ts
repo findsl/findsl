@@ -72,7 +72,7 @@ import { findModuleInWorkspace } from './findsl-definition.js';
 import { BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
 import { findMethodDef, paramNamesFromSignature } from './findsl-method-defs.js';
 import { infer } from './findsl-inference.js';
-import { buildLocalScope, stepChainOp } from './findsl-local-scope.js';
+import { buildLocalScope, inferChainPrefix } from './findsl-local-scope.js';
 import { collectExpressionTypes, type Type, type ImportResolver } from './findsl-types.js';
 import type { FindslServices } from './findsl-module.js';
 
@@ -472,9 +472,6 @@ function inferReceiverTypeBeforeOp(
         if (!chain.receiver) return undefined;
         current = infer(chain.receiver, localEnv, ctx, () => {});
     }
-    for (let i = 0; i < untilIndex; i++) {
-        if (!current || current.kind === 'unknown') return undefined;
-        current = stepChainOp(current, chain.chain[i], true);
-    }
-    return current;
+    if (!current) return undefined;
+    return inferChainPrefix(current, chain.chain, untilIndex, chain, localEnv, ctx);
 }

@@ -48,7 +48,7 @@ import { findModuleInWorkspace } from './findsl-definition.js';
 import { BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
 import { findMethodDef } from './findsl-method-defs.js';
 import { infer } from './findsl-inference.js';
-import { buildLocalScope, stepChainOp } from './findsl-local-scope.js';
+import { buildLocalScope, inferChainPrefix } from './findsl-local-scope.js';
 import { buildModuleHeader } from './findsl-scope.js';
 import { type Type } from './findsl-types.js';
 import type { FindslServices } from './findsl-module.js';
@@ -346,11 +346,8 @@ function inferReceiverTypeAt(
         if (!chain.receiver) return undefined;
         current = infer(chain.receiver, localEnv, ctx, () => {});
     }
-    for (let i = 0; i < untilIndex; i++) {
-        if (!current || current.kind === 'unknown') return undefined;
-        current = stepChainOp(current, chain.chain[i], true);
-    }
-    return current;
+    if (!current) return undefined;
+    return inferChainPrefix(current, chain.chain, untilIndex, chain, localEnv, ctx);
 }
 
 /** Index der zur `(` an `openIdx` passenden `)`, oder −1. Konsistent mit

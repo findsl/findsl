@@ -795,6 +795,35 @@ konst B: Wahrheitswert = S.beginntMit("Ha")
         // Darf keine falsche Doc-Karte zeigen
         expect(content(h)).not.toContain('§ 11');
     });
+
+    it('verkettete Builtins: ZWEITE Methode bekommt Hover (Nutzer-Fall)', async () => {
+        // `a.mindestens(b).mindestens(c)` — nach dem ersten typ-erhaltenden
+        // `.mindestens(…)` muss der Empfänger weiter EuroCent sein, damit
+        // das zweite `.mindestens` aufgelöst wird. Vorher lieferte der
+        // Skeleton-Stepper `unknown` → kein Hover am zweiten Glied.
+        const src = `konst A: EuroCent = 1,00
+konst B: EuroCent = 2,00
+konst R: EuroCent = A.mindestens(B).mindestens(0,00)
+`;
+        // `mindestens(0` trifft eindeutig das ZWEITE Kettenglied.
+        const h = await hoverAt(src, 'mindestens(0');
+        const md = content(h);
+        expect(md).toContain('mindestens');
+        expect(md).toContain('§ 11.6');
+    });
+
+    it('verkettete Builtins: erstes UND zweites Glied auf ParenChain', async () => {
+        // Geklammerter Empfänger + zwei verkettete Methoden.
+        const src = `konst A: EuroCent = 1,00
+konst R: EuroCent = (A + 1,00).höchstens(9,00).mindestens(0,00)
+`;
+        const erst = content(await hoverAt(src, 'höchstens'));
+        expect(erst).toContain('höchstens');
+        expect(erst).toContain('§ 11.6');
+        const zweit = content(await hoverAt(src, 'mindestens'));
+        expect(zweit).toContain('mindestens');
+        expect(zweit).toContain('§ 11.6');
+    });
 });
 
 describe('Hover auf primitiven Typen in Annotationen', () => {

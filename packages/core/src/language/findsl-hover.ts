@@ -64,7 +64,7 @@ import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
 import { parseDocTags, stripDocMarkers as stripMarkersShared } from './doc-tags.js';
 import {
     buildLocalScope,
-    stepChainOp,
+    inferChainPrefix,
 } from './findsl-local-scope.js';
 import { renderDocForHover, type QuelleAnnotation } from './doc-hover-renderer.js';
 import * as path from 'node:path';
@@ -260,13 +260,10 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
                 container, ctx, program,
                 (p, n) => this.resolveCrossModuleType(p, n),
             );
-            let current: Type | undefined =
-                infer(container.receiver, localEnv, ctx, () => {});
-            for (let i = 0; i < idx; i++) {
-                if (!current || current.kind === 'unknown') return undefined;
-                current = stepChainOp(current, container.chain[i], true);
-            }
-            baseType = current;
+            const start = infer(container.receiver, localEnv, ctx, () => {});
+            baseType = inferChainPrefix(
+                start, container.chain, idx, container, localEnv, ctx,
+            );
         } else {
             return undefined;
         }
@@ -449,7 +446,7 @@ function inferBaseTypeAt(
     );
 
     // Wurzel-Typ: lokal → Top-Level → Cross-Modul.
-    let current: Type | undefined =
+    const current: Type | undefined =
         localEnv.lookup(chain.name) ?? provider.resolveCrossModuleType(program, chain.name);
     if (!current) return undefined;
     // Cross-Modul-Datensatz-Symbol ist als Konstruktor-Funktionstyp
@@ -457,11 +454,7 @@ function inferBaseTypeAt(
     // Record-Typ. Hier passiert das nicht — die Cross-Modul-Wurzel ist
     // typischerweise ein Wert oder Funktionsaufruf, kein Datensatz selbst.
 
-    for (let i = 0; i < untilIndex; i++) {
-        current = stepChainOp(current, chain.chain[i], true);
-        if (!current || current.kind === 'unknown') return undefined;
-    }
-    return current;
+    return inferChainPrefix(current, chain.chain, untilIndex, chain, localEnv, ctx);
 }
 
 // ---------------------------------------------------------------------------

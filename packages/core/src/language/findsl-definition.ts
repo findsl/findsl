@@ -53,7 +53,7 @@ import * as path from 'node:path';
 import {
     type Type,
 } from './findsl-types.js';
-import { buildLocalScope, stepChainOp } from './findsl-local-scope.js';
+import { buildLocalScope, inferChainPrefix } from './findsl-local-scope.js';
 import type { FindslServices } from './findsl-module.js';
 
 export class FindslDefinitionProvider implements DefinitionProvider {
@@ -319,15 +319,11 @@ function inferBaseTypeAt(
         (p, n) => resolveCrossModuleType(p, n, documents),
     );
 
-    let current: Type | undefined =
+    const current: Type | undefined =
         localEnv.lookup(chain.name) ?? resolveCrossModuleType(program, chain.name, documents);
     if (!current) return undefined;
 
-    for (let i = 0; i < untilIndex; i++) {
-        current = stepChainOp(current, chain.chain[i], false);
-        if (!current || current.kind === 'unknown') return undefined;
-    }
-    return current;
+    return inferChainPrefix(current, chain.chain, untilIndex, chain, localEnv, ctx);
 }
 
 // ---------------------------------------------------------------------------

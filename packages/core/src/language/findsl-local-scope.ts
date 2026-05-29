@@ -11,20 +11,19 @@
  *   - Param-/Let-Bindings entlang der `$container`-Kette zu sammeln
  *     (`buildLocalScope`), inkl. Lambda-HOF-Element-Typ-Inferenz und
  *     `für jeden`-Iter-Binding (Issue #65),
- *   - eine `CallChain` Schritt für Schritt zu „durchlaufen"
- *     (`stepChainOp`) — `()`/`.field`/`?.field`/`!!` — und
+ *   - den Empfänger-Typ vor einem Chain-Glied zu inferieren
+ *     (`inferChainPrefix`) — delegiert an den autoritativen Ketten-Walker
+ *     des Type-Checkers (`walkChain`), damit auch verkettete Builtin-
+ *     Methoden (§ 11) korrekt durchlaufen werden — und
  *   - `Type`-Annotationen mit Cross-Modul-Fallback aufzulösen
  *     (`resolveAnnotationWithImports`).
  *
- * Beide Provider hatten das vor Issue #70 jeweils dupliziert (ein
- * gepatcher Bug betraf zwingend beide Stellen). Diese Datei ist die EINE
- * Quelle; der einzige Unterschied (Hover braucht eine tolerante Variante
- * von `?.` auf nicht-nullable Records; Hover nutzt eine Provider-Methode
- * für Cross-Modul-Auflösung, Definition eine freie Funktion mit
- * `LangiumDocuments`) wird über zwei kleine Schnittstellen abstrahiert:
- *
- *   - `stepChainOp(..., tolerant)` — Boolean-Flag.
- *   - `CrossModuleResolver` — Callback, den der Aufrufer bindet.
+ * Die vier LSP-Provider (Hover/Definition/Inlay/Signatur) hatten das vor
+ * Issue #70 jeweils dupliziert (ein gepatchter Bug betraf zwingend alle
+ * Stellen). Diese Datei ist die EINE Quelle; der einzige Unterschied
+ * (Hover nutzt eine Provider-Methode für Cross-Modul-Auflösung, Definition
+ * eine freie Funktion mit `LangiumDocuments`) wird über `CrossModuleResolver`
+ * abstrahiert — einen Callback, den der Aufrufer bindet.
  */
 
 import type { AstNode } from 'langium';
@@ -33,23 +32,20 @@ import {
     isCall,
     isCallChain,
     isFieldAccess,
-    isForceUnwrap,
     isFuerExpr,
     isFunktionDecl,
     isLambda,
     isLetStmt,
-    isSafeFieldAccess,
     type ChainOp,
     type Expr,
     type Program,
     type Type as TypeAnnotation,
 } from './generated/ast.js';
-import { buildModuleHeader } from './findsl-scope.js';
+import { walkChain } from './findsl-inference.js';
 import {
     infer,
     resolveTypeAnnotation,
     TNull,
-    TUnknown,
     TypeEnv,
     type Type,
     type TypeContext,
@@ -239,54 +235,31 @@ export function buildLocalScope(
  * `TUnknown`, weil ein „Sprung-zur-Definition" auf ungenutzten Cast
  * nicht sinnvoll ist (`tolerant: false`).
  */
-export function stepChainOp(
-    t: Type, op: ChainOp, tolerant: boolean,
+/**
+ * Inferiert den Empfänger-Typ VOR dem Chain-Glied an `untilIndex`, indem
+ * der autoritative Ketten-Walker (`walkChain` aus dem Type-Checker) über
+ * das Chain-Prefix `chain[0..untilIndex)` läuft. Ersetzt das frühere
+ * Glied-für-Glied-`stepChainOp`, das Builtin-Methoden NICHT kannte: bei
+ * `a.mindestens(b).mindestens(c)` lieferte es nach dem ersten
+ * `.mindestens(…)` `unknown` (Empfänger ist kein Record) → der zweite
+ * `.mindestens` fand keine Methode mehr. `walkChain` behandelt alle
+ * Methoden-Familien (§ 11) korrekt und konsumiert das jeweils folgende
+ * `Call`-Glied — so funktioniert Hover/Definition/Inlay/Signatur auch bei
+ * verketteten Builtins.
+ *
+ * Diagnosen werden verschluckt (reiner Lese-Pfad). `unknown` → `undefined`
+ * (gleiche Fehl-Semantik wie zuvor: der Aufrufer bricht dann ab).
+ */
+export function inferChainPrefix(
+    start: Type,
+    chain: ReadonlyArray<ChainOp>,
+    untilIndex: number,
+    node: AstNode,
+    env: TypeEnv,
+    ctx: TypeContext,
 ): Type | undefined {
-    if (isCall(op)) {
-        if (t.kind === 'function') return t.result;
-        return TUnknown;
-    }
-    if (isFieldAccess(op)) {
-        const unwrapped = t.kind === 'nullable' ? t.inner : t;
-        if (unwrapped.kind !== 'record') return TUnknown;
-        const field = unwrapped.decl.fields.find((f) => f.name === op.name);
-        if (!field) return TUnknown;
-        // Wir brauchen einen TypeContext, um Field-Typen aufzulösen — der
-        // hier rumgereichte Datensatz hat noch keinen direkten Zugriff
-        // darauf. Workaround: aus dem Container des Records (Program) bei
-        // Bedarf nochmal aufbauen. Für den Hover/Definition-Pfad (selten,
-        // einmal pro Cursor-Bewegung) ist das vertretbar.
-        const program = (unwrapped.decl as { $container?: Program }).$container;
-        if (!program) return TUnknown;
-        const localCtx = buildModuleHeader(program).context;
-        return resolveTypeAnnotation(field.type, localCtx);
-    }
-    if (isSafeFieldAccess(op)) {
-        if (t.kind === 'nullable') {
-            const inner = t.inner;
-            if (inner.kind !== 'record') return TUnknown;
-            const field = inner.decl.fields.find((f) => f.name === op.name);
-            if (!field) return TUnknown;
-            const program = (inner.decl as { $container?: Program }).$container;
-            if (!program) return TUnknown;
-            const localCtx = buildModuleHeader(program).context;
-            return TNull(resolveTypeAnnotation(field.type, localCtx));
-        }
-        if (tolerant && t.kind === 'record') {
-            // `?.` auf nicht-Nullable — formal ein Typ-Fehler, fürs Hover
-            // tolerant durchreichen.
-            const field = t.decl.fields.find((f) => f.name === op.name);
-            if (!field) return TUnknown;
-            const program = (t.decl as { $container?: Program }).$container;
-            if (!program) return TUnknown;
-            const localCtx = buildModuleHeader(program).context;
-            return resolveTypeAnnotation(field.type, localCtx);
-        }
-        return TUnknown;
-    }
-    if (isForceUnwrap(op)) {
-        return t.kind === 'nullable' ? t.inner : t;
-    }
-    // Index in Listen — Skelett-Stepper unterstützt das nicht.
-    return TUnknown;
+    const result = walkChain(
+        start, chain.slice(0, untilIndex), node, env, ctx, () => {},
+    );
+    return result.kind === 'unknown' ? undefined : result;
 }

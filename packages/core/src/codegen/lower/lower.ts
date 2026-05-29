@@ -20,6 +20,7 @@
  */
 
 import { Decimal } from 'decimal.js';
+import type { AstNode } from 'langium';
 import {
     type Program, type TopDecl, type Expr, type Type,
     type FunktionDecl, type DatensatzDecl, type WaehleExpr,
@@ -243,12 +244,10 @@ function lowerStringLiteral(raw: string, reg: Registry): IrExpr {
  * Lokaler AST-Eltern-Walk, 1:1 zu `interpreter.ts governingMoneyTarget`
  * (1008-1029): nächste maßgebliche Geld-Annotation über `$container`.
  */
-function governingMoneyTarget(node: object): 'Euro' | 'Cent' | undefined {
-    let cur = node as { $container?: object };
+function governingMoneyTarget(node: AstNode): 'Euro' | 'Cent' | undefined {
+    let cur: AstNode = node;
     for (;;) {
-        const c = cur.$container as
-            | (object & { value?: unknown; type?: Type; targetType?: Type; $container?: unknown })
-            | undefined;
+        const c = cur.$container;
         if (!c) return undefined;
         if (isCast(c) && c.value === cur) {
             const m = moneyAnnotation(c.targetType);
@@ -260,11 +259,11 @@ function governingMoneyTarget(node: object): 'Euro' | 'Cent' | undefined {
             const m = c.type ? moneyAnnotation(c.type) : undefined;
             if (m === 'Euro' || m === 'Cent') return m;
         } else if (isFunktionBody(c)) {
-            const fd = (c as { $container?: unknown }).$container;
-            const m = isFunktionDecl(fd) ? moneyAnnotation((fd).returnType) : undefined;
+            const fd = c.$container;
+            const m = isFunktionDecl(fd) ? moneyAnnotation(fd.returnType) : undefined;
             if (m === 'Euro' || m === 'Cent') return m;
         }
-        cur = c as { $container?: object };
+        cur = c;
     }
 }
 

@@ -27,6 +27,9 @@
     "version:sync": "node scripts/sync-version.mjs",
     "version:check": "node scripts/sync-version.mjs --check"
   },
+  "overrides": {
+    "dompurify": "^3.4.7"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/katex": "0.16.8",

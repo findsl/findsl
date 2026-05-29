@@ -15,6 +15,14 @@
  * Ablauf: sea-config → `node --experimental-sea-config` → Blob →
  * Node-Binär kopieren → (macOS: Signatur entfernen) → `postject`
  * injiziert den Blob → (macOS: ad-hoc neu signieren).
+ *
+ * AKZEPTIERTES RISIKO `postject@1.0.0-alpha.6` (Issue #216, Security-Review
+ * 2026-05-29): `alpha.6` ist die einzige je veröffentlichte Version (kein
+ * GA), daher kein Update möglich. Es ist Node.js' offizielles SEA-Tool und
+ * läuft AUSSCHLIESSLICH build-zeitlich mit hardcodierten Argumenten (s. u.)
+ * — kein verteiltes Artefakt enthält postject, kein Laufzeit-/Distributions-
+ * Supply-Chain-Pfad. Bei GA-Release auf stabile Version heben + Lock-Hash
+ * überwachen.
  */
 
 import { execFileSync } from 'node:child_process';

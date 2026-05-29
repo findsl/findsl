@@ -166,8 +166,9 @@ function initDirective(theme: MermaidTheme): string {
 /** Ein FlowGraph → ein Mermaid-`flowchart`-Block (ohne Code-Fence).
  *  `click`-Direktiven verlinken Gesetzes-§ (gesetze-im-internet) und legen
  *  den vollen `abbruch`-Wortlaut als Tooltip. Diese werden NUR in Renderern
- *  mit `securityLevel: 'loose'` (eigene HTML-Ausgabe, VS Code) aktiv — auf
- *  GitHub (strict) werden sie ignoriert, brechen das Diagramm aber nicht. */
+ *  mit aktivierten Klicks (`securityLevel: 'antiscript'` in der eigenen
+ *  HTML-Ausgabe, `'loose'` in VS Code) aktiv — auf GitHub (strict) werden
+ *  sie ignoriert, brechen das Diagramm aber nicht. */
 export function renderMermaid(graph: FlowGraph, opts: MermaidOptions = {}): string {
     const dir = opts.direction ?? 'TD';
     const theme = opts.theme ?? 'default';
@@ -187,7 +188,7 @@ export function renderMermaid(graph: FlowGraph, opts: MermaidOptions = {}): stri
         const tip = withTips && n.tooltip ? clickStr(n.tooltip) : undefined;
         // Defense-in-Depth: nur whitelisted https-§-Links als click-Ziel
         // (n.link stammt aus parseQuelleRefs, aber der Guard sitzt explizit
-        // am Emit-Punkt — securityLevel:'loose' macht clicks im HTML aktiv).
+        // am Emit-Punkt — securityLevel:'antiscript' macht clicks im HTML aktiv).
         const link = n.link && isSafeUrl(n.link) ? n.link : undefined;
         if (link && tip) {
             lines.push(`    click ${n.id} href "${link}" "${tip}" _blank`);
@@ -196,10 +197,10 @@ export function renderMermaid(graph: FlowGraph, opts: MermaidOptions = {}): stri
         }
         // Tooltip OHNE Link: bewusst KEINE `click … callback`-Direktive.
         // Mermaids `click`-Grammatik bände hier einen JS-Handler namens
-        // `callback`, den es nirgends gibt — in `securityLevel: 'loose'`-
-        // Renderern (VS Code) ein Laufzeitfehler beim Klick, auf GitHub
-        // (strict) wirkungslos. Reiche Tooltips liefert die HTML-Ausgabe
-        // über die eigene KaTeX-Schicht (n.tooltipRaw).
+        // `callback`, den es nirgends gibt — in Renderern mit aktivierten
+        // Klicks (`'antiscript'`/`'loose'`) ein Laufzeitfehler beim Klick,
+        // auf GitHub (strict) wirkungslos. Reiche Tooltips liefert die
+        // HTML-Ausgabe über die eigene KaTeX-Schicht (n.tooltipRaw).
     }
     const klassen = opts.klassen ?? false;
     if (farben || klassen) lines.push(...styleLines(graph, theme, farben));

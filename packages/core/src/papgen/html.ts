@@ -9,7 +9,9 @@
  *
  * Damit kontrollieren wir den Renderer und liefern, was die rohe `.md`-
  * Ausgabe nicht kann:
- *   - `securityLevel: 'loose'` → klickbare Gesetzes-§-Links.
+ *   - `securityLevel: 'antiscript'` → klickbare Gesetzes-§-Links, aber
+ *     `<script>`-Elemente werden entfernt (XSS-Schutz; `'loose'` würde sie
+ *     zulassen). Klick-/href-Funktionalität bleibt aktiv.
  *   - hervorgehobene Diagramm-Titel + Zoom (Buttons / ⌘·Strg+Mausrad);
  *     `flowchart.useMaxWidth:false` rendert in natürlicher Größe.
  *   - EIGENE Hover-Tooltips (Mermaids native sind reiner Text): pro Knoten
@@ -288,7 +290,7 @@ ${body}
 // die mermaid-API liegt unter .default.
 var mermaid = (window.mermaidBundle && window.mermaidBundle.default) || window.mermaidBundle;
 var PAP_TIPS = ${tipsJson};
-mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', flowchart: { useMaxWidth: false } });
+mermaid.initialize({ startOnLoad: false, securityLevel: 'antiscript', flowchart: { useMaxWidth: false } });
 function papSetup() {
 ${ZOOM_JS}
 ${TOOLTIP_JS}

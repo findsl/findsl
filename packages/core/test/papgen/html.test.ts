@@ -2,7 +2,8 @@
  * PAP-HTML-Emitter (Phase 4) — self-contained HTML mit inline mermaid.
  *
  * Prüft: gültiges HTML-Gerüst, eingebettetes mermaid (kein CDN),
- * `securityLevel: 'loose'` (klickbare Links), Tooltip-CSS mit
+ * `securityLevel: 'antiscript'` (klickbare Links, aber `<script>` entfernt),
+ * Tooltip-CSS mit
  * prefers-color-scheme (hell/dunkel), HTML-Escaping des Diagramm-
  * Quelltexts (`<br/>` → `&lt;br/&gt;`, sonst frisst der HTML-Parser es).
  */
@@ -38,7 +39,10 @@ describe('papgen/html', () => {
         const modul = buildModuleGraphs(program, 'kst', { detail: 'struktur', params: 'symbole' });
         const html = renderHtml([modul]);
 
-        expect(html).toContain("securityLevel: 'loose'");
+        // 'antiscript' statt 'loose': Klicks/href-Links bleiben aktiv, aber
+        // Mermaid entfernt <script>-Elemente (XSS-Schutz, #214).
+        expect(html).toContain("securityLevel: 'antiscript'");
+        expect(html).not.toContain("securityLevel: 'loose'");
         expect(html).toContain('mermaid.run()');
         expect(html).toContain('.pap-tooltip');     // eigener KaTeX-fähiger Tooltip
         expect(html).toContain('prefers-color-scheme: dark');
@@ -108,6 +112,28 @@ describe('papgen/html', () => {
         expect(tipsLine).not.toContain('<script>');
         // … sondern escapt (htmlEscape: <→&lt;).
         expect(tipsLine).toContain('&lt;/script');
+    });
+
+    it('neutralisiert <script> innerhalb eines TeX-Arguments ($…$)', async () => {
+        // Bösartiges Markup im Math-Modus: KaTeX rendert mit `throwOnError:
+        // false` + `trust:false` — gibt also NIE einen rohen `<script>`-Tag
+        // aus (entweder Math-Zeichen oder escapte Fehler-Meldung). Der
+        // Tooltip wandert per `tip.innerHTML` in den DOM, daher darf keine
+        // aktive `<script>`-Sequenz in der PAP_TIPS-Zeile stehen (#214).
+        const program = await parseSource(
+            'konst X: Ganzzahl = 1\n'
+            + '--\n'
+            + 'Formel $\\text{<script>alert(1)</script>}$ im Doc.\n'
+            + '--\n'
+            + 'fn F(a: Euro): Euro = a\n',
+        );
+        const modul = buildModuleGraphs(program, 'm', { detail: 'struktur', params: 'symbole' });
+        const html = renderHtml([modul]);
+        const tipsLine = html.split('\n').find((l) => l.includes('var PAP_TIPS ='))!;
+
+        expect(tipsLine).toBeDefined();
+        expect(tipsLine).not.toContain('<script>');
+        expect(tipsLine).not.toContain('</script>');
     });
 
     it('escapt den Diagramm-Quelltext (<br/> → &lt;br/&gt;)', async () => {

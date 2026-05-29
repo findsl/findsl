@@ -2,6 +2,22 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-05-29 — **Formatter: `datensatz`-Felder
+als 4-Spalten-Tabelle.** Issue #202. Felder mehrzeiliger Datensätze
+fluchten jetzt durchgängig in vier Spalten — Feldname, Typ, `= default`,
+Inline-`//`-Kommentar — bisher driftete Spalte 2/3/4 mit der Typ-Länge.
+**Implementation:** im `isField`-Handler wird zusätzlich zur bestehenden
+Namens-Spalte (`:`-Padding) auch ein `=`-Padding (`maxTypeLen − typeLen +
+1` Spaces) emittiert; Felder ohne Default lassen `,` direkt am Typ
+kleben (sonst „schwebt" das Komma). **Spalte 4** (Inline-Kommentar)
+über einen neuen Post-Pass `inlineCommentEdits` analog `docTagEdits`:
+pro Datensatz wird `commentCol = max(rowTail über Felder mit `//`) + 1`
+berechnet und der Whitespace zwischen `,` und `//` per `TextEdit` auf
+die Ziel-Lücke gesetzt. Felder ohne Inline-Kommentar erzeugen keinen
+Edit ⇒ keine Trailing-Spaces. **+6 Tests**; idempotent; bestehende
+1324 Tests grün. `kraftstg-typen.findsl` als visueller Smoke-Check:
+alle vier Spalten fluchten.*
+
 *Letzte Aktualisierung: 2026-05-30 — **LSP: Cmd+Click + Hover für
 importierte Elemente im `verwende`-Block.** Issue #196. Die einzelnen
 Namen in `verwende { Foo, Bar als Baz, … } aus "./modul"` waren bislang

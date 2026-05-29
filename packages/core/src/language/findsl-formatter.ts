@@ -380,7 +380,14 @@ export class FindslFormatter extends AbstractFormatter {
         // separate Replace-Edits, da Langiums Token-Formatter Terminal-
         // INHALT nicht umformen kann. Überlappen die Gap-Edits von oben
         // nicht (eigenes Token-Range); Sicherheitscheck zusätzlich.
-        const all = [...edits, ...this.docTagEdits(document, edits, range)];
+        // Analog: Inline-Kommentare (`//` nach `,` in mehrzeiligen
+        // Datensatz-Feldern) werden auf eine gemeinsame Spalte
+        // ausgerichtet (Issue #202).
+        const all = [
+            ...edits,
+            ...this.docTagEdits(document, edits, range),
+            ...this.inlineCommentEdits(document),
+        ];
         // `// @formatter:off`…`// @formatter:on` (SPEC § 2.3.1): jeden
         // Edit verwerfen, dessen Range eine geschützte Region berührt
         // ⇒ Quelltext dort byte-für-byte erhalten. Deckt ALLE Quellen
@@ -416,6 +423,89 @@ export class FindslFormatter extends AbstractFormatter {
             if (range && !rangeContains(range, r)) continue;       // Range-Format: nur innerhalb
             if (base.some((e) => rangesOverlap(e.range, r))) continue;
             out.push({ range: r, newText: aligned });
+        }
+        return out;
+    }
+
+    /**
+     * Inline-Kommentar-Ausrichtung in mehrzeiligen `datensatz`-Feldern
+     * (Issue #202, Spalte 4): pro Datensatz alle trailing `//`-Kommentare
+     * auf eine gemeinsame Spalte gepaddet — die Whitespace-Lücke zwischen
+     * `,` und `//` wird per Replace-Edit gesetzt.
+     *
+     * Berechnung pro Feld (relativ zum Typ-Anfang, targeted Output):
+     *   - mit Default:    `rowTail = maxTypeLen + 3 + |default| + 1`
+     *   - ohne Default:   `rowTail = typeLen + 1`
+     *   - `commentCol = max(rowTail über Felder mit `//`) + 1`
+     *   - Whitespace zwischen `,` und `//` = `commentCol − rowTail`
+     *
+     * Felder ohne Inline-Kommentar erzeugen KEINEN Edit ⇒ keine
+     * Trailing-Spaces. `@formatter:off`-Regionen schützt der finale
+     * Overlap-Filter in `doDocumentFormat`.
+     */
+    private inlineCommentEdits(document: LangiumDocument): TextEdit[] {
+        const program = document.parseResult?.value as {
+            decls?: ReadonlyArray<AstNode>;
+        } | undefined;
+        if (!program?.decls) return [];
+        const text = document.textDocument.getText();
+        const out: TextEdit[] = [];
+
+        for (const decl of program.decls) {
+            if (!isDatensatzDecl(decl)) continue;
+            if (!datensatzIstMehrzeilig(decl)) continue;
+            const fields = decl.fields as ReadonlyArray<{
+                type?: { $cstNode?: { text: string } };
+                default?: { $cstNode?: { text: string } };
+                $cstNode?: { range: Range; offset: number; end: number };
+            }>;
+            if (fields.length === 0) continue;
+
+            const maxTypeLen = Math.max(
+                ...fields.map((f) => f.type?.$cstNode?.text.length ?? 0),
+            );
+
+            // Pro Feld: rowTail (targeted Komma-Position vom Typ-Anfang)
+            // und Suche nach trailing `//` in der gleichen Zeile.
+            const rows: Array<{
+                rowTail: number;
+                commaEnd: number;     // Offset NACH `,` in der Quelle
+                slashStart: number;   // Offset VOR `//` in der Quelle
+            } | undefined> = fields.map((f) => {
+                const cst = f.$cstNode;
+                if (!cst) return undefined;
+                // Trailing-Komma sitzt direkt hinter der Field-CST.
+                let i = cst.end;
+                while (i < text.length && text[i] !== ',' && text[i] !== '\n') i++;
+                if (i >= text.length || text[i] !== ',') return undefined;
+                const commaEnd = i + 1;
+                // Auf derselben Zeile nach Whitespace + `//` suchen.
+                let j = commaEnd;
+                while (j < text.length && (text[j] === ' ' || text[j] === '\t')) j++;
+                if (j + 1 >= text.length || text[j] !== '/' || text[j + 1] !== '/') return undefined;
+
+                const typeLen = f.type?.$cstNode?.text.length ?? 0;
+                const rowTail = f.default
+                    ? maxTypeLen + 3 + (f.default.$cstNode?.text.length ?? 0) + 1
+                    : typeLen + 1;
+                return { rowTail, commaEnd, slashStart: j };
+            });
+
+            const present = rows.filter((r): r is NonNullable<typeof r> => r !== undefined);
+            if (present.length === 0) continue;
+            const commentCol = Math.max(...present.map((r) => r.rowTail)) + 1;
+
+            for (const r of present) {
+                const padding = commentCol - r.rowTail;
+                const targetWs = ' '.repeat(Math.max(1, padding));
+                out.push({
+                    range: {
+                        start: document.textDocument.positionAt(r.commaEnd),
+                        end:   document.textDocument.positionAt(r.slashStart),
+                    },
+                    newText: targetWs,
+                });
+            }
         }
         return out;
     }
@@ -703,25 +793,39 @@ export class FindslFormatter extends AbstractFormatter {
             const f = this.getNodeFormatter(node);
             f.keyword(':').prepend(Formatting.noSpace());
 
-            // Zwei-Spalten-Layout für Felder eines MEHRZEILIGEN
-            // `datensatz`: alle Typen auf eine Spalte, deren Breite sich
-            // am längsten Feldnamen orientiert. Polsterung nach `:` =
-            // (maxNameLen − nameLen + 1) Leerzeichen → der längste Name
-            // bekommt genau ein Space, alle Typen fluchten. Rein
-            // AST-basiert (Feldnamen-Längen) ⇒ idempotent. Sonst
-            // (Funktionsparameter, einzeiliger datensatz): ein Space.
+            // Vier-Spalten-Layout für Felder eines MEHRZEILIGEN
+            // `datensatz` (Issue #202): Spalte 1 (Name), Spalte 2 (Typ),
+            // Spalte 3 (`= default`), Spalte 4 (`//`-Kommentar — separater
+            // Post-Pass in `inlineCommentEdits`). Hier emittieren wir die
+            // beiden Token-Paddings:
+            //  - nach `:` → `maxNameLen − nameLen + 1` (Spalte 1→2)
+            //  - vor `=` → `maxTypeLen − typeLen + 1` (Spalte 2→3, nur
+            //    wenn Default vorhanden; ohne Default klebt `,` direkt am
+            //    Typ — sonst „schwebt" das Komma)
+            // Rein AST-basiert (CST-Text der Typ-Annotation) ⇒ idempotent.
+            // Sonst (fn-Parameter, einzeiliger datensatz): je ein Space.
             const container = node.$container;
-            if (isField(node) && isDatensatzDecl(container)
-                && datensatzIstMehrzeilig(container) && node.name) {
+            const inMultilineDs = isField(node) && isDatensatzDecl(container)
+                && datensatzIstMehrzeilig(container) && !!node.name;
+            if (inMultilineDs) {
+                const ds = container as { fields: ReadonlyArray<{ name?: string; type?: { $cstNode?: { text: string } }; default?: unknown }> };
                 const maxNameLen = Math.max(
-                    ...container.fields.map((x) => x.name?.length ?? 0),
+                    ...ds.fields.map((x) => x.name?.length ?? 0),
                 );
-                const pad = maxNameLen - node.name.length + 1;
-                f.keyword(':').append(Formatting.spaces(pad));
+                f.keyword(':').append(Formatting.spaces(maxNameLen - node.name!.length + 1));
+                if ((node as { default?: unknown }).default !== undefined) {
+                    const maxTypeLen = Math.max(
+                        ...ds.fields.map((x) => x.type?.$cstNode?.text.length ?? 0),
+                    );
+                    const typeLen = (node as { type?: { $cstNode?: { text: string } } })
+                        .type?.$cstNode?.text.length ?? 0;
+                    f.keyword('=').prepend(Formatting.spaces(maxTypeLen - typeLen + 1))
+                                  .append(Formatting.oneSpace());
+                }
             } else {
                 f.keyword(':').append(Formatting.oneSpace());
+                f.keyword('=').surround(Formatting.oneSpace());
             }
-            f.keyword('=').surround(Formatting.oneSpace());
             return;
         }
     }

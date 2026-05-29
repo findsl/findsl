@@ -200,6 +200,33 @@ sonst -> 3
         expect(await format(out)).toBe(out);          // idempotent
     });
 
+    it('umbrechender falls-Arm bläht die ->-Spalte NICHT auf', async () => {
+        // Arm 2 ist (vom Autor) mehrzeilig → sein `->` steht inline hinter
+        // der Fortsetzung. Die gemeinsame `->`-Spalte richtet sich nur nach
+        // der LÄNGSTEN EINZEILIGEN Arm-Linke (hier Arm 1), nicht nach Arm 2s
+        // flach gerechneter Gesamtbreite.
+        const out = await format(`datensatz Fahrzeug(antrieb: Antrieb, art: Art, nfzklasse: Klasse)
+aufzählung Antrieb { Elektro }
+aufzählung Art { AndereBis3500, AndereUeber3500 }
+aufzählung Klasse { MindestensS2 }
+fn _A(f: Fahrzeug, betrag: EuroCent): EuroCent = wähle {
+falls f.antrieb == Elektro und f.art == AndereBis3500 -> (betrag / 2) als EuroCent
+falls f.antrieb == Elektro und f.art == AndereUeber3500
+und f.nfzklasse == MindestensS2 -> (betrag / 2) als EuroCent
+sonst -> betrag
+}
+`);
+        // Arm 1 = längste einzeilige Linke → genau ein Space vor `->`.
+        expect(out).toContain(
+            '    falls f.antrieb == Elektro und f.art == AndereBis3500 -> (betrag / 2) als EuroCent\n',
+        );
+        // Umbrechender Arm 2: `->` inline hinter der Fortsetzung (ein Space).
+        expect(out).toContain('        und f.nfzklasse == MindestensS2 -> (betrag / 2) als EuroCent\n');
+        // `sonst` fluchtet mit Arm 1 (Spalte = Arm-1-Breite), NICHT mit Arm 2 flach.
+        expect(out).toContain('    sonst                                                 -> betrag\n');
+        expect(await format(out)).toBe(out);          // idempotent
+    });
+
     it('Arithmetik, Cast, Nullcheck, Bereich', async () => {
         const out = await format(`konst A: Euro? = nichts
 konst R: Euro = (A   oder   0) als Euro  +  1 als Euro

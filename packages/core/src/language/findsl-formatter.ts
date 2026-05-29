@@ -351,6 +351,16 @@ function datensatzIstMehrzeilig(
     return fs.length > 0 && a !== undefined && b !== undefined && a !== b;
 }
 
+/** Erstreckt sich die Parameterliste einer `fn` über mehrere Zeilen? */
+function fnParamsIstMehrzeilig(
+    decl: { params: ReadonlyArray<{ $cstNode?: { range: { start: { line: number }; end: { line: number } } } }> },
+): boolean {
+    const ps = decl.params;
+    const a = ps[0]?.$cstNode?.range.start.line;
+    const b = ps[ps.length - 1]?.$cstNode?.range.end.line;
+    return ps.length > 0 && a !== undefined && b !== undefined && a !== b;
+}
+
 export class FindslFormatter extends AbstractFormatter {
 
     /**
@@ -452,62 +462,68 @@ export class FindslFormatter extends AbstractFormatter {
         const out: TextEdit[] = [];
 
         for (const decl of program.decls) {
-            if (!isDatensatzDecl(decl)) continue;
-            if (!datensatzIstMehrzeilig(decl)) continue;
-            const fields = decl.fields as ReadonlyArray<{
-                type?: { $cstNode?: { text: string } };
-                default?: { $cstNode?: { text: string } };
-                $cstNode?: { range: Range; offset: number; end: number };
-            }>;
-            if (fields.length === 0) continue;
-
-            const maxTypeLen = Math.max(
-                ...fields.map((f) => f.type?.$cstNode?.text.length ?? 0),
-            );
-
-            // Pro Feld: rowTail (targeted Komma-Position vom Typ-Anfang)
-            // und Suche nach trailing `//` in der gleichen Zeile.
-            const rows: Array<{
-                rowTail: number;
-                commaEnd: number;     // Offset NACH `,` in der Quelle
-                slashStart: number;   // Offset VOR `//` in der Quelle
-            } | undefined> = fields.map((f) => {
-                const cst = f.$cstNode;
-                if (!cst) return undefined;
-                // Trailing-Komma sitzt direkt hinter der Field-CST.
-                let i = cst.end;
-                while (i < text.length && text[i] !== ',' && text[i] !== '\n') i++;
-                if (i >= text.length || text[i] !== ',') return undefined;
-                const commaEnd = i + 1;
-                // Auf derselben Zeile nach Whitespace + `//` suchen.
-                let j = commaEnd;
-                while (j < text.length && (text[j] === ' ' || text[j] === '\t')) j++;
-                if (j + 1 >= text.length || text[j] !== '/' || text[j + 1] !== '/') return undefined;
-
-                const typeLen = f.type?.$cstNode?.text.length ?? 0;
-                const rowTail = f.default
-                    ? maxTypeLen + 3 + (f.default.$cstNode?.text.length ?? 0) + 1
-                    : typeLen + 1;
-                return { rowTail, commaEnd, slashStart: j };
-            });
-
-            const present = rows.filter((r): r is NonNullable<typeof r> => r !== undefined);
-            if (present.length === 0) continue;
-            const commentCol = Math.max(...present.map((r) => r.rowTail)) + 1;
-
-            for (const r of present) {
-                const padding = commentCol - r.rowTail;
-                const targetWs = ' '.repeat(Math.max(1, padding));
-                out.push({
-                    range: {
-                        start: document.textDocument.positionAt(r.commaEnd),
-                        end:   document.textDocument.positionAt(r.slashStart),
-                    },
-                    newText: targetWs,
-                });
+            if (isDatensatzDecl(decl) && datensatzIstMehrzeilig(decl)) {
+                this.alignInlineComments(decl.fields, text, document, out);
+            } else if (isFunktionDecl(decl) && fnParamsIstMehrzeilig(decl)) {
+                this.alignInlineComments(decl.params, text, document, out);
             }
         }
         return out;
+    }
+
+    /**
+     * Berechnet `commentCol` und emittiert pro Sibling mit trailing
+     * Inline-`//` einen Replace-Edit für den Whitespace zwischen `,` und
+     * `//`. Wird sowohl für datensatz-Felder als auch für fn-Parameter
+     * verwendet (identische Spalten-Logik).
+     */
+    private alignInlineComments(
+        siblings: ReadonlyArray<{
+            type?: { $cstNode?: { text: string } };
+            default?: { $cstNode?: { text: string } };
+            $cstNode?: { range: Range; offset: number; end: number };
+        }>,
+        text: string,
+        document: LangiumDocument,
+        out: TextEdit[],
+    ): void {
+        if (siblings.length === 0) return;
+        const maxTypeLen = Math.max(
+            ...siblings.map((s) => s.type?.$cstNode?.text.length ?? 0),
+        );
+        const rows: Array<{
+            rowTail: number;
+            commaEnd: number;
+            slashStart: number;
+        } | undefined> = siblings.map((s) => {
+            const cst = s.$cstNode;
+            if (!cst) return undefined;
+            let i = cst.end;
+            while (i < text.length && text[i] !== ',' && text[i] !== '\n') i++;
+            if (i >= text.length || text[i] !== ',') return undefined;
+            const commaEnd = i + 1;
+            let j = commaEnd;
+            while (j < text.length && (text[j] === ' ' || text[j] === '\t')) j++;
+            if (j + 1 >= text.length || text[j] !== '/' || text[j + 1] !== '/') return undefined;
+            const typeLen = s.type?.$cstNode?.text.length ?? 0;
+            const rowTail = s.default
+                ? maxTypeLen + 3 + (s.default.$cstNode?.text.length ?? 0) + 1
+                : typeLen + 1;
+            return { rowTail, commaEnd, slashStart: j };
+        });
+        const present = rows.filter((r): r is NonNullable<typeof r> => r !== undefined);
+        if (present.length === 0) return;
+        const commentCol = Math.max(...present.map((r) => r.rowTail)) + 1;
+        for (const r of present) {
+            const padding = commentCol - r.rowTail;
+            out.push({
+                range: {
+                    start: document.textDocument.positionAt(r.commaEnd),
+                    end:   document.textDocument.positionAt(r.slashStart),
+                },
+                newText: ' '.repeat(Math.max(1, padding)),
+            });
+        }
     }
 
     protected format(node: AstNode): void {
@@ -709,9 +725,23 @@ export class FindslFormatter extends AbstractFormatter {
             const f = this.getNodeFormatter(node);
             if (hasDocPrefix(node)) f.keyword('fn').prepend(Formatting.newLine());
             f.keyword('fn').append(Formatting.oneSpace());
-            // Parameter-Klammern/-Kommas bewusst NICHT formatiert:
-            // Trailing-Komma `,)` vs. Trenn-Komma führt zu Oszillation;
-            // lange Signaturen werden ohnehin oft hand-umbrochen.
+            const open = f.keyword('(');
+            const close = f.keyword(')');
+            open.prepend(Formatting.noSpace());                // Name( statt Name (
+            // Mehrzeilige Param-Liste → analog `datensatz`-Block-Layout
+            // (kanonischer Block, Spalten-Padding macht die isParam-Regel).
+            // Einzeilige bleiben kompakt (kein interior/`)`-Format,
+            // damit Trailing-Komma `,)` vs. Trenn-Komma nicht oszilliert).
+            if (fnParamsIstMehrzeilig(node)) {
+                f.interior(open, close).prepend(Formatting.indent());
+                f.properties('params').prepend(Formatting.indent());
+                f.keywords(',').prepend(Formatting.noSpace());
+                close.prepend(Formatting.newLine());
+            } else {
+                open.append(Formatting.noSpace());
+                f.keywords(',').prepend(Formatting.noSpace())
+                    .append(Formatting.oneSpace());
+            }
             f.keyword(':').prepend(Formatting.noSpace()).append(Formatting.oneSpace());
             f.keyword('=').surround(Formatting.oneSpace());     // Expression-Body
             return;
@@ -793,29 +823,34 @@ export class FindslFormatter extends AbstractFormatter {
             const f = this.getNodeFormatter(node);
             f.keyword(':').prepend(Formatting.noSpace());
 
-            // Vier-Spalten-Layout für Felder eines MEHRZEILIGEN
-            // `datensatz` (Issue #202): Spalte 1 (Name), Spalte 2 (Typ),
-            // Spalte 3 (`= default`), Spalte 4 (`//`-Kommentar — separater
-            // Post-Pass in `inlineCommentEdits`). Hier emittieren wir die
-            // beiden Token-Paddings:
+            // Vier-Spalten-Layout (Issue #202 + Folge für fn-Params):
+            // Spalte 1 (Name), Spalte 2 (Typ), Spalte 3 (`= default`),
+            // Spalte 4 (`//`-Kommentar — separater Post-Pass in
+            // `inlineCommentEdits`). Hier emittieren wir die beiden
+            // Token-Paddings:
             //  - nach `:` → `maxNameLen − nameLen + 1` (Spalte 1→2)
             //  - vor `=` → `maxTypeLen − typeLen + 1` (Spalte 2→3, nur
             //    wenn Default vorhanden; ohne Default klebt `,` direkt am
             //    Typ — sonst „schwebt" das Komma)
+            // Greift für Felder eines MEHRZEILIGEN datensatz UND für
+            // Parameter einer fn mit mehrzeiliger Param-Liste.
             // Rein AST-basiert (CST-Text der Typ-Annotation) ⇒ idempotent.
-            // Sonst (fn-Parameter, einzeiliger datensatz): je ein Space.
             const container = node.$container;
-            const inMultilineDs = isField(node) && isDatensatzDecl(container)
-                && datensatzIstMehrzeilig(container) && !!node.name;
-            if (inMultilineDs) {
-                const ds = container as { fields: ReadonlyArray<{ name?: string; type?: { $cstNode?: { text: string } }; default?: unknown }> };
+            const siblings = isField(node) && isDatensatzDecl(container)
+                    && datensatzIstMehrzeilig(container) && !!node.name
+                ? (container as { fields: ReadonlyArray<{ name?: string; type?: { $cstNode?: { text: string } }; default?: unknown }> }).fields
+                : isParam(node) && isFunktionDecl(container)
+                    && fnParamsIstMehrzeilig(container) && !!node.name
+                ? (container as { params: ReadonlyArray<{ name?: string; type?: { $cstNode?: { text: string } }; default?: unknown }> }).params
+                : undefined;
+            if (siblings) {
                 const maxNameLen = Math.max(
-                    ...ds.fields.map((x) => x.name?.length ?? 0),
+                    ...siblings.map((x) => x.name?.length ?? 0),
                 );
                 f.keyword(':').append(Formatting.spaces(maxNameLen - node.name!.length + 1));
                 if ((node as { default?: unknown }).default !== undefined) {
                     const maxTypeLen = Math.max(
-                        ...ds.fields.map((x) => x.type?.$cstNode?.text.length ?? 0),
+                        ...siblings.map((x) => x.type?.$cstNode?.text.length ?? 0),
                     );
                     const typeLen = (node as { type?: { $cstNode?: { text: string } } })
                         .type?.$cstNode?.text.length ?? 0;

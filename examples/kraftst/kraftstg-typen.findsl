@@ -172,36 +172,36 @@ Feld ist für jede Fahrzeugart relevant — maßgeblich ist `art`
 --
 @Quelle("§ 8 KraftStG")
 datensatz Fahrzeug(
-    art:                  Fahrzeugart,                            // § 8 KraftStG: Tarifauswahl
-    antrieb:              Antrieb,                                 // Fremd-/Selbstzündung/Elektro
-    hubraumCcm:           Ganzzahl       = 0,                      // cm³ (Nr. 1, 2, 2b)
-    co2GrammProKm:        Ganzzahl       = 0,                      // g/km (Nr. 2 b/c)
-    gesamtgewichtKg:      Ganzzahl       = 0,                      // kg (Nr. 2a, 3, 4, 5)
-    erstzulassung:        Erstzulassungsregime = AbJan2021,        // PKW: § 9 Nr. 2 a/b/c
-    pkwStufe:             PkwSchadstoffstufe   = Ee,               // PKW Nr. 2a: Stufe aa–ee
-    co2FreigrenzeNr2b:    Ganzzahl       = 95,                     // PKW Nr. 2b: Freigrenze g/km
-    dreiradGrenzwerte:    Wahrheitswert  = falsch,                 // Nr. 2b: Grenzwerte eingehalten?
-    wohnmobilklasse:      WohnmobilKlasse      = WomoSonst,        // Nr. 2a: Schadstoffklasse
-    nfzklasse:            NfzKlasse            = NfzSonst,         // Nr. 4: Schadstoff-/Geräuschklasse
-    behinderung:          Behinderung          = Keine,            // § 3a KraftStG
-    elektroBefreitNach3d: Wahrheitswert  = falsch,                 // § 3d KraftStG aktiv?
+    art:                  Fahrzeugart,                      // § 8 KraftStG: Tarifauswahl
+    antrieb:              Antrieb,                          // Fremd-/Selbstzündung/Elektro
+    hubraumCcm:           Ganzzahl             = 0,         // cm³ (Nr. 1, 2, 2b)
+    co2GrammProKm:        Ganzzahl             = 0,         // g/km (Nr. 2 b/c)
+    gesamtgewichtKg:      Ganzzahl             = 0,         // kg (Nr. 2a, 3, 4, 5)
+    erstzulassung:        Erstzulassungsregime = AbJan2021, // PKW: § 9 Nr. 2 a/b/c
+    pkwStufe:             PkwSchadstoffstufe   = Ee,        // PKW Nr. 2a: Stufe aa–ee
+    co2FreigrenzeNr2b:    Ganzzahl             = 95,        // PKW Nr. 2b: Freigrenze g/km
+    dreiradGrenzwerte:    Wahrheitswert        = falsch,    // Nr. 2b: Grenzwerte eingehalten?
+    wohnmobilklasse:      WohnmobilKlasse      = WomoSonst, // Nr. 2a: Schadstoffklasse
+    nfzklasse:            NfzKlasse            = NfzSonst,  // Nr. 4: Schadstoff-/Geräuschklasse
+    behinderung:          Behinderung          = Keine,     // § 3a KraftStG
+    elektroBefreitNach3d: Wahrheitswert        = falsch,    // § 3d KraftStG aktiv?
 )
 
 --
 Vollständige, prüfbare Berechnung der Kraftfahrzeug-Jahressteuer.
 
-@param tarifbetrag       Steuer nach § 9 Abs. 1 KraftStG (vor § 9
-                         Abs. 2 / § 3a / § 3d).
-@param nachElektro       nach Anwendung der 50 %-Ermäßigung für
-                         Elektrofahrzeuge (§ 9 Abs. 2 KraftStG).
-@param jahressteuer      festgesetzte Jahressteuer nach Anwendung von
-                         § 3a / § 3d KraftStG (0 bei Befreiung).
+@param tarifbetrag  Steuer nach § 9 Abs. 1 KraftStG (vor § 9
+                    Abs. 2 / § 3a / § 3d).
+@param nachElektro  nach Anwendung der 50 %-Ermäßigung für
+                    Elektrofahrzeuge (§ 9 Abs. 2 KraftStG).
+@param jahressteuer festgesetzte Jahressteuer nach Anwendung von
+                    § 3a / § 3d KraftStG (0 bei Befreiung).
 --
 @Quelle("§ 9 KraftStG")
 datensatz KraftfahrzeugsteuerErgebnis(
-    tarifbetrag:   EuroCent,    // § 9 Abs. 1 KraftStG
-    nachElektro:   EuroCent,    // § 9 Abs. 2 KraftStG
-    jahressteuer:  EuroCent,    // nach § 3a / § 3d KraftStG
+    tarifbetrag:  EuroCent, // § 9 Abs. 1 KraftStG
+    nachElektro:  EuroCent, // § 9 Abs. 2 KraftStG
+    jahressteuer: EuroCent, // nach § 3a / § 3d KraftStG
 )
 
 // ===========================================================================
@@ -212,14 +212,13 @@ datensatz KraftfahrzeugsteuerErgebnis(
 Anzahl angefangener Einheiten: `wert` geteilt durch `schritt`,
 aufgerundet (§ 9 KraftStG: „für je … oder einen Teil davon").
 
-@param wert    zu zerlegende Menge (cm³ bzw. kg).
-@param teiler  Einheitengröße (25 / 100 / 200).
-@rückgabe  Anzahl angefangener Einheiten (≥ 0).
+@param wert   zu zerlegende Menge (cm³ bzw. kg).
+@param teiler Einheitengröße (25 / 100 / 200).
+@rückgabe     Anzahl angefangener Einheiten (≥ 0).
 --
 @Quelle("§ 9 Absatz 1 KraftStG")
-fn Einheiten(wert: Ganzzahl, teiler: Ganzzahl): Ganzzahl =
-    wähle {
-        falls wert <= 0 -> 0
-        sonst           -> ((wert / teiler) als Dezimal).aufrunden()
-    }
+fn Einheiten(wert: Ganzzahl, teiler: Ganzzahl): Ganzzahl = wähle {
+    falls wert <= 0 -> 0
+    sonst           -> ((wert / teiler) als Dezimal).aufrunden()
+}
 

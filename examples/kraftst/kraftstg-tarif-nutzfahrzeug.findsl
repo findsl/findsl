@@ -169,8 +169,10 @@ konst NR4B_1: EuroCent = 6,42
 konst NR4B_2: EuroCent = 6,88
 @Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
 konst NR4B_3: EuroCent = 7,31
+
 @Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
 konst NR4B_4: EuroCent = 7,75
+
 @Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
 konst NR4B_5: EuroCent = 8,18
 @Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
@@ -308,14 +310,14 @@ Andere Kraftfahrzeuge bis 3.500 kg (§ 9 Abs. 1 Nr. 3 KraftStG):
 je angefangene 200 kg, progressiv nach Gewichtsspanne (kein
 Höchstbetrag).
 
-@param g Gesamtgewicht (kg).
-@rückgabe  Jahressteuer.
+@param g  Gesamtgewicht (kg).
+@rückgabe Jahressteuer.
 --
 @Quelle("§ 9 Absatz 1 Nummer 3 KraftStG")
 fn SteuerNr3(g: Ganzzahl): EuroCent = wähle {
     falls g <= 2000 -> NR3_BIS_2000 * Einheiten(g, 200)
     falls g <= 3000 -> NR3_KUM_2000 + NR3_2000_3000 * Einheiten(g - 2000, 200)
-    sonst -> NR3_KUM_3000 + NR3_3000_3500 * Einheiten(g - 3000, 200)
+    sonst           -> NR3_KUM_3000 + NR3_3000_3500 * Einheiten(g - 3000, 200)
 }
 
 // ===========================================================================
@@ -329,39 +331,39 @@ jeweils eigenem Höchstbetrag. Alle vier Buchstaben sind eigenständig
 modelliert: a (≥ S2, Spannen bis > 12.000 kg, max 556 €), b (S1,
 max 914 €), c (G1, max 1.425 €), d (sonst, max 1.681 €).
 
-@param g       Gesamtgewicht (kg).
-@param klasse  Schadstoff-/Geräuschklasse.
-@rückgabe  Jahressteuer.
+@param g      Gesamtgewicht (kg).
+@param klasse Schadstoff-/Geräuschklasse.
+@rückgabe     Jahressteuer.
 --
 @Quelle("§ 9 Absatz 1 Nummer 4 KraftStG")
 fn SteuerNr4(g: Ganzzahl, klasse: NfzKlasse): EuroCent = wähle (klasse) {
     falls MindestensS2 -> _Nr4a(g).höchstens(NR4A_MAX)
-    falls S1 -> _Nr4b(g).höchstens(NR4B_MAX)
-    falls G1 -> _Nr4c(g).höchstens(NR4C_MAX)
-    falls NfzSonst -> _Nr4d(g).höchstens(NR4D_MAX)
+    falls S1           -> _Nr4b(g).höchstens(NR4B_MAX)
+    falls G1           -> _Nr4c(g).höchstens(NR4C_MAX)
+    falls NfzSonst     -> _Nr4d(g).höchstens(NR4D_MAX)
 }
 
 --
 Progressiver Stufentarif Buchst. a (≥ S2), je 200 kg, Spannen
 2.000…> 12.000 kg (§ 9 Abs. 1 Nr. 4 Buchst. a KraftStG).
 
-@param g Gesamtgewicht (kg).
-@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+@param g  Gesamtgewicht (kg).
+@rückgabe Tarifbetrag vor Höchstbetragsbegrenzung.
 --
 @Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe a KraftStG")
 fn _Nr4a(g: Ganzzahl): EuroCent = wähle {
-    falls g <= 2000 -> NR4A_1 * Einheiten(g, 200)
-    falls g <= 3000 -> NR4A_KUM_2000 + NR4A_2 * Einheiten(g - 2000, 200)
-    falls g <= 4000 -> NR4A_KUM_3000 + NR4A_3 * Einheiten(g - 3000, 200)
-    falls g <= 5000 -> NR4A_KUM_4000 + NR4A_4 * Einheiten(g - 4000, 200)
-    falls g <= 6000 -> NR4A_KUM_5000 + NR4A_5 * Einheiten(g - 5000, 200)
-    falls g <= 7000 -> NR4A_KUM_6000 + NR4A_6 * Einheiten(g - 6000, 200)
-    falls g <= 8000 -> NR4A_KUM_7000 + NR4A_7 * Einheiten(g - 7000, 200)
-    falls g <= 9000 -> NR4A_KUM_8000 + NR4A_8 * Einheiten(g - 8000, 200)
+    falls g <= 2000  -> NR4A_1 * Einheiten(g, 200)
+    falls g <= 3000  -> NR4A_KUM_2000 + NR4A_2 * Einheiten(g - 2000, 200)
+    falls g <= 4000  -> NR4A_KUM_3000 + NR4A_3 * Einheiten(g - 3000, 200)
+    falls g <= 5000  -> NR4A_KUM_4000 + NR4A_4 * Einheiten(g - 4000, 200)
+    falls g <= 6000  -> NR4A_KUM_5000 + NR4A_5 * Einheiten(g - 5000, 200)
+    falls g <= 7000  -> NR4A_KUM_6000 + NR4A_6 * Einheiten(g - 6000, 200)
+    falls g <= 8000  -> NR4A_KUM_7000 + NR4A_7 * Einheiten(g - 7000, 200)
+    falls g <= 9000  -> NR4A_KUM_8000 + NR4A_8 * Einheiten(g - 8000, 200)
     falls g <= 10000 -> NR4A_KUM_9000 + NR4A_9 * Einheiten(g - 9000, 200)
     falls g <= 11000 -> NR4A_KUM_10000 + NR4A_10 * Einheiten(g - 10000, 200)
     falls g <= 12000 -> NR4A_KUM_11000 + NR4A_11 * Einheiten(g - 11000, 200)
-    sonst -> NR4A_KUM_12000 + NR4A_12 * Einheiten(g - 12000, 200)
+    sonst            -> NR4A_KUM_12000 + NR4A_12 * Einheiten(g - 12000, 200)
 }
 
 --
@@ -369,78 +371,78 @@ Progressiver Stufentarif Buchst. d (Voraussetzungen a/b/c nicht
 erfüllt), je 200 kg, Spannen 2.000…> 15.000 kg
 (§ 9 Abs. 1 Nr. 4 Buchst. d KraftStG).
 
-@param g Gesamtgewicht (kg).
-@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+@param g  Gesamtgewicht (kg).
+@rückgabe Tarifbetrag vor Höchstbetragsbegrenzung.
 --
 @Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe d KraftStG")
 fn _Nr4d(g: Ganzzahl): EuroCent = wähle {
-    falls g <= 2000 -> NR4D_1 * Einheiten(g, 200)
-    falls g <= 3000 -> NR4D_KUM_2000 + NR4D_2 * Einheiten(g - 2000, 200)
-    falls g <= 4000 -> NR4D_KUM_3000 + NR4D_3 * Einheiten(g - 3000, 200)
-    falls g <= 5000 -> NR4D_KUM_4000 + NR4D_4 * Einheiten(g - 4000, 200)
-    falls g <= 6000 -> NR4D_KUM_5000 + NR4D_5 * Einheiten(g - 5000, 200)
-    falls g <= 7000 -> NR4D_KUM_6000 + NR4D_6 * Einheiten(g - 6000, 200)
-    falls g <= 8000 -> NR4D_KUM_7000 + NR4D_7 * Einheiten(g - 7000, 200)
-    falls g <= 9000 -> NR4D_KUM_8000 + NR4D_8 * Einheiten(g - 8000, 200)
+    falls g <= 2000  -> NR4D_1 * Einheiten(g, 200)
+    falls g <= 3000  -> NR4D_KUM_2000 + NR4D_2 * Einheiten(g - 2000, 200)
+    falls g <= 4000  -> NR4D_KUM_3000 + NR4D_3 * Einheiten(g - 3000, 200)
+    falls g <= 5000  -> NR4D_KUM_4000 + NR4D_4 * Einheiten(g - 4000, 200)
+    falls g <= 6000  -> NR4D_KUM_5000 + NR4D_5 * Einheiten(g - 5000, 200)
+    falls g <= 7000  -> NR4D_KUM_6000 + NR4D_6 * Einheiten(g - 6000, 200)
+    falls g <= 8000  -> NR4D_KUM_7000 + NR4D_7 * Einheiten(g - 7000, 200)
+    falls g <= 9000  -> NR4D_KUM_8000 + NR4D_8 * Einheiten(g - 8000, 200)
     falls g <= 10000 -> NR4D_KUM_9000 + NR4D_9 * Einheiten(g - 9000, 200)
     falls g <= 11000 -> NR4D_KUM_10000 + NR4D_10 * Einheiten(g - 10000, 200)
     falls g <= 12000 -> NR4D_KUM_11000 + NR4D_11 * Einheiten(g - 11000, 200)
     falls g <= 13000 -> NR4D_KUM_12000 + NR4D_12 * Einheiten(g - 12000, 200)
     falls g <= 14000 -> NR4D_KUM_13000 + NR4D_13 * Einheiten(g - 13000, 200)
     falls g <= 15000 -> NR4D_KUM_14000 + NR4D_14 * Einheiten(g - 14000, 200)
-    sonst -> NR4D_KUM_15000 + NR4D_15 * Einheiten(g - 15000, 200)
+    sonst            -> NR4D_KUM_15000 + NR4D_15 * Einheiten(g - 15000, 200)
 }
 
 --
 Progressiver Stufentarif Buchst. b (Schadstoffklasse S 1), je 200 kg,
 Spannen 2.000…> 15.000 kg (§ 9 Abs. 1 Nr. 4 Buchst. b KraftStG).
 
-@param g Gesamtgewicht (kg).
-@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+@param g  Gesamtgewicht (kg).
+@rückgabe Tarifbetrag vor Höchstbetragsbegrenzung.
 --
 @Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe b KraftStG")
 fn _Nr4b(g: Ganzzahl): EuroCent = wähle {
-    falls g <= 2000 -> NR4B_1 * Einheiten(g, 200)
-    falls g <= 3000 -> NR4B_KUM_2000 + NR4B_2 * Einheiten(g - 2000, 200)
-    falls g <= 4000 -> NR4B_KUM_3000 + NR4B_3 * Einheiten(g - 3000, 200)
-    falls g <= 5000 -> NR4B_KUM_4000 + NR4B_4 * Einheiten(g - 4000, 200)
-    falls g <= 6000 -> NR4B_KUM_5000 + NR4B_5 * Einheiten(g - 5000, 200)
-    falls g <= 7000 -> NR4B_KUM_6000 + NR4B_6 * Einheiten(g - 6000, 200)
-    falls g <= 8000 -> NR4B_KUM_7000 + NR4B_7 * Einheiten(g - 7000, 200)
-    falls g <= 9000 -> NR4B_KUM_8000 + NR4B_8 * Einheiten(g - 8000, 200)
+    falls g <= 2000  -> NR4B_1 * Einheiten(g, 200)
+    falls g <= 3000  -> NR4B_KUM_2000 + NR4B_2 * Einheiten(g - 2000, 200)
+    falls g <= 4000  -> NR4B_KUM_3000 + NR4B_3 * Einheiten(g - 3000, 200)
+    falls g <= 5000  -> NR4B_KUM_4000 + NR4B_4 * Einheiten(g - 4000, 200)
+    falls g <= 6000  -> NR4B_KUM_5000 + NR4B_5 * Einheiten(g - 5000, 200)
+    falls g <= 7000  -> NR4B_KUM_6000 + NR4B_6 * Einheiten(g - 6000, 200)
+    falls g <= 8000  -> NR4B_KUM_7000 + NR4B_7 * Einheiten(g - 7000, 200)
+    falls g <= 9000  -> NR4B_KUM_8000 + NR4B_8 * Einheiten(g - 8000, 200)
     falls g <= 10000 -> NR4B_KUM_9000 + NR4B_9 * Einheiten(g - 9000, 200)
     falls g <= 11000 -> NR4B_KUM_10000 + NR4B_10 * Einheiten(g - 10000, 200)
     falls g <= 12000 -> NR4B_KUM_11000 + NR4B_11 * Einheiten(g - 11000, 200)
     falls g <= 13000 -> NR4B_KUM_12000 + NR4B_12 * Einheiten(g - 12000, 200)
     falls g <= 14000 -> NR4B_KUM_13000 + NR4B_13 * Einheiten(g - 13000, 200)
     falls g <= 15000 -> NR4B_KUM_14000 + NR4B_14 * Einheiten(g - 14000, 200)
-    sonst -> NR4B_KUM_15000 + NR4B_15 * Einheiten(g - 15000, 200)
+    sonst            -> NR4B_KUM_15000 + NR4B_15 * Einheiten(g - 15000, 200)
 }
 
 --
 Progressiver Stufentarif Buchst. c (Geräuschklasse G 1), je 200 kg,
 Spannen 2.000…> 15.000 kg (§ 9 Abs. 1 Nr. 4 Buchst. c KraftStG).
 
-@param g Gesamtgewicht (kg).
-@rückgabe  Tarifbetrag vor Höchstbetragsbegrenzung.
+@param g  Gesamtgewicht (kg).
+@rückgabe Tarifbetrag vor Höchstbetragsbegrenzung.
 --
 @Quelle("§ 9 Absatz 1 Nummer 4 Buchstabe c KraftStG")
 fn _Nr4c(g: Ganzzahl): EuroCent = wähle {
-    falls g <= 2000 -> NR4C_1 * Einheiten(g, 200)
-    falls g <= 3000 -> NR4C_KUM_2000 + NR4C_2 * Einheiten(g - 2000, 200)
-    falls g <= 4000 -> NR4C_KUM_3000 + NR4C_3 * Einheiten(g - 3000, 200)
-    falls g <= 5000 -> NR4C_KUM_4000 + NR4C_4 * Einheiten(g - 4000, 200)
-    falls g <= 6000 -> NR4C_KUM_5000 + NR4C_5 * Einheiten(g - 5000, 200)
-    falls g <= 7000 -> NR4C_KUM_6000 + NR4C_6 * Einheiten(g - 6000, 200)
-    falls g <= 8000 -> NR4C_KUM_7000 + NR4C_7 * Einheiten(g - 7000, 200)
-    falls g <= 9000 -> NR4C_KUM_8000 + NR4C_8 * Einheiten(g - 8000, 200)
+    falls g <= 2000  -> NR4C_1 * Einheiten(g, 200)
+    falls g <= 3000  -> NR4C_KUM_2000 + NR4C_2 * Einheiten(g - 2000, 200)
+    falls g <= 4000  -> NR4C_KUM_3000 + NR4C_3 * Einheiten(g - 3000, 200)
+    falls g <= 5000  -> NR4C_KUM_4000 + NR4C_4 * Einheiten(g - 4000, 200)
+    falls g <= 6000  -> NR4C_KUM_5000 + NR4C_5 * Einheiten(g - 5000, 200)
+    falls g <= 7000  -> NR4C_KUM_6000 + NR4C_6 * Einheiten(g - 6000, 200)
+    falls g <= 8000  -> NR4C_KUM_7000 + NR4C_7 * Einheiten(g - 7000, 200)
+    falls g <= 9000  -> NR4C_KUM_8000 + NR4C_8 * Einheiten(g - 8000, 200)
     falls g <= 10000 -> NR4C_KUM_9000 + NR4C_9 * Einheiten(g - 9000, 200)
     falls g <= 11000 -> NR4C_KUM_10000 + NR4C_10 * Einheiten(g - 10000, 200)
     falls g <= 12000 -> NR4C_KUM_11000 + NR4C_11 * Einheiten(g - 11000, 200)
     falls g <= 13000 -> NR4C_KUM_12000 + NR4C_12 * Einheiten(g - 12000, 200)
     falls g <= 14000 -> NR4C_KUM_13000 + NR4C_13 * Einheiten(g - 13000, 200)
     falls g <= 15000 -> NR4C_KUM_14000 + NR4C_14 * Einheiten(g - 14000, 200)
-    sonst -> NR4C_KUM_15000 + NR4C_15 * Einheiten(g - 15000, 200)
+    sonst            -> NR4C_KUM_15000 + NR4C_15 * Einheiten(g - 15000, 200)
 }
 
 // ===========================================================================
@@ -452,7 +454,7 @@ Kraftfahrzeuganhänger (§ 9 Abs. 1 Nr. 5 KraftStG): je angefangene
 200 kg Gesamtgewicht 7,46 €, höchstens 373,24 €.
 
 @param gesamtgewichtKg Gesamtgewicht (kg).
-@rückgabe  Jahressteuer des Anhängers.
+@rückgabe              Jahressteuer des Anhängers.
 --
 @Quelle("§ 9 Absatz 1 Nummer 5 KraftStG")
 fn SteuerAnhaenger(gesamtgewichtKg: Ganzzahl): EuroCent =

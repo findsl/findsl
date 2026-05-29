@@ -69,7 +69,7 @@ body:
       label: Sprachänderung?
       description: Betrifft der Vorschlag die Sprache selbst (Grammatik/Syntax/Typsystem)?
       options:
-        - label: "Mir ist bewusst: Sprachänderungen erfordern den synchronen Pflege-Roundtrip der Grammatik-Trias (SPEC.md · grammar/findsl.ebnf · packages/core/src/language/findsl.langium) plus langium:generate + build + bundle + test."
+        - label: "Mir ist bewusst: Sprachänderungen erfordern den synchronen Pflege-Roundtrip des Grammatik-Duos (SPEC.md Anhang A · packages/core/src/language/findsl.langium) plus langium:generate + build + bundle + test."
           required: false
 
   - type: textarea

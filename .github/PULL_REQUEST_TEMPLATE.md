@@ -19,7 +19,7 @@ Closes #
 
 - [ ] Build-Roundtrip lokal grün: `npm run langium:generate && npm run build && npm run bundle && npm test` (alle Tests grün, Bundle-Smoke 4/4)
 - [ ] Beispielmodule unverändert reproduzierbar (`parse`/`test` für `kst`/`kraftst`/`gewst`/`est`)
-- [ ] **Bei Sprachänderung:** Grammatik-Trias synchron gepflegt — `SPEC.md` · `grammar/findsl.ebnf` · `packages/core/src/language/findsl.langium` (+ `langium:generate` neu ausgeführt)
+- [ ] **Bei Sprachänderung:** Grammatik-Duo synchron gepflegt — `SPEC.md` (Anhang A) · `packages/core/src/language/findsl.langium` (+ `langium:generate` neu ausgeführt)
 - [ ] Neue Quelldateien tragen den Lizenz-Header gemäß `CLA.md` (SPDX `EUPL-1.2`; nach evtl. Shebang)
 - [ ] Doku aktualisiert, falls einschlägig (`docs/`, ggf. `docs/changelog.md` vorne ergänzt)
 - [ ] Keine Secrets/Credentials committet

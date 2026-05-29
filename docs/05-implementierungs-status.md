@@ -10,7 +10,7 @@ gewst 43/43 · est 22/22).
 | Komponente                     | Status        | Anmerkung                                                            |
 | ------------------------------ | ------------- | -------------------------------------------------------------------- |
 | Sprachgestaltung               | ✓ v1.0        | SPEC.md (inkl. `abbruch`/`never`/`erwartet abbruch`)                 |
-| Grammatik-Trias                | ✓ synchron    | SPEC.md · grammar/findsl.ebnf · findsl.langium (regeneriert)         |
+| Grammatik-Duo                  | ✓ synchron    | SPEC.md (Anhang A) · findsl.langium (regeneriert); Keyword-Kopplung maschinell getestet (#205) |
 | Parser (auto-generiert)        | ✓ funktional  | Alle 4 Beispieldateien parsen sauber                                 |
 | Type-Checker                   | ✓ funktional  | Bidirektional, Geld-Arithmetik, `never`/Bottom, partial-parse-robust |
 | Datei-Auflöser / Scope         | ✓ funktional  | Relativpfad-`verwende`-Analyse, Header-Registry (Schlüssel = abs. Pfad), Cross-Datei |

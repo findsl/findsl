@@ -32,8 +32,8 @@
    (Status s. § 5). Offen ist v. a. **Codegen** (Java/TS/JS,
    `src/codegen/` leer) sowie die Stdlib-Diskussion und der optionale
    Starlight-Export (§ 8 b/c). Vor jeder Sprach-/Provider-Änderung:
-   Drei-Artefakte-Sync + `langium:generate` + `build` + `bundle` +
-   `npm test` (706 Tests) + Bundle-Smoke.
+   Grammatik-Duo-Sync (SPEC.md Anhang A · findsl.langium) +
+   `langium:generate` + `build` + `bundle` + `npm test` + Bundle-Smoke.
 
 ---
 

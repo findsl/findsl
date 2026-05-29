@@ -2,13 +2,15 @@
 
 ## 10. Empfohlener Einstieg für Claude Code
 
-> **Aufgabe „aus Gesetz X ein FinDSL-Modul + Tests generieren"?** Dann
-> ist **[`GESETZ-ZU-FINDSL.md`](GESETZ-ZU-FINDSL.md)** die verbindliche,
-> schrittweise Arbeitsanweisung (Gesetz-XML/PDF lesen, Scope-Trennung,
-> Architektur, alle FinDSL-Fallstricke, Verifikation, Checkliste).
-> Vorlagen: `examples/kst/` (klein), `examples/kraftst/` (groß),
-> `examples/gewst/` (Verrechnungslogik). Erst den Leitfaden lesen, dann
-> arbeiten.
+> **Aufgabe „aus Gesetz X (oder aus Alltagssprache) ein FinDSL-Modul +
+> Tests generieren"?** Dann ist das ausgelieferte Skill
+> **[`skills/findsl-author/`](../skills/findsl-author/SKILL.md)** die
+> verbindliche Arbeitsanweisung (Scope-Trennung, Architektur, alle
+> FinDSL-Fallstricke, Tests). Die **Repo-Konventionen** für ein
+> Beispielmodul im `examples/`-Baum stehen in
+> **[`CONTRIBUTING.md`](../CONTRIBUTING.md)** → „Beispielmodul aus einem
+> Gesetz beitragen". Vorlagen: `examples/kst/` (klein), `examples/kraftst/`
+> (groß), `examples/gewst/` (Verrechnungslogik). Erst lesen, dann arbeiten.
 
 1. **`SPEC.md` querlesen** — vor allem Kapitel 1 (Designprinzipien),
    Kapitel 3 (Typsystem) und Kapitel 4 (Ausdrücke). Die EBNF in Anhang A

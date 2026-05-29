@@ -616,7 +616,8 @@ Formel mit a–f-Gewichtung, § 9-Kürzungen inkl. Spenden-Höchstbetrag
 max(20 %; 4 ‰), § 10a-Mindestbesteuerung 1 Mio. + 60 %, § 11-Abrundung/
 Freibetrag/Messzahl, § 16-Mindesthebesatz; EZ-<2025-`abbruch`; 43/43
 `pruefe`, Datei + separate `.test.findsl`) samt neuer KI-Agenten-Anleitung
-**[`GESETZ-ZU-FINDSL.md`](GESETZ-ZU-FINDSL.md)** (vollständiger,
+**`GESETZ-ZU-FINDSL.md`** (seit 2026-05-29 im Skill `skills/findsl-author/`
++ `CONTRIBUTING.md` aufgegangen; vollständiger,
 schrittweiser Leitfaden Gesetz-XML/PDF → `.findsl` + Tests; in § 2 und § 10
 referenziert). **639 Tests grün**, Bundle-Smoke 4/4; `pruefe`-Stand:
 ESt 9/9/6/2, KStG 23/23, KraftStG 34/34, GewStG 43/43. Davor

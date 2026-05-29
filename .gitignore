@@ -88,3 +88,6 @@ packages/core/src/codegen/emit-ts/runtime-files-ts.generated.ts
 # TS-Codegen-Gate: repo-interne Temp-Verzeichnisse (werden im finally
 # aufgeräumt; Eintrag schützt vor Resten nach hartem Abbruch)
 .ts-gate-*/
+
+# Lokaler Dogfooding-Symlink auf das ausgelieferte Agent Skill (-> skills/findsl-author)
+/.claude/skills/

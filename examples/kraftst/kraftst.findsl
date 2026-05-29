@@ -88,6 +88,7 @@ verwende {
 -- Rotes/Oldtimer-Kennzeichen, nur für Krafträder gültig (Jahressteuer). --
 @Quelle("§ 9 Absatz 4 Nummer 1 KraftStG")
 konst KZ_NUR_KRAD: EuroCent = 46,02
+
 -- Rotes/Oldtimer-Kennzeichen, im Übrigen (Jahressteuer). --
 @Quelle("§ 9 Absatz 4 Nummer 2 KraftStG")
 konst KZ_UEBRIGE: EuroCent = 191,73
@@ -100,8 +101,8 @@ konst KZ_UEBRIGE: EuroCent = 191,73
 Tarifbetrag nach § 9 Abs. 1 KraftStG: wählt anhand der Fahrzeugart
 (§ 8 KraftStG) die einschlägige Nummer.
 
-@param f Fahrzeug-Eingaben.
-@rückgabe  Steuer nach § 9 Abs. 1 KraftStG (vor Abs. 2 / § 3a / § 3d).
+@param f  Fahrzeug-Eingaben.
+@rückgabe Steuer nach § 9 Abs. 1 KraftStG (vor Abs. 2 / § 3a / § 3d).
 --
 @Quelle("§ 9 Absatz 1 KraftStG")
 fn TarifNach9Abs1(f: Fahrzeug): EuroCent = wähle (f.art) {
@@ -127,14 +128,14 @@ befreit).
 
 @param f      Fahrzeug-Eingaben.
 @param betrag Tarifbetrag nach § 9 Abs. 1 KraftStG.
-@rückgabe  Betrag nach § 9 Abs. 2 KraftStG.
+@rückgabe     Betrag nach § 9 Abs. 2 KraftStG.
 --
 @Quelle("§ 9 Absatz 2 KraftStG")
 fn _Anwende9Abs2(f: Fahrzeug, betrag: EuroCent): EuroCent = wähle {
-    falls f.antrieb == Elektro und f.art == AndereBis3500            -> (betrag / 2) als EuroCent
+    falls f.antrieb == Elektro und f.art == AndereBis3500   -> (betrag / 2) als EuroCent
     falls f.antrieb == Elektro und f.art == AndereUeber3500
-          und f.nfzklasse == MindestensS2                            -> (betrag / 2) als EuroCent
-    sonst                                                            -> betrag
+        und f.nfzklasse == MindestensS2                     -> (betrag / 2) als EuroCent
+    sonst                                                   -> betrag
 }
 
 --
@@ -145,14 +146,14 @@ Steuer auf 0; § 3a Abs. 2 halbiert.
 
 @param f      Fahrzeug-Eingaben.
 @param betrag Betrag nach § 9 Abs. 1/2 KraftStG.
-@rückgabe  Festgesetzte Jahressteuer (0 bei Befreiung).
+@rückgabe     Festgesetzte Jahressteuer (0 bei Befreiung).
 --
 @Quelle("§ 3a KraftStG")
 fn _AnwendeVerguenstigung(f: Fahrzeug, betrag: EuroCent): EuroCent = wähle {
-    falls f.elektroBefreitNach3d                  -> 0,00
-    falls f.behinderung == Befreit3aAbs1          -> 0,00
-    falls f.behinderung == Ermaessigt3aAbs2       -> (betrag / 2) als EuroCent
-    sonst                                         -> betrag
+    falls f.elektroBefreitNach3d            -> 0,00
+    falls f.behinderung == Befreit3aAbs1    -> 0,00
+    falls f.behinderung == Ermaessigt3aAbs2 -> (betrag / 2) als EuroCent
+    sonst                                   -> betrag
 }
 
 // ===========================================================================
@@ -165,15 +166,14 @@ gesetzlichen Reihenfolge: § 8 (Tarifauswahl) → § 9 Abs. 1
 (Tarifbetrag) → § 9 Abs. 2 (Elektro-Ermäßigung) → § 3a / § 3d
 (Vergünstigung/Befreiung). Liefert alle Zwischengrößen.
 
-@param f Fahrzeug-Eingaben.
-@rückgabe  Vollständig dokumentiertes Berechnungsergebnis.
+@param f  Fahrzeug-Eingaben.
+@rückgabe Vollständig dokumentiertes Berechnungsergebnis.
 --
 @Quelle("§ 9 KraftStG")
 fn BerechneKraftfahrzeugsteuer(f: Fahrzeug): KraftfahrzeugsteuerErgebnis {
     var tarif: EuroCent = TarifNach9Abs1(f)
     var nachE: EuroCent = _Anwende9Abs2(f, tarif)
     var jahr: EuroCent = _AnwendeVerguenstigung(f, nachE)
-
     KraftfahrzeugsteuerErgebnis(
         tarifbetrag  = tarif,
         nachElektro  = nachE,

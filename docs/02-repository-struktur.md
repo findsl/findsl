@@ -22,7 +22,8 @@ FinDSL/                                 ← npm-Workspace-Wurzel (privat)
 ├── package.json                        (Workspace-Manifest + Dev-Tooling)
 ├── tsconfig.json                       (Solution: project references)
 ├── esbuild.mjs · scripts/              (Build-Tooling: copy-assets, enhance-textmate)
-├── CLAUDE.md · README.md · SPEC.md · GESETZ-ZU-FINDSL.md
+├── CLAUDE.md · README.md · SPEC.md
+├── skills/findsl-author/               (ausgeliefertes Agent Skill: FinDSL generieren)
 ├── LICENSE (EUPL-1.2, SPDX-kanonisch) · LICENSE-COMMERCIAL.md
 ├── NOTICE · CONTRIBUTING.md · CLA.md   ← Dual-Lizenz: EUPL-1.2 + kommerziell
 │                                          (© devtank42 GmbH; CLA-Pflicht

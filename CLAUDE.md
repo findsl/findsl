@@ -39,10 +39,15 @@ Danach Pflicht-Roundtrip:
 `npm run langium:generate && npm run build && npm run bundle && npm test`
 (inkl. Bundle-Smoke). Sonst läuft im Editor ein veralteter Server.
 
-**Aufgabe „aus Gesetz X ein FinDSL-Modul + Tests generieren"?** Zuerst und
-verbindlich [`GESETZ-ZU-FINDSL.md`](GESETZ-ZU-FINDSL.md) lesen (schrittweise
-Arbeitsanweisung). Vorlagen: `examples/kst/` (klein), `examples/kraftst/`
-(groß, Modul-Dekomposition), `examples/gewst/` (Verrechnungslogik).
+**Aufgabe „aus Gesetz X (oder aus Alltagssprache) ein FinDSL-Modul + Tests
+generieren"?** Das ausgelieferte Skill
+[`skills/findsl-author/`](skills/findsl-author/SKILL.md) ist die
+verbindliche Arbeitsanweisung (Sprache, Architektur, Fallstricke, Tests).
+Die **Repo-Konventionen** für ein Beispielmodul im `examples/`-Baum
+(Gesetzesquelle, Ablage, `@Quelle`-Slug, Verifikation, Buchführung) stehen
+in [`CONTRIBUTING.md`](CONTRIBUTING.md) → „Beispielmodul aus einem Gesetz
+beitragen". Vorlagen: `examples/kst/` (klein), `examples/kraftst/` (groß,
+Modul-Dekomposition), `examples/gewst/` (Verrechnungslogik).
 
 **Teststand (Stand 2026-05-18, verifiziert):** 836 Tests grün, 56 Dateien,
 Bundle-Smoke 4/4, Aggregat 122/122. Beispielmodule: `kst` · `kraftst` ·

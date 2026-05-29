@@ -33,6 +33,7 @@ import {
     isNullLiteral, isNullCheck, isForceUnwrap, isSafeFieldAccess,
     isFunctionType,
 } from '../../language/generated/ast.js';
+import { parseGermanNumberLiteral } from '../../language/number-parse.js';
 import type {
     IrModule, IrDecl, IrExpr, IrBlockResult, IrFnBody, IrField,
     IrParam, IrLet, IrDoc, ZahlFactory, ZielTyp, IrComposedModule,
@@ -179,18 +180,16 @@ function castTarget(t: Type | undefined): ZielTyp {
 }
 
 /**
- * Spiegel `values.ts parseNumberLiteral` (277-290): deutsche Notation
- * `.`=Tausender, `,`=Dezimal, `%`→Bruch (÷100 exakt via decimal.js).
+ * Klassifikation geteilt mit dem Interpreter-Orakel
+ * ({@link parseGermanNumberLiteral}); `%`→Bruch (÷100 exakt via decimal.js)
+ * bleibt hier, weil das IR den fertigen `arg`-String trägt.
  */
 function parseNumberLiteral(raw: string): { factory: ZahlFactory; arg: string } {
-    const hasPercent = raw.endsWith('%');
-    const body = hasPercent ? raw.slice(0, -1) : raw;
-    const normalized = body.replace(/\./g, '').replace(',', '.');
-    if (hasPercent) {
-        return { factory: 'prozent', arg: new Decimal(normalized).div(100).toString() };
+    const p = parseGermanNumberLiteral(raw);
+    if (p.kind === 'prozent') {
+        return { factory: 'prozent', arg: new Decimal(p.normalized).div(100).toString() };
     }
-    if (body.includes(',')) return { factory: 'dezimal', arg: normalized };
-    return { factory: 'ganzzahl', arg: normalized };
+    return { factory: p.kind, arg: p.normalized };
 }
 
 /**

@@ -20,6 +20,7 @@
  */
 
 import { Decimal } from 'decimal.js';
+import { parseGermanNumberLiteral } from '../language/number-parse.js';
 
 export type NumericTag =
     | 'Ganzzahl' | 'Dezimal' | 'Prozent'
@@ -275,18 +276,12 @@ export function valueToInterpolatedString(v: Value): string {
  * `%` ergibt `Dezimal`, sonst `Ganzzahl`.
  */
 export function parseNumberLiteral(raw: string): NumericValue {
-    const hasPercent = raw.endsWith('%');
-    const body = hasPercent ? raw.slice(0, -1) : raw;
-    // Deutsche Notation: `.` = Tausender-Trenner (entfernen), `,` =
-    // Dezimaltrenner (→ `.` für Decimal-Parsing).
-    const normalized = body.replace(/\./g, '').replace(',', '.');
-    if (hasPercent) {
-        return NumericValue.prozent(new Decimal(normalized).div(100));
+    const p = parseGermanNumberLiteral(raw);
+    switch (p.kind) {
+        case 'prozent':  return NumericValue.prozent(new Decimal(p.normalized).div(100));
+        case 'dezimal':  return NumericValue.dezimal(p.normalized);
+        case 'ganzzahl': return NumericValue.ganzzahl(p.normalized);
     }
-    if (body.includes(',')) {
-        return NumericValue.dezimal(normalized);
-    }
-    return NumericValue.ganzzahl(normalized);
 }
 
 /**

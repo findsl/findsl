@@ -49,9 +49,12 @@ import {
     isUnaryOp,
     isWaehleExpr,
     isWennExpr,
+    type BinaryOp,
     type BlockStmt,
     type CallArg,
+    type CallChain,
     type Expr,
+    type ParenChain,
 } from './generated/ast.js';
 import {
     listMethod,
@@ -459,7 +462,7 @@ export function checkWaehleExhaustiveness(
 }
 
 function inferBinary(
-    expr: { op: string; left: Expr; right: Expr },
+    expr: BinaryOp,
     env: TypeEnv, ctx: TypeContext, report: Reporter,
 ): Type {
     const op = expr.op;
@@ -499,7 +502,7 @@ function inferBinary(
         }
         if (l.kind === 'unknown' || r.kind === 'unknown') return TWahrheit;
         if (!comparable(l, r)) {
-            report(expr as unknown as AstNode,
+            report(expr,
                 `Vergleich nicht definiert: ${typeToString(l)} ${op} ${typeToString(r)}.`);
         }
         return TWahrheit;
@@ -508,7 +511,7 @@ function inferBinary(
     // Arithmetik
     const lt = infer(expr.left, env, ctx, report);
     const rt = infer(expr.right, env, ctx, report);
-    return arithResult(op, lt, rt, expr as unknown as AstNode, report);
+    return arithResult(op, lt, rt, expr, report);
 }
 
 function arithResult(op: string, lt: Type, rt: Type, node: AstNode, report: Reporter): Type {
@@ -618,7 +621,7 @@ export function ensureWahrheit(node: AstNode, t: Type, report: Reporter): void {
 }
 
 export function inferCallChain(
-    cc: { name?: string; chain: ReadonlyArray<AstNode & { $type: string }> },
+    cc: CallChain,
     env: TypeEnv, ctx: TypeContext, report: Reporter,
     expected?: Type,
 ): Type {
@@ -637,19 +640,19 @@ export function inferCallChain(
                 // → echter Fehler. Weder lokale Deklaration, noch
                 // `verwende`-Import, noch Builtin. Spiegelt den
                 // Laufzeitfehler „Aufrufziel ist nicht aufrufbar".
-                report(cc as unknown as AstNode,
+                report(cc,
                     `Aufrufziel "${cc.name}" ist nicht definiert oder nicht `
                     + `importiert (weder lokale Deklaration noch `
                     + `\`verwende\`-Import noch Builtin).`);
             }
             current = ev ?? TUnknown;
         } else {
-            report(cc as unknown as AstNode, `Unbekannter Identifier: "${cc.name}".`);
+            report(cc, `Unbekannter Identifier: "${cc.name}".`);
             return TUnknown;
         }
     }
 
-    return walkChain(current, cc.chain, cc as unknown as AstNode, env, ctx, report, expected);
+    return walkChain(current, cc.chain, cc, env, ctx, report, expected);
 }
 
 /**
@@ -659,13 +662,15 @@ export function inferCallChain(
  * SPEC `paren_expr`). Teil-Parse: fehlender `receiver` → `unknown`.
  */
 export function inferParenChain(
-    pc: { receiver?: Expr; chain: ReadonlyArray<AstNode & { $type: string }> },
+    pc: ParenChain,
     env: TypeEnv, ctx: TypeContext, report: Reporter,
     expected?: Type,
 ): Type {
+    // Teil-Parse: Langium kann `receiver` zur Laufzeit weglassen, obwohl
+    // der generierte Typ ihn als Pflichtfeld führt.
     if (!pc.receiver) return TUnknown;
     const start = infer(pc.receiver, env, ctx, report);
-    return walkChain(start, pc.chain, pc as unknown as AstNode, env, ctx, report, expected);
+    return walkChain(start, pc.chain, pc, env, ctx, report, expected);
 }
 
 /**

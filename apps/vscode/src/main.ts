@@ -234,19 +234,23 @@ function registerTestController(context: vscode.ExtensionContext): void {
 
         const prev = debounce.get(key);
         if (prev) clearTimeout(prev);
-        debounce.set(key, setTimeout(async () => {
-            debounce.delete(key);
-            // Item erst jetzt anlegen; resolveFile entfernt es sofort
-            // wieder, falls die Datei keinen prüfe-Block enthält. Hat der
-            // Nutzer gerade einen prüfe-Block ergänzt, erscheint die Datei.
-            const item = ensureFileItem(ctrl, uri);
-            try {
-                await resolveFile(ctrl, item);
-                if (ctrl.items.get(key)) ctrl.invalidateTestResults?.(item);
-            } catch {
-                /* Symbol-Provider transient nicht bereit — nächster
-                   Edit löst erneut aus. */
-            }
+        debounce.set(key, setTimeout(() => {
+            // setTimeout erwartet einen void-Callback — die asynchrone Arbeit
+            // in einer per `void` losgelösten IIFE kapseln.
+            void (async () => {
+                debounce.delete(key);
+                // Item erst jetzt anlegen; resolveFile entfernt es sofort
+                // wieder, falls die Datei keinen prüfe-Block enthält. Hat der
+                // Nutzer gerade einen prüfe-Block ergänzt, erscheint die Datei.
+                const item = ensureFileItem(ctrl, uri);
+                try {
+                    await resolveFile(ctrl, item);
+                    if (ctrl.items.get(key)) ctrl.invalidateTestResults?.(item);
+                } catch {
+                    /* Symbol-Provider transient nicht bereit — nächster
+                       Edit löst erneut aus. */
+                }
+            })();
         }, 250));
     };
 
@@ -569,6 +573,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
         const t = setTimeout(() => reject(new TimeoutError()), ms);
         p.then(
             (v) => { clearTimeout(t); resolve(v); },
+            // Original-Rejection-Grund unverändert weiterreichen (transparenter
+            // Timeout-Wrapper) — `e` ist `unknown`, kein synthetischer Error.
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
             (e) => { clearTimeout(t); reject(e); },
         );
     });

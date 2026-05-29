@@ -75,7 +75,7 @@ function entquote(s: string): string {
  *   - unbekannte Top-Level-Skalare → ebenfalls Metadaten
  */
 export function parseKopf(raw: string): DocKopf {
-    const text = raw.replace(/^﻿/, '');
+    const text = raw.replace(/^\uFEFF/, '');
     const fm = text.match(/^\s*---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?([\s\S]*)$/);
 
     let titel: string | undefined;

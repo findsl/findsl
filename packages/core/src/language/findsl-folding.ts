@@ -17,7 +17,7 @@
  *     hidden Block-Comment) → als `Comment`-Faltung
  *   - mehrzeilige `"""…"""`-Strings (Bescheid-Templates) → als Region
  *
- * `/* … *​/`-Block-Kommentare werden weiterhin von der Basisklasse
+ * Block-Kommentare im C-Stil werden weiterhin von der Basisklasse
  * (`collectCommentFolding`) gefaltet — wir rufen `super.collectFolding`.
  */
 

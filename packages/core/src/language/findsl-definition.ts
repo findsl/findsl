@@ -30,13 +30,10 @@ import type { DefinitionParams, LocationLink } from 'vscode-languageserver';
 import {
     isAufzaehlungDecl,
     isBlockExpr,
-    isCall,
     isCallChain,
     isDatensatzDecl,
     isFieldAccess,
     isField,
-    isForceUnwrap,
-    isFuerExpr,
     isFunktionDecl,
     isImportItem,
     isKonstDecl,
@@ -47,22 +44,14 @@ import {
     isSafeFieldAccess,
     type CallChain,
     type ChainOp,
-    type Expr,
     type Field,
     type ImportItem,
     type Program,
-    type Type as TypeAnnotation,
 } from './generated/ast.js';
 import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
 import * as path from 'node:path';
 import {
-    infer,
-    resolveTypeAnnotation,
-    TNull,
-    TUnknown,
-    TypeEnv,
     type Type,
-    type TypeContext,
 } from './findsl-types.js';
 import { buildLocalScope, stepChainOp } from './findsl-local-scope.js';
 import type { FindslServices } from './findsl-module.js';
@@ -304,7 +293,7 @@ export function resolveLocalBinding(from: AstNode, name: string): AstNode | unde
                 if (lp) return lp;
             }
         }
-        n = n.$container as AstNode | undefined;
+        n = n.$container;
     }
     return undefined;
 }

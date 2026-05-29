@@ -20,52 +20,18 @@
  */
 
 import type { AstNode } from 'langium';
-import { parseSlotPath, parseStringLiteral } from '../interpret/values.js';
-import { InterpretError } from '../interpret/values.js';
-import {
-    listMethod,
-    scalarRoundingMethod,
-    textMethod,
-} from './findsl-method-inference.js';
 import { BUILTIN_ENUM_DEFS, BUILTIN_FUNCTION_DEFS } from './findsl-stdlib.js';
 import { checkAgainstAnnotation } from './findsl-type-check.js';
 import { collectImportBindings } from './import-path.js';
 import {
-    isAbbruchExpr,
     isAufzaehlungDecl,
-    isBinaryOp,
-    isBoolLiteral,
-    isCall,
-    isCallChain,
-    isCast,
     isDatensatzDecl,
-    isFallArm,
-    isFieldAccess,
-    isForceUnwrap,
-    isFuerExpr,
     isFunktionDecl,
-    isIndex,
     isKonstDecl,
     isAusgabeStmt,
-    isLambda,
     isLetStmt,
-    isListLiteral,
-    isNullCheck,
-    isNullLiteral,
-    isNumberLiteral,
-    isParenChain,
     isPruefeDecl,
-    isRange,
-    isSafeFieldAccess,
-    isSonstArm,
-    isStringLiteral,
-    isUnaryOp,
-    isWaehleExpr,
-    isWennExpr,
-    type BlockStmt,
-    type CallArg,
     type DatensatzDecl,
-    type Expr,
     type FunktionBody,
     type FunktionDecl,
     type KonstDecl,

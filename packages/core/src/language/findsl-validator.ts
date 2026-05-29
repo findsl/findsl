@@ -42,7 +42,6 @@ import {
     isKonstDecl,
     isLetStmt,
     isNamedType,
-    isParam,
     isPruefeDecl,
     isSafeFieldAccess,
     isStringLiteral,

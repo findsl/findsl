@@ -184,7 +184,7 @@ Beispiele:
             if (all.length === 0) {
                 console.log(`✓ ${disp(fullPath)} erfolgreich geparst, keine Diagnosen.`);
                 if (options.verbose) {
-                    console.log(`  AST-Knoten: ${countNodes(document.parseResult.value as object)}`);
+                    console.log(`  AST-Knoten: ${countNodes(document.parseResult.value)}`);
                 }
                 continue;
             }
@@ -1030,7 +1030,10 @@ Beispiele:
         process.exit(missing.length > 0 ? 1 : 0);
     });
 
-program.parseAsync(process.argv);
+// Top-Level-Einstieg: Commander parst und führt die Action aus. Bewusst
+// nicht awaitbar (Modul-Top-Level); Fehler behandeln die Actions selbst
+// via process.exit.
+void program.parseAsync(process.argv);
 
 function severityName(sev: number | undefined): string {
     switch (sev) {

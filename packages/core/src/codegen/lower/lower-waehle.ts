@@ -112,7 +112,7 @@ export function lowerWaehle(
     const arms: IrArm[] = w.arms.map((arm) => {
         if (isFallArm(arm)) {
             return {
-                patterns: arm.patterns.map((p) => deps.lowerExpr(p as Expr, reg)),
+                patterns: arm.patterns.map((p) => deps.lowerExpr(p, reg)),
                 result: lowerArmResult(arm.result, reg, deps),
                 isSonst: false,
             };

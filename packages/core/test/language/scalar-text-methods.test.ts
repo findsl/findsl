@@ -159,7 +159,6 @@ describe('§11.1 — Rundung über ParenChain (Kern-Tarifmuster)', () => {
 });
 
 describe('§11.5 — Text-Methoden', () => {
-    const T = (m: string) => `konst R: Dezimal = 0\nkonst S: Text = "Hallo"\nkonst Q: ${m}\n`;
     async function tdiags(decl: string): Promise<string[]> {
         return diags(`konst S: Text = "Hallo Welt"\n${decl}\n`);
     }

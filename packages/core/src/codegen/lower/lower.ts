@@ -43,7 +43,6 @@ import {
     floatValue as floatValueImpl,
     floatWaehle as floatWaehleImpl,
     isChoice,
-    lowerArmResult as lowerArmResultImpl,
     lowerBlockLambda as lowerBlockLambdaImpl,
     lowerWaehle as lowerWaehleImpl,
     type WaehleLowerDeps,
@@ -96,7 +95,7 @@ const MONEY_NAMES = new Set(['Euro', 'Cent', 'EuroCent']);
 interface NamedAtom { name: string; typeArgs?: { args: ReadonlyArray<Type> } }
 function namedAtom(t: Type | undefined): NamedAtom | undefined {
     const atom = t?.atom;
-    return atom && isNamedType(atom) ? (atom as NamedAtom) : undefined;
+    return atom && isNamedType(atom) ? (atom) : undefined;
 }
 
 /** Name eines NamedType-Atoms, sonst undefined (Teil-Parse-robust). */
@@ -262,7 +261,7 @@ function governingMoneyTarget(node: object): 'Euro' | 'Cent' | undefined {
             if (m === 'Euro' || m === 'Cent') return m;
         } else if (isFunktionBody(c)) {
             const fd = (c as { $container?: unknown }).$container;
-            const m = isFunktionDecl(fd as object) ? moneyAnnotation((fd as FunktionDecl).returnType) : undefined;
+            const m = isFunktionDecl(fd) ? moneyAnnotation((fd).returnType) : undefined;
             if (m === 'Euro' || m === 'Cent') return m;
         }
         cur = c as { $container?: object };
@@ -982,10 +981,6 @@ const waehleDeps: WaehleLowerDeps = {
 /** Block-Lambda (`{ var …; ergebnis }`) als Arm-Ergebnis → IrBlockResult. */
 function lowerBlockLambda(lam: { stmts: ReadonlyArray<object>; result?: Expr }, reg: Registry): IrBlockResult {
     return lowerBlockLambdaImpl(lam, reg, waehleDeps);
-}
-
-function lowerArmResult(result: Expr | undefined, reg: Registry): IrExpr | IrBlockResult {
-    return lowerArmResultImpl(result, reg, waehleDeps);
 }
 
 function lowerWaehle(w: WaehleExpr, reg: Registry): IrExpr {

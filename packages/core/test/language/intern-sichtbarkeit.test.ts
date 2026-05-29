@@ -25,7 +25,6 @@ async function internErrors(src: string, uri: string): Promise<string[]> {
         .map((d) => d.message);
 }
 
-const QUELLE = 'file:///pfad/quelle.findsl';
 const TESTDATEI = 'file:///pfad/quelle.test.findsl';
 const ANDERE = 'file:///pfad/anderes.findsl';
 

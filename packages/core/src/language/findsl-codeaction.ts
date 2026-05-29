@@ -148,8 +148,8 @@ export class FindslCodeActionProvider implements CodeActionProvider {
     private enclosingKonst(node: AstNode): (AstNode & { name?: string }) | undefined {
         let n: AstNode | undefined = node;
         while (n) {
-            if (n.$type === 'KonstDecl') return n as AstNode & { name?: string };
-            n = n.$container as AstNode | undefined;
+            if (n.$type === 'KonstDecl') return n;
+            n = n.$container;
         }
         return undefined;
     }
@@ -208,7 +208,7 @@ export class FindslCodeActionProvider implements CodeActionProvider {
         let n: AstNode | undefined = node;
         while (n) {
             if (isImportDecl(n)) return n;
-            n = n.$container as AstNode | undefined;
+            n = n.$container;
         }
         return undefined;
     }
@@ -255,7 +255,7 @@ export class FindslCodeActionProvider implements CodeActionProvider {
         let n: AstNode | undefined = node;
         while (n) {
             if (isImportItem(n)) return n;
-            n = n.$container as AstNode | undefined;
+            n = n.$container;
         }
         return undefined;
     }

@@ -446,7 +446,7 @@ function layoutFlow(atoms: Atom[], maxWidth: number, base: number): Content[] {
                 cols.push({
                     width: a.w, svg: a.svg, height: a.h,
                     margin: [MATH_PAD_L, Math.round((rowH - a.h) / 2), 0, 0],
-                } as Content);
+                });
                 cols.push({ text: '', width: MATH_PAD_R } as Content);
             } else if (a.k === 'space') {
                 buf.push({ text: ' ' });
@@ -710,7 +710,7 @@ function declContent(d: DeclDoc): Content[] {
                 {
                     text: `§ ${r.num} ${r.abk}`, link: r.url,
                     color: C.accent, decoration: 'underline',
-                } as Content,
+                },
             ]);
             out.push(quelleCallout([{ text: q.text, color: C.muted }, '   ', ...links]));
         }
@@ -790,7 +790,7 @@ export function buildPdfDoc(model: DocModel, opts: PdfOptions = {}): TDocumentDe
             text: m.name, style: 'h1',
             tocItem: true, tocStyle: 'tocModule',
             tocMargin: [0, 13, 0, 3],
-        } as Content);
+        });
         // Relativer Dateipfad: kleine, ausgegraute Zeile unter dem
         // Kapitelnamen (Kapitel = Datei).
         content.push({ text: m.pfad, style: 'modulePfad' });
@@ -804,7 +804,7 @@ export function buildPdfDoc(model: DocModel, opts: PdfOptions = {}): TDocumentDe
                 text: g.header.toUpperCase(), style: 'group',
                 tocItem: true, tocStyle: 'tocGroup',
                 tocMargin: [16, 7, 0, 2],
-            } as Content);
+            });
             content.push(hairline(0.75, C.rule, 5, 16));
             for (const d of g.decls) content.push(...declContent(d));
         }

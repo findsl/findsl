@@ -234,7 +234,7 @@ function altText(tex: string): string {
  *
  *  Escaped: `\` `` ` `` `*` `_` `[` `]` `(` `)` `!` `<` `>` `~` `|`. */
 function escapeMarkdownInline(s: string): string {
-    return s.replace(/([\\`*_\[\]()!<>~|])/g, '\\$1');
+    return s.replace(/([\\`*_[\]()!<>~|])/g, '\\$1');
 }
 
 /** Escape Markdown-Sonderzeichen in einer einzeiligen Beschreibung (für

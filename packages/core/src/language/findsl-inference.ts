@@ -81,7 +81,6 @@ import {
     resolveTypeAnnotation,
     typeEq,
     typeToString,
-    type NullableType,
     type PrimitiveType,
     type Reporter,
     type Type,
@@ -168,7 +167,7 @@ function inferImpl(expr: Expr, env: TypeEnv, ctx: TypeContext, report: Reporter)
                     && arm.patterns.some((p) => isNullLiteral(p));
                 if (!armHasNullPattern) {
                     armEnv = env.child();
-                    armEnv.define(refineName, (subjectType as NullableType).inner);
+                    armEnv.define(refineName, (subjectType).inner);
                 }
             }
             const armResult = isFallArm(arm) || isSonstArm(arm) ? arm.result : undefined;
@@ -711,7 +710,7 @@ function walkChain(
                     : undefined;
             const r = listMethod(current.element, op.name, callOp, env, ctx, report);
             if (r === undefined) {
-                report(op as unknown as AstNode,
+                report(op,
                     `Liste hat keine Methode "${op.name}" (SPEC § 11.2).`);
                 current = TUnknown;
             } else {
@@ -739,7 +738,7 @@ function walkChain(
             const isTerminal = afterIdx >= chain.length;
             current = scalarRoundingMethod(
                 current, op.name, isTerminal ? expected : undefined,
-                op as unknown as AstNode, report,
+                op, report,
             );
             if (callOp) k++;                      // folgendes () konsumieren
             continue;
@@ -757,7 +756,7 @@ function walkChain(
             const next = chain[k + 1];
             const callOp = next && isCall(next) ? next : undefined;
             const r = scalarArgMethod(
-                current, op.name, callOp, op as unknown as AstNode, env, ctx, report);
+                current, op.name, callOp, op, env, ctx, report);
             current = r.type;
             if (r.consumedCall && next && isCall(next)) k++;
             continue;
@@ -770,9 +769,9 @@ function walkChain(
             && isFieldAccess(op) && op.name) {
             const next = chain[k + 1];
             const callOp = next && isCall(next) ? next : undefined;
-            const r = textMethod(op.name, callOp, op as unknown as AstNode, env, ctx, report);
+            const r = textMethod(op.name, callOp, op, env, ctx, report);
             if (r === undefined) {
-                report(op as unknown as AstNode,
+                report(op,
                     `Text hat keine Methode "${op.name}" (SPEC § 11.5).`);
                 current = TUnknown;
             } else {
@@ -789,28 +788,28 @@ function walkChain(
             if (current.kind === 'list') {
                 current = current.element;
             } else if (current.kind !== 'unknown') {
-                report(op as unknown as AstNode,
+                report(op,
                     `Index-Zugriff "[…]" auf nicht-Liste (Typ ${typeToString(current)}).`);
                 current = TUnknown;
             }
         } else if (isFieldAccess(op)) {
-            current = accessField(current, op.name, op as unknown as AstNode, ctx, report);
+            current = accessField(current, op.name, op, ctx, report);
         } else if (isSafeFieldAccess(op)) {
             // T?.feld → fieldType?
             if (current.kind === 'nullable') {
-                const inner = accessField(current.inner, op.name, op as unknown as AstNode, ctx, report);
+                const inner = accessField(current.inner, op.name, op, ctx, report);
                 current = TNull(inner);
             } else if (current.kind === 'unknown') {
                 current = TUnknown;
             } else {
-                report(op as unknown as AstNode, `Sicher-Zugriff "?." verlangt Nullable-Operanden, erhalten ${typeToString(current)}.`);
+                report(op, `Sicher-Zugriff "?." verlangt Nullable-Operanden, erhalten ${typeToString(current)}.`);
                 current = TUnknown;
             }
         } else if (isForceUnwrap(op)) {
             if (current.kind === 'nullable') {
                 current = current.inner;
             } else if (current.kind !== 'unknown') {
-                report(op as unknown as AstNode, `Force-Unwrap "!!" verlangt Nullable-Operanden, erhalten ${typeToString(current)}.`);
+                report(op, `Force-Unwrap "!!" verlangt Nullable-Operanden, erhalten ${typeToString(current)}.`);
             }
         }
     }
@@ -849,13 +848,13 @@ function applyCall(
                 const idx = namedMap.get(arg.name);
                 if (idx === undefined) {
                     const known = callee.paramNames.join(', ');
-                    report(arg as unknown as AstNode,
+                    report(arg,
                         `Unbekanntes benanntes Argument "${arg.name}" `
                         + `(erwartet eines von: ${known}).`);
                     expected = TUnknown;
                     paramIdx = -1;
                 } else if (bound.has(idx)) {
-                    report(arg as unknown as AstNode,
+                    report(arg,
                         `Argument "${arg.name}" wurde bereits übergeben.`);
                     expected = TUnknown;
                     paramIdx = -1;

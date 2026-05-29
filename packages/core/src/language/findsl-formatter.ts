@@ -224,7 +224,7 @@ function arrowPad(arm: AstNode): number | undefined {
     const arms = (c as { arms?: ReadonlyArray<{ $cstNode?: { text: string } }> }).arms ?? [];
     if (arms.length === 0) return undefined;
     const max = Math.max(...arms.map((a) => armLinkeBreite(a)));
-    return max - armLinkeBreite(arm as unknown as { $cstNode?: { text: string } }) + 1;
+    return max - armLinkeBreite(arm) + 1;
 }
 
 /** Maximale Zeilenbreite, ab der Operator-Ketten umgebrochen werden. */
@@ -847,7 +847,7 @@ export class FindslFormatter extends AbstractFormatter {
                 const maxNameLen = Math.max(
                     ...siblings.map((x) => x.name?.length ?? 0),
                 );
-                f.keyword(':').append(Formatting.spaces(maxNameLen - node.name!.length + 1));
+                f.keyword(':').append(Formatting.spaces(maxNameLen - node.name.length + 1));
                 if ((node as { default?: unknown }).default !== undefined) {
                     const maxTypeLen = Math.max(
                         ...siblings.map((x) => x.type?.$cstNode?.text.length ?? 0),

@@ -158,7 +158,7 @@ export function collectImportBindings(program: Program): RawImportBinding[] {
                 sourceName: item.name,
                 rawSource: raw,
                 resolvedPath: resolved,
-                node: item as unknown as AstNode,
+                node: item,
             });
         }
     }

@@ -48,7 +48,6 @@ import {
     TText,
     TUnknown,
     typeToString,
-    type NullableType,
     type Reporter,
     type Type,
     type TypeContext,
@@ -164,7 +163,7 @@ function checkAgainstAnnotationImpl(
                     && arm.patterns.some((p) => isNullLiteral(p));
                 if (!armHasNullPattern) {
                     armEnv = env.child();
-                    armEnv.define(refineName, (subjectType as NullableType).inner);
+                    armEnv.define(refineName, (subjectType).inner);
                 }
             }
             checkAgainstAnnotation(arm.result, expected, armEnv, ctx, report);

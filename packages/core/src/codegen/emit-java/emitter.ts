@@ -22,6 +22,8 @@ import type {
     IrTestModule, IrTestCase, IrType,
 } from '../ir/nodes.js';
 import { reflowJava } from './reflow.js';
+import { fnName as javaMethodName } from '../shared-names.js';
+import { stripDocBody, wrapDoc } from '../shared-doc.js';
 
 const IND = '    ';
 
@@ -71,33 +73,13 @@ function javaString(s: string): string {
 }
 
 /**
- * FinDSL-`fn`-Name → Java-Methodenname: erster Buchst. (nach optionalem
- * führendem `_`) klein. Deterministisch, konsistent an Decl UND Aufruf.
- */
-function javaMethodName(name: string): string {
-    return name.replace(/^(_*)(\p{L})/u, (_m, us: string, c: string) => us + c.toLowerCase());
-}
-
-/**
- * FinDSL-`--…--`-Doc → Javadoc-Zeilen (oder leer). `@Quelle` gehört NICHT
- * mehr hierher (war ein unbekanntes Javadoc-Tag → Warnung) — es wird über
+ * FinDSL-`--…--`-Doc → Javadoc-Zeilen (oder leer). Strip-Logik geteilt mit
+ * dem TS-Emitter ({@link stripDocBody}). `@Quelle` gehört NICHT hierher (war
+ * ein unbekanntes Javadoc-Tag → Warnung) — es wird über
  * {@link quelleAnnotations} zur echten `@Quelle`-Annotation (#156).
  */
 function javadoc(info: IrDoc, indent: string): string[] {
-    const body: string[] = [];
-    if (info.doc && info.doc.trim() !== '') {
-        const stripped = info.doc.replace(/\r/g, '').trim()
-            .replace(/^--/, '').replace(/--$/, '');
-        for (const raw of stripped.split('\n')) {
-            if (raw.trim() === '--') continue;
-            const ln = raw.replace(/@rückgabe\b/g, '@return').replace(/\*\//g, '* /');
-            body.push(ln.length ? ` * ${ln}` : ' *');
-        }
-        while (body.length && body[0] === ' *') body.shift();
-        while (body.length && body[body.length - 1] === ' *') body.pop();
-    }
-    if (body.length === 0) return [];
-    return [`${indent}/**`, ...body.map((l) => indent + l), `${indent} */`];
+    return wrapDoc(stripDocBody(info.doc, '@return'), indent);
 }
 
 /**

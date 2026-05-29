@@ -40,6 +40,8 @@ import type {
     IrModule, IrDecl, IrExpr, IrArm, IrBlockResult, IrDoc,
     IrTestModule, IrTestCase, IrType, IrComposedModule, IrLet,
 } from '../ir/nodes.js';
+import { fnName as tsFnName } from '../shared-names.js';
+import { stripDocBody, wrapDoc } from '../shared-doc.js';
 
 const IND = '    ';
 
@@ -134,33 +136,16 @@ function tsString(s: string): string {
 }
 
 /**
- * FinDSL-`fn`-Name → TS-Funktionsname: erster Buchstabe (nach optionalem
- * führendem `_`) klein. Deterministisch, konsistent an Decl UND Aufruf —
- * identische Transformation wie der Java-Emitter (`javaMethodName`).
+ * FinDSL-Doc + `@Quelle` → JSDoc-Zeilen (oder leer). Strip-Logik geteilt mit
+ * dem Java-Emitter ({@link stripDocBody}); `@Quelle` kommt hier inline ins
+ * JSDoc (Java nutzt stattdessen echte `@Quelle`-Annotationen, #156).
  */
-function tsFnName(name: string): string {
-    return name.replace(/^(_*)(\p{L})/u, (_m, us: string, c: string) => us + c.toLowerCase());
-}
-
-/** FinDSL-Doc + `@Quelle` → JSDoc-Zeilen (oder leer). Port von `javadoc()`. */
 function tsdoc(info: IrDoc, indent: string): string[] {
-    const body: string[] = [];
-    if (info.doc && info.doc.trim() !== '') {
-        const stripped = info.doc.replace(/\r/g, '').trim()
-            .replace(/^--/, '').replace(/--$/, '');
-        for (const raw of stripped.split('\n')) {
-            if (raw.trim() === '--') continue;
-            const ln = raw.replace(/@rückgabe\b/g, '@returns').replace(/\*\//g, '* /');
-            body.push(ln.length ? ` * ${ln}` : ' *');
-        }
-        while (body.length && body[0] === ' *') body.shift();
-        while (body.length && body[body.length - 1] === ' *') body.pop();
-    }
+    const body = stripDocBody(info.doc, '@returns');
     for (const q of info.quelle) {
         body.push(` * @Quelle ${q.replace(/\*\//g, '* /')}`);
     }
-    if (body.length === 0) return [];
-    return [`${indent}/**`, ...body.map((l) => indent + l), `${indent} */`];
+    return wrapDoc(body, indent);
 }
 
 // --- Ausdrucks-Emission --------------------------------------------------

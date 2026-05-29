@@ -53,15 +53,13 @@ const RUNTIME_SYMBOLS = [
 
 /**
  * Cross-Modul-Auflösung für `crossCall`: `fieldName` → Klassenname (=
- * Namespace-Import-Alias). Single-threaded, synchron emittiert — wird zu
- * Beginn jeder öffentlichen Emit-Funktion gesetzt (analog zum Java-
- * Emitter, der ausschließlich aus Top-Level-Funktionen besteht).
+ * Namespace-Import-Alias). Wird je Modul aus {@link IrModule.composedModules}
+ * gebaut und als expliziter Parameter durch die Emit-Funktionen gereicht
+ * (kein Module-Level-Zustand, Issue #211).
  */
-let crossClassByField: ReadonlyMap<string, string> = new Map();
+type Cross = ReadonlyMap<string, string>;
 
-function buildFieldToClass(
-    composed: ReadonlyArray<IrComposedModule>,
-): ReadonlyMap<string, string> {
+function buildFieldToClass(composed: ReadonlyArray<IrComposedModule>): Cross {
     const m = new Map<string, string>();
     for (const c of composed) m.set(c.fieldName, c.className);
     return m;
@@ -168,12 +166,12 @@ function tsdoc(info: IrDoc, indent: string): string[] {
 // --- Ausdrucks-Emission --------------------------------------------------
 
 /** (#44 Text-`+`) Arithmetik: Text → TS-String-Konkat; numerisch → Runtime-Method. */
-function emitArith(e: Extract<IrExpr, { kind: 'arith' }>): string {
+function emitArith(e: Extract<IrExpr, { kind: 'arith' }>, cross: Cross): string {
     if (e.isText) {
-        return `(${emitExpr(e.left)}) + (${emitExpr(e.right)})`;
+        return `(${emitExpr(e.left, cross)}) + (${emitExpr(e.right, cross)})`;
     }
     const m = e.op === '+' ? 'add' : e.op === '-' ? 'sub' : 'mul';
-    return `${emitExpr(e.left)}.${m}(${emitExpr(e.right)})`;
+    return `${emitExpr(e.left, cross)}.${m}(${emitExpr(e.right, cross)})`;
 }
 
 /**
@@ -181,8 +179,8 @@ function emitArith(e: Extract<IrExpr, { kind: 'arith' }>): string {
  * numerisch → `.equalsValue`/`.compareValue` (decimal.js-Runtime, skalen-
  * unabhängig). Ordnungsvergleiche auf Text fängt das Lowering vorab ab.
  */
-function emitCmp(e: Extract<IrExpr, { kind: 'cmp' }>): string {
-    const l = emitExpr(e.left), r = emitExpr(e.right);
+function emitCmp(e: Extract<IrExpr, { kind: 'cmp' }>, cross: Cross): string {
+    const l = emitExpr(e.left, cross), r = emitExpr(e.right, cross);
     const op: string = e.op;
     if (e.isText) {
         return op === '==' ? `${l} === ${r}` : `${l} !== ${r}`;
@@ -208,17 +206,18 @@ function emitCmp(e: Extract<IrExpr, { kind: 'cmp' }>): string {
  */
 function emitListExpr(
     e: Extract<IrExpr, { kind: 'listLit' | 'listRange' | 'listEnumRange' }>,
+    cross: Cross,
 ): string {
     if (e.kind === 'listLit') {
         return e.items.length === 0
             ? `FinDslListe.empty<${irTypeToTsCore(e.elementType)}>()`
-            : `FinDslListe.of([${e.items.map(emitExpr).join(', ')}])`;
+            : `FinDslListe.of([${e.items.map((x) => emitExpr(x, cross)).join(', ')}])`;
     }
-    const step = e.step !== undefined ? emitExpr(e.step) : 'null';
+    const step = e.step !== undefined ? emitExpr(e.step, cross) : 'null';
     if (e.kind === 'listRange') {
-        return `FinDslListe.bereich(${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+        return `FinDslListe.bereich(${emitExpr(e.from, cross)}, ${emitExpr(e.to, cross)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
     }
-    return `FinDslListe.enumBereich(${emitExpr(e.from)}, ${emitExpr(e.to)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
+    return `FinDslListe.enumBereich(${emitExpr(e.from, cross)}, ${emitExpr(e.to, cross)}, ${e.exclusive ? 'true' : 'false'}, ${step})`;
 }
 
 /**
@@ -227,14 +226,14 @@ function emitListExpr(
  * `(p) => body`. Parameter sind kontextuell getypt (Listen-Methoden-
  * Signatur), daher keine Param-Annotation.
  */
-function emitLambda1(e: Extract<IrExpr, { kind: 'lambda1' }>): string {
+function emitLambda1(e: Extract<IrExpr, { kind: 'lambda1' }>, cross: Cross): string {
     if (e.lets !== undefined && e.lets.length > 0) {
         const decls = e.lets
-            .map((l) => `const ${l.name}: ${irTypeToTsCore(l.type)} = ${emitExpr(l.expr)};`)
+            .map((l) => `const ${l.name}: ${irTypeToTsCore(l.type)} = ${emitExpr(l.expr, cross)};`)
             .join(' ');
-        return `(${e.param}) => { ${decls} return ${emitExpr(e.body)}; }`;
+        return `(${e.param}) => { ${decls} return ${emitExpr(e.body, cross)}; }`;
     }
-    return `(${e.param}) => ${emitExpr(e.body)}`;
+    return `(${e.param}) => ${emitExpr(e.body, cross)}`;
 }
 
 /**
@@ -242,19 +241,19 @@ function emitLambda1(e: Extract<IrExpr, { kind: 'lambda1' }>): string {
  * direkt; numerische Slots über `.asText()` (bit-genaue Zahl→Text-Konversion
  * via Runtime, identisch zum Java-Emitter).
  */
-function emitStrInterp(e: Extract<IrExpr, { kind: 'strInterp' }>): string {
+function emitStrInterp(e: Extract<IrExpr, { kind: 'strInterp' }>, cross: Cross): string {
     const terms: string[] = [];
     for (let k = 0; k < e.slots.length; k++) {
         terms.push(tsString(e.parts[k]));
         const isText = e.slotIsText?.[k] ?? false;
-        terms.push(isText ? emitExpr(e.slots[k]) : `${emitExpr(e.slots[k])}.asText()`);
+        terms.push(isText ? emitExpr(e.slots[k], cross) : `${emitExpr(e.slots[k], cross)}.asText()`);
     }
     terms.push(tsString(e.parts[e.parts.length - 1]));
     return terms.join(' + ');
 }
 
 /** Ausdruck → TS-Ausdrucks-String (seiteneffektfrei, P2). Dispatch-Switch. */
-function emitExpr(e: IrExpr): string {
+function emitExpr(e: IrExpr, cross: Cross): string {
     switch (e.kind) {
         case 'numLit':
             return `FinDslNumber.${e.factory}(${tsString(e.arg)})`;
@@ -268,29 +267,29 @@ function emitExpr(e: IrExpr): string {
         case 'field':
             // Record = TS-Klasse mit `readonly`-Feldern → Property-Zugriff
             // (kein Java-Accessor `()`); Sicht-Subtyp IS-A FinDslNumber.
-            return `${emitExpr(e.receiver)}.${e.name}`;
+            return `${emitExpr(e.receiver, cross)}.${e.name}`;
         case 'call':
             // Lokaler Top-Level-Funktionsaufruf (hoisted im Modul).
-            return `${tsFnName(e.name)}(${e.args.map(emitExpr).join(', ')})`;
+            return `${tsFnName(e.name)}(${e.args.map((a) => emitExpr(a, cross)).join(', ')})`;
         case 'box':
             // Sicht-Adapter an Schreibgrenze (rein nominal, Wert/Tag bleiben).
-            return `${e.wrapper}.von(${emitExpr(e.expr)})`;
+            return `${e.wrapper}.von(${emitExpr(e.expr, cross)})`;
         case 'unbox':
             // IS-A — Unboxing entfällt; defensiver Durchgriff.
-            return emitExpr(e.expr);
+            return emitExpr(e.expr, cross);
         case 'ctor': {
             const qual = e.ownerClass !== undefined ? `${e.ownerClass}.` : '';
-            return `new ${qual}${e.typeName}(${e.args.map(emitExpr).join(', ')})`;
+            return `new ${qual}${e.typeName}(${e.args.map((a) => emitExpr(a, cross)).join(', ')})`;
         }
         case 'crossCall': {
-            const owner = crossClassByField.get(e.fieldName);
+            const owner = cross.get(e.fieldName);
             if (owner === undefined) {
                 throw new Error(
                     `Emit: Cross-Modul-Feld "${e.fieldName}" ohne Klasse `
                     + '(composedModules unvollständig).');
             }
             return `${owner}.${tsFnName(e.methodName)}`
-                + `(${e.args.map(emitExpr).join(', ')})`;
+                + `(${e.args.map((a) => emitExpr(a, cross)).join(', ')})`;
         }
         case 'crossRef':
             return `${e.ownerClass}.${e.memberName}`;
@@ -306,60 +305,60 @@ function emitExpr(e: IrExpr): string {
                 ? (e.left.ownerClass !== undefined
                     ? `${e.left.ownerClass}.${e.left.enumName}` : e.left.enumName)
                 : undefined;
-            const lRaw = emitExpr(e.left);
+            const lRaw = emitExpr(e.left, cross);
             const l = et !== undefined ? `(${lRaw} as ${et})` : lRaw;
-            const r = emitExpr(e.right);
+            const r = emitExpr(e.right, cross);
             return e.op === '==' ? `${l} === ${r}` : `${l} !== ${r}`;
         }
-        case 'arith':           return emitArith(e);
-        case 'div':             return `${emitExpr(e.left)}.div(${emitExpr(e.right)})`;
-        case 'cmp':             return emitCmp(e);
-        case 'and':             return `(${emitExpr(e.left)}) && (${emitExpr(e.right)})`;
-        case 'or':              return `(${emitExpr(e.left)}) || (${emitExpr(e.right)})`;
+        case 'arith':           return emitArith(e, cross);
+        case 'div':             return `${emitExpr(e.left, cross)}.div(${emitExpr(e.right, cross)})`;
+        case 'cmp':             return emitCmp(e, cross);
+        case 'and':             return `(${emitExpr(e.left, cross)}) && (${emitExpr(e.right, cross)})`;
+        case 'or':              return `(${emitExpr(e.left, cross)}) || (${emitExpr(e.right, cross)})`;
         case 'nullLit':         return 'null';
         case 'nullCheck':
-            return `${emitExpr(e.value)} ${e.negated ? '!==' : '==='} null`;
+            return `${emitExpr(e.value, cross)} ${e.negated ? '!==' : '==='} null`;
         case 'bool':            return e.value ? 'true' : 'false';
-        case 'neg':             return `${emitExpr(e.value)}.neg()`;
-        case 'not':             return `!(${emitExpr(e.value)})`;
-        case 'round':           return `${emitExpr(e.receiver)}.${e.mode}(${tsString(e.target)})`;
-        case 'scalarLimit':     return `${emitExpr(e.receiver)}.${e.op}(${emitExpr(e.arg)})`;
-        case 'scalarRoundTo':   return `${emitExpr(e.receiver)}.${e.op}(${emitExpr(e.arg)})`;
-        case 'cast':            return `${emitExpr(e.value)}.cast(${tsString(e.target)})`;
+        case 'neg':             return `${emitExpr(e.value, cross)}.neg()`;
+        case 'not':             return `!(${emitExpr(e.value, cross)})`;
+        case 'round':           return `${emitExpr(e.receiver, cross)}.${e.mode}(${tsString(e.target)})`;
+        case 'scalarLimit':     return `${emitExpr(e.receiver, cross)}.${e.op}(${emitExpr(e.arg, cross)})`;
+        case 'scalarRoundTo':   return `${emitExpr(e.receiver, cross)}.${e.op}(${emitExpr(e.arg, cross)})`;
+        case 'cast':            return `${emitExpr(e.value, cross)}.cast(${tsString(e.target)})`;
         case 'moneyAnno':
-            return `${emitExpr(e.expr)}.withMoneyAnnotation(`
+            return `${emitExpr(e.expr, cross)}.withMoneyAnnotation(`
                 + `${tsString(e.target)}, ${tsString(e.what)})`;
         // --- Listen (§ 11.2) ---
-        case 'listLit':         return emitListExpr(e);
-        case 'listRange':       return emitListExpr(e);
-        case 'listEnumRange':   return emitListExpr(e);
-        case 'listMethod':      return `${emitExpr(e.receiver)}.${e.method}()`;
-        case 'listMap':         return `${emitExpr(e.receiver)}.zuordnen(${emitExpr(e.fn)})`;
-        case 'listFilter':      return `${emitExpr(e.receiver)}.filtern(${emitExpr(e.fn)})`;
-        case 'listCountWhere':  return `${emitExpr(e.receiver)}.zaehleMit(${emitExpr(e.fn)})`;
-        case 'listContains':    return `${emitExpr(e.receiver)}.enthaelt(${emitExpr(e.value)})`;
-        case 'listAt':          return `${emitExpr(e.receiver)}.bei(${emitExpr(e.index)})`;
-        case 'listFold':        return `${emitExpr(e.receiver)}.zusammenfassen(${emitExpr(e.start)}, ${emitExpr(e.fn)})`;
+        case 'listLit':         return emitListExpr(e, cross);
+        case 'listRange':       return emitListExpr(e, cross);
+        case 'listEnumRange':   return emitListExpr(e, cross);
+        case 'listMethod':      return `${emitExpr(e.receiver, cross)}.${e.method}()`;
+        case 'listMap':         return `${emitExpr(e.receiver, cross)}.zuordnen(${emitExpr(e.fn, cross)})`;
+        case 'listFilter':      return `${emitExpr(e.receiver, cross)}.filtern(${emitExpr(e.fn, cross)})`;
+        case 'listCountWhere':  return `${emitExpr(e.receiver, cross)}.zaehleMit(${emitExpr(e.fn, cross)})`;
+        case 'listContains':    return `${emitExpr(e.receiver, cross)}.enthaelt(${emitExpr(e.value, cross)})`;
+        case 'listAt':          return `${emitExpr(e.receiver, cross)}.bei(${emitExpr(e.index, cross)})`;
+        case 'listFold':        return `${emitExpr(e.receiver, cross)}.zusammenfassen(${emitExpr(e.start, cross)}, ${emitExpr(e.fn, cross)})`;
         // --- Lambdas (native Pfeilfunktionen) ---
-        case 'lambda1':         return emitLambda1(e);
-        case 'lambda2':         return `(${e.param1}, ${e.param2}) => ${emitExpr(e.body)}`;
+        case 'lambda1':         return emitLambda1(e, cross);
+        case 'lambda2':         return `(${e.param1}, ${e.param2}) => ${emitExpr(e.body, cross)}`;
         case 'lambdaCall':
             // First-class Lambda-Wert: direkter Aufruf (kein Java `.apply`).
-            return `${emitExpr(e.fn)}(${e.args.map(emitExpr).join(', ')})`;
+            return `${emitExpr(e.fn, cross)}(${e.args.map((a) => emitExpr(a, cross)).join(', ')})`;
         // --- String-Interpolation ---
-        case 'strInterp':       return emitStrInterp(e);
+        case 'strInterp':       return emitStrInterp(e, cross);
         // --- Nullable (#117): Java-Pendant `emitNullable`. `nichts` → null;
         //     P2 (seiteneffektfrei) → Doppel-Evaluation in Elvis/Safe-Access
         //     unkritisch. Force-Unwrap wirft `FinDslRuntimeError` (kein
         //     Abbruch), spiegelt `interpreter.ts` (InterpretError auf null). ---
         case 'elvis': {
-            const l = emitExpr(e.left);
-            return `(${l} !== null) ? ${l} : ${emitExpr(e.right)}`;
+            const l = emitExpr(e.left, cross);
+            return `(${l} !== null) ? ${l} : ${emitExpr(e.right, cross)}`;
         }
         case 'forceUnwrap':
-            return `nichtNull(${emitExpr(e.value)}, ${tsString(e.hint)})`;
+            return `nichtNull(${emitExpr(e.value, cross)}, ${tsString(e.hint)})`;
         case 'safeFieldAccess': {
-            const r = emitExpr(e.receiver);
+            const r = emitExpr(e.receiver, cross);
             return `(${r} !== null) ? ${r}.${e.name} : null`;
         }
         case 'abort':
@@ -381,45 +380,45 @@ const RETURN_SINK: Sink = { kind: 'return' };
  * `let <name>: <T>;` + Statement-gelowertem `wähle` als Zuweisungs-Sink
  * (TS-Definite-Assignment via erschöpfendem if/else + throw).
  */
-function emitLet(l: IrLet, indent: string): string {
+function emitLet(l: IrLet, indent: string, cross: Cross): string {
     const e = l.expr;
     const tt = irTypeToTsCore(l.type);
     if (e.kind === 'waehle') {
         return `${indent}let ${l.name}: ${tt};\n`
-            + emitResult(e, indent, { kind: 'assign', name: l.name });
+            + emitResult(e, indent, cross, { kind: 'assign', name: l.name });
     }
-    return `${indent}const ${l.name}: ${tt} = ${emitExpr(e)};`;
+    return `${indent}const ${l.name}: ${tt} = ${emitExpr(e, cross)};`;
 }
 
 function emitResult(
-    r: IrExpr | IrBlockResult, indent: string, sink: Sink = RETURN_SINK,
+    r: IrExpr | IrBlockResult, indent: string, cross: Cross, sink: Sink = RETURN_SINK,
 ): string {
     if (r.kind === 'blockResult') {
-        const lines = r.lets.map((l) => emitLet(l, indent));
-        lines.push(emitResult(r.result, indent, sink));
+        const lines = r.lets.map((l) => emitLet(l, indent, cross));
+        lines.push(emitResult(r.result, indent, cross, sink));
         return lines.join('\n');
     }
     if (r.kind === 'waehle') {
-        return emitWaehle(r, indent, sink);
+        return emitWaehle(r, indent, cross, sink);
     }
     if (r.kind === 'abort') {
-        return `${indent}throw new FinDslAbort(${emitExpr(r.reason)});`;
+        return `${indent}throw new FinDslAbort(${emitExpr(r.reason, cross)});`;
     }
     return sink.kind === 'assign'
-        ? `${indent}${sink.name} = ${emitExpr(r)};`
-        : `${indent}return ${emitExpr(r)};`;
+        ? `${indent}${sink.name} = ${emitExpr(r, cross)};`
+        : `${indent}return ${emitExpr(r, cross)};`;
 }
 
-function emitArmCondition(arm: IrArm, subject: IrExpr | undefined): string {
+function emitArmCondition(arm: IrArm, subject: IrExpr | undefined, cross: Cross): string {
     if (arm.patterns.length === 0) {
         throw new Error('falls-Arm ohne Pattern (Teil-Parse, Codegen).');
     }
     const terms = arm.patterns.map((p) => {
-        if (subject === undefined) return emitExpr(p);
+        if (subject === undefined) return emitExpr(p, cross);
         if (p.kind !== 'enumVal') {
             throw new Error('Subjekt-wähle erwartet Enum-Pattern (Codegen).');
         }
-        return `${emitExpr(subject)} === ${emitExpr(p)}`;
+        return `${emitExpr(subject, cross)} === ${emitExpr(p, cross)}`;
     });
     return terms.length === 1 ? terms[0] : terms.map((t) => `(${t})`).join(' || ');
 }
@@ -427,6 +426,7 @@ function emitArmCondition(arm: IrArm, subject: IrExpr | undefined): string {
 function emitWaehle(
     w: Extract<IrExpr, { kind: 'waehle' }>,
     indent: string,
+    cross: Cross,
     sink: Sink = RETURN_SINK,
 ): string {
     const noMatch = `${indent}throw new FinDslRuntimeError(`
@@ -440,11 +440,11 @@ function emitWaehle(
         for (const arm of w.arms) {
             if (arm.isSonst) {
                 hasSonst = true;
-                lines.push(emitResult(arm.result, indent, sink));
+                lines.push(emitResult(arm.result, indent, cross, sink));
                 break;
             }
-            lines.push(`${indent}if (${emitArmCondition(arm, w.subject)}) {`);
-            lines.push(emitResult(arm.result, indent + IND, sink));
+            lines.push(`${indent}if (${emitArmCondition(arm, w.subject, cross)}) {`);
+            lines.push(emitResult(arm.result, indent + IND, cross, sink));
             lines.push(`${indent}}`);
         }
         if (!hasSonst) lines.push(noMatch);
@@ -454,7 +454,7 @@ function emitWaehle(
     // Assign-Sink (`var x = wähle{…}`): echte if / else if / else-Kette —
     // jeder Pfad weist genau einmal zu oder wirft (TS-Definite-Assignment).
     if (w.arms.length === 1 && w.arms[0].isSonst) {
-        return emitResult(w.arms[0].result, indent, sink);
+        return emitResult(w.arms[0].result, indent, cross, sink);
     }
     const lines: string[] = [];
     let hasSonst = false;
@@ -463,12 +463,12 @@ function emitWaehle(
         if (arm.isSonst) {
             hasSonst = true;
             lines.push(`${indent}} else {`);
-            lines.push(emitResult(arm.result, indent + IND, sink));
+            lines.push(emitResult(arm.result, indent + IND, cross, sink));
             break;
         }
         const head = i === 0 ? `${indent}if (` : `${indent}} else if (`;
-        lines.push(`${head}${emitArmCondition(arm, w.subject)}) {`);
-        lines.push(emitResult(arm.result, indent + IND, sink));
+        lines.push(`${head}${emitArmCondition(arm, w.subject, cross)}) {`);
+        lines.push(emitResult(arm.result, indent + IND, cross, sink));
     }
     lines.push(hasSonst
         ? `${indent}}`
@@ -476,13 +476,13 @@ function emitWaehle(
     return lines.join('\n');
 }
 
-function emitFnBody(decl: Extract<IrDecl, { kind: 'fn' }>): string {
+function emitFnBody(decl: Extract<IrDecl, { kind: 'fn' }>, cross: Cross): string {
     const b = decl.body;
     if (b.kind === 'expr') {
-        return emitResult(b.expr, IND);
+        return emitResult(b.expr, IND, cross);
     }
-    const out = b.lets.map((l) => emitLet(l, IND));
-    out.push(emitResult(b.result, IND));
+    const out = b.lets.map((l) => emitLet(l, IND, cross));
+    out.push(emitResult(b.result, IND, cross));
     return out.join('\n');
 }
 
@@ -509,11 +509,11 @@ function emitRecordDecl(d: Extract<IrDecl, { kind: 'record' }>): string {
 }
 
 /** `konst` → `export const`; numerisch → Wrapper-getypt, Kern-Ausdruck geboxt. */
-function emitKonstDecl(d: Extract<IrDecl, { kind: 'konst' }>): string {
+function emitKonstDecl(d: Extract<IrDecl, { kind: 'konst' }>, cross: Cross): string {
     const doc = tsdoc(d.info, '');
     const head = doc.length ? doc.join('\n') + '\n' : '';
     const w = d.type.kind === 'number' ? d.type.wrapper : undefined;
-    const init = w !== undefined ? `${w}.von(${emitExpr(d.expr)})` : emitExpr(d.expr);
+    const init = w !== undefined ? `${w}.von(${emitExpr(d.expr, cross)})` : emitExpr(d.expr, cross);
     return head + `export const ${d.name}: ${irTypeToTsApi(d.type)} = ${init};`;
 }
 
@@ -522,19 +522,19 @@ function emitKonstDecl(d: Extract<IrDecl, { kind: 'konst' }>): string {
  * Signatur (Rückgabe wird vom Lowering an der Ergebnisposition geboxt).
  * Intern (`_`): nicht exportiert, Kern-Signatur (`FinDslNumber`).
  */
-function emitFnDecl(d: Extract<IrDecl, { kind: 'fn' }>): string {
+function emitFnDecl(d: Extract<IrDecl, { kind: 'fn' }>, cross: Cross): string {
     const doc = tsdoc(d.info, '');
     const head = doc.length ? doc.join('\n') + '\n' : '';
     if (d.internal) {
         const params = d.params
             .map((p) => `${p.name}: ${irTypeToTsCore(p.type)}`).join(', ');
         return head + `function ${tsFnName(d.name)}(${params}): `
-            + `${irTypeToTsCore(d.returnType)} {\n` + emitFnBody(d) + '\n}';
+            + `${irTypeToTsCore(d.returnType)} {\n` + emitFnBody(d, cross) + '\n}';
     }
     const params = d.params
         .map((p) => `${p.name}: ${irTypeToTsApi(p.type)}`).join(', ');
     return head + `export function ${tsFnName(d.name)}(${params}): `
-        + `${irTypeToTsApi(d.returnType)} {\n` + emitFnBody(d) + '\n}';
+        + `${irTypeToTsApi(d.returnType)} {\n` + emitFnBody(d, cross) + '\n}';
 }
 
 /**
@@ -643,13 +643,13 @@ export interface TsModuleFile {
  * Konstanten-Initialisierern); Funktionen sind hoisted und stehen zuletzt.
  */
 export function emitTsModule(m: IrModule): TsModuleFile {
-    crossClassByField = buildFieldToClass(m.composedModules);
+    const cross = buildFieldToClass(m.composedModules);
 
     const order = { enum: 0, record: 1, konst: 2, fn: 3 } as const;
     const members = [...m.decls]
         .map((d, i) => ({ d, i }))
         .sort((a, b) => order[a.d.kind] - order[b.d.kind] || a.i - b.i)
-        .map(({ d }) => emitDecl(d))
+        .map(({ d }) => emitDecl(d, cross))
         .join('\n\n');
 
     const header = importHeader(members, m);
@@ -665,12 +665,12 @@ export function emitTsModule(m: IrModule): TsModuleFile {
     return { fileName: `${m.className}.ts`, code };
 }
 
-function emitDecl(d: IrDecl): string {
+function emitDecl(d: IrDecl, cross: Cross): string {
     switch (d.kind) {
         case 'enum':   return emitEnumDecl(d);
         case 'record': return emitRecordDecl(d);
-        case 'konst':  return emitKonstDecl(d);
-        case 'fn':     return emitFnDecl(d);
+        case 'konst':  return emitKonstDecl(d, cross);
+        case 'fn':     return emitFnDecl(d, cross);
     }
     // Exhaustiveness-Guard (wie emitExpr): eine künftige IrDecl-Variante
     // wird mit Codegen-Diagnose abgewiesen statt still `undefined` zu
@@ -689,7 +689,7 @@ function flattenAnd(e: IrExpr): IrExpr[] {
 }
 
 /** Ein `testfall` → ein `it(...)` (Spiegel runPruefeDecl). */
-function emitTestCase(c: IrTestCase, indent: string): string {
+function emitTestCase(c: IrTestCase, indent: string, cross: Cross): string {
     const I1 = indent + IND;            // it-Rumpf
     let bodyLines: string[];
     if (c.erwartetAbbruch) {
@@ -698,16 +698,16 @@ function emitTestCase(c: IrTestCase, indent: string): string {
         const I2 = I1 + IND;
         bodyLines = [
             `${I1}expect(() => {`,
-            ...c.lets.map((l) => emitLet(l, I2)),
-            `${I2}${emitExpr(c.assertion)};`,
+            ...c.lets.map((l) => emitLet(l, I2, cross)),
+            `${I2}${emitExpr(c.assertion, cross)};`,
             `${I1}}).toThrow(FinDslAbort);`,
         ];
     } else {
         // Top-Level-`und` → je Konjunkt ein `expect(...).toBe(true)`.
         bodyLines = [
-            ...c.lets.map((l) => emitLet(l, I1)),
+            ...c.lets.map((l) => emitLet(l, I1, cross)),
             ...flattenAnd(c.assertion).map(
-                (t) => `${I1}expect(${emitExpr(t)}).toBe(true);`),
+                (t) => `${I1}expect(${emitExpr(t, cross)}).toBe(true);`),
         ];
     }
     return [
@@ -723,10 +723,10 @@ function emitTestCase(c: IrTestCase, indent: string): string {
  * per Namespace-Import (`import * as <SUT>`) eingebunden.
  */
 export function emitTsTestModule(m: IrTestModule): TsModuleFile {
-    crossClassByField = buildFieldToClass(m.composedModules);
+    const cross = buildFieldToClass(m.composedModules);
 
     const suites = m.suites.map((s) => {
-        const cases = s.cases.map((c) => emitTestCase(c, IND)).join('\n\n');
+        const cases = s.cases.map((c) => emitTestCase(c, IND, cross)).join('\n\n');
         return `describe(${tsString(s.suiteName)}, () => {\n${cases}\n});`;
     });
     const body = suites.join('\n\n');

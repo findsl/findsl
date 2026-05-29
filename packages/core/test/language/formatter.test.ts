@@ -582,6 +582,40 @@ describe('Formatter: Operator-Ketten — Umbruch/Erhalt (≤120)', () => {
         expect(out).toContain('= AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n    + BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB');
         expect(await format(out)).toBe(out);          // idempotent
     });
+
+    it('einzeiliger Methoden-/Postfix-Rumpf > 120 → bricht nach `=` um', async () => {
+        // Nutzer-Fall SteuerAnhaenger: nicht intern umbrechbarer Postfix-
+        // Ausdruck (`(…).höchstens(…)`); inline > 120 → eigene, um 4
+        // eingerückte Zeile. (Quelle EINZEILIG geschrieben.)
+        const out = await format(
+            'fn SteuerAnhaenger(gesamtgewichtKg: Ganzzahl): EuroCent ='
+            + ' (ANH_JE_200KG * Einheiten(gesamtgewichtKg, 200)).höchstens(ANH_MAX)\n',
+        );
+        expect(out).toContain(
+            'fn SteuerAnhaenger(gesamtgewichtKg: Ganzzahl): EuroCent =\n'
+            + '    (ANH_JE_200KG * Einheiten(gesamtgewichtKg, 200)).höchstens(ANH_MAX)',
+        );
+        out.split('\n').forEach((l) => expect(l.length).toBeLessThanOrEqual(120));
+        expect(await format(out)).toBe(out);          // idempotent
+    });
+
+    it('kurzer Methoden-/Postfix-Rumpf ≤ 120 → bleibt einzeilig', async () => {
+        const out = await format('fn K(x: EuroCent): EuroCent = x.höchstens(MAX)\n');
+        expect(out).toContain('fn K(x: EuroCent): EuroCent = x.höchstens(MAX)');
+        expect(await format(out)).toBe(out);          // idempotent
+    });
+
+    it('mehrzeiliger Konstruktor-Rumpf bleibt inline nach `=` (bricht intern)', async () => {
+        // Auch wenn flach > 120: der Aufruf bricht je Argument selbst um,
+        // die erste Zeile (`= Ctor(`) bleibt kurz → KEIN Umbruch nach `=`.
+        const out = await format(
+            'fn B(): GewerbesteuerErgebnis = GewerbesteuerErgebnis(\n'
+            + 'einMittellangerFeldname = einMittellangerWert,\n'
+            + 'einZweiterMittellangerFeldname = einZweiterMittellangerWert,\n)\n',
+        );
+        expect(out).toContain('GewerbesteuerErgebnis = GewerbesteuerErgebnis(\n');
+        expect(await format(out)).toBe(out);          // idempotent
+    });
 });
 
 describe('Formatter: wähle-Arm-RHS Operator-Kette > 120 bricht (idempotent)', () => {

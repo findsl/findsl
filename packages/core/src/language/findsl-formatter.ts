@@ -42,6 +42,7 @@ import {
     isDeclPrefix,
     isFallArm,
     isField,
+    isFunktionBody,
     isFunktionDecl,
     isImportDecl,
     isImportItem,
@@ -57,6 +58,8 @@ import {
     isUnaryOp,
     isWaehleExpr,
     isWennExpr,
+    type FunktionBody,
+    type FunktionDecl,
     type Type as TypeAnnotation,
     type TypeAtom,
 } from './generated/ast.js';
@@ -254,6 +257,33 @@ function typeAtomStr(atom: TypeAtom): string {
 }
 
 /**
+ * Kanonische Prefix-Breite einer `fn`-Deklaration bis EINSCHLIESSLICH
+ * ` = ` (Spalte, an der der Rumpf-Ausdruck beginnt): `fn N(params): T = `.
+ * Strukturell aus Namen+Typen berechenbar (trägt nie variable
+ * Ausrichtungs-Polsterung) ⇒ über Format-Läufe stabil ⇒ idempotente
+ * Umbruch-Entscheidung.
+ */
+function funktionDeclPrefixWidth(fd: FunktionDecl): number {
+    const params = fd.params
+        .map((p) => `${p.name}: ${typeStr(p.type)}`
+            + (p.default ? ` = ${flat(p.default.$cstNode?.text)}` : ''))
+        .join(', ');
+    return 3 + (fd.name?.length ?? 1) + 1 + params.length + 1
+        + 2 + typeStr(fd.returnType).length + 3;
+}
+
+/**
+ * Breite des Funktions-Rumpfs, WENN er einzeilig hinter `= ` stünde:
+ * Prefix (`fn N(params): T = `) + flach gerechnete Ausdrucksbreite.
+ * Maß für die 120-Zeichen-Entscheidung bei intern nicht umbrechbaren
+ * Rumpf-Ausdrücken (Postfix-/Methodenketten, Calls …).
+ */
+function funktionBodyInlineWidth(body: FunktionBody): number {
+    return funktionDeclPrefixWidth(body.$container)
+        + flat(body.expr?.$cstNode?.text).length;
+}
+
+/**
  * Kanonische Prefix-Breite (Spalte, an der der Rumpf-Ausdruck beginnt)
  * NUR wenn die Operator-Kette der direkte Rumpf einer `fn`/`konst`/
  * `var`-Deklaration ist — diese Prefixe (`fn N(p: T): R = `,
@@ -277,12 +307,7 @@ function declPrefixWidth(chainRoot: AstNode): number | undefined {
     if (c.$type === 'FunktionBody') {
         const fd = (c as { $container?: AstNode }).$container;
         if (!fd || !isFunktionDecl(fd)) return undefined;
-        const params = fd.params
-            .map((p) => `${p.name}: ${typeStr(p.type)}`
-                + (p.default ? ` = ${flat(p.default.$cstNode?.text)}` : ''))
-            .join(', ');
-        return 3 + (fd.name?.length ?? 1) + 1 + params.length + 1
-            + 2 + typeStr(fd.returnType).length + 3;
+        return funktionDeclPrefixWidth(fd);
     }
     // `wähle`-Arm-RHS: Startspalte ist DETERMINISTISCH aus dem Layout
     // (nicht aus der — im selben Lauf verschobenen — Quell-Spalte!):
@@ -800,7 +825,44 @@ export class FindslFormatter extends AbstractFormatter {
                     .append(Formatting.oneSpace());
             }
             f.keyword(':').prepend(Formatting.noSpace()).append(Formatting.oneSpace());
-            f.keyword('=').surround(Formatting.oneSpace());     // Expression-Body
+            // Das `=` des Expression-Bodys gehört zum `FunktionBody`-
+            // Kindknoten (eigener AST-Knoten, von Langium aus dieser
+            // Decl-Region weggeschnitten) → dort formatiert (isFunktionBody).
+            return;
+        }
+        if (isFunktionBody(node) && node.expr) {
+            // `: T = expr`. Das `=` umschließt regulär EIN Space. Ein
+            // Rumpf-Ausdruck, der EINZEILIG die 120-Zeichen-Grenze
+            // überschritte UND nicht selbst intern umbricht (also KEINE
+            // `wähle`- und KEINE Operator-Kette), wird nach `=` auf eine
+            // eigene, um eine Ebene eingerückte Zeile gesetzt — so bleibt
+            // die Zeile ≤ 120. `wähle` (inline `= wähle {`) und BinaryOp-
+            // Ketten (erstes Operand bleibt nach `=`, Hang an den
+            // Operatoren via chainExceedsMax) brechen selbst → hier
+            // ausgenommen. Entscheidung rein strukturell (Prefix-Breite +
+            // flache Ausdrucksbreite) ⇒ deterministisch ⇒ idempotent.
+            const f = this.getNodeFormatter(node);
+            const eq = f.keyword('=');
+            eq.prepend(Formatting.oneSpace());
+            // Nur EINZEILIGE Rumpf-Ausdrücke umbrechen: ein vom Formatter
+            // selbst mehrzeilig gesetzter Ausdruck (mehrzeiliger Konstruktor-
+            // Aufruf mit benannten Argumenten, Block …) beginnt mit einer
+            // kurzen ersten Zeile (`= Ctor(`) und darf NICHT nach `=`
+            // verschoben werden. `wähle` (inline `= wähle {`) und BinaryOp-
+            // Ketten (Operator-Hang) brechen ohnehin selbst → ausgenommen.
+            const r = node.expr.$cstNode?.range;
+            const exprEinzeilig = !!r && r.start.line === r.end.line;
+            const breakBody = exprEinzeilig
+                && !isWaehleExpr(node.expr)
+                && !isBinaryOp(node.expr)
+                && funktionBodyInlineWidth(node) > MAX_LINE;
+            // Überlauf → erzwungener Umbruch (deterministisch). Sonst
+            // `fit`: bewahrt einen vom Autor gesetzten Umbruch bzw. das
+            // Inline-Layout idempotent (wie bei Operator-Ketten) — KEIN
+            // Kollabieren mehrzeiliger BinaryOp-/wähle-Rümpfe.
+            eq.append(breakBody
+                ? Formatting.indent()
+                : Formatting.fit(Formatting.oneSpace(), Formatting.indent()));
             return;
         }
         if (isDatensatzDecl(node)) {

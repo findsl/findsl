@@ -23,7 +23,8 @@ import { Decimal } from 'decimal.js';
 import type { AstNode } from 'langium';
 import {
     type Program, type TopDecl, type Expr, type Type,
-    type FunktionDecl, type DatensatzDecl, type WaehleExpr,
+    type FunktionDecl, type DatensatzDecl, type WaehleExpr, type ChainOp,
+    type Call,
     isKonstDecl, isFunktionDecl, isDatensatzDecl, isAufzaehlungDecl,
     isNumberLiteral, isStringLiteral, isCallChain, isParenChain,
     isCall, isFieldAccess, isBinaryOp, isWaehleExpr,
@@ -580,7 +581,7 @@ function isNullableExpr(e: IrExpr, reg: Registry): boolean {
 
 function lowerChainOps(
     base: IrExpr,
-    chain: ReadonlyArray<object>,
+    chain: ReadonlyArray<ChainOp>,
     reg: Registry,
 ): IrExpr {
     let cur = base;
@@ -590,8 +591,7 @@ function lowerChainOps(
         // (#44 L9-Rest) `[i]` (Index-Syntax) → semantisch identisch zu
         // `.bei(i)`. Lower auf denselben Knoten.
         if (isIndex(op)) {
-            const ix = (op as { index: Expr }).index;
-            cur = { kind: 'listAt', receiver: cur, index: lowerExpr(ix, reg) };
+            cur = { kind: 'listAt', receiver: cur, index: lowerExpr(op.index, reg) };
             i += 1;
             continue;
         }
@@ -622,13 +622,13 @@ function lowerChainOps(
         // und gehen denselben Method-Call-Pfad. `chainStep` zählt, wie weit
         // wir im `chain`-Array vorrücken (2 bei `(…)`-Call, 1 bei Trailing-
         // Lambda — das Lambda lebt AM FieldAccess, nicht als eigenes Glied).
-        const trailingLam = (op as { trailingLambda?: Expr }).trailingLambda;
+        const trailingLam = op.trailingLambda;
         const hasTrailingLambda = trailingLam !== undefined;
         const isMethodCall = (next !== undefined && isCall(next)) || hasTrailingLambda;
         if (isMethodCall) {
             const call = hasTrailingLambda
                 ? { args: [{ value: trailingLam }] as ReadonlyArray<{ name?: string; value: Expr }> }
-                : (next as { args: ReadonlyArray<{ name?: string; value: Expr }> });
+                : (next as Call);
             const chainStep = hasTrailingLambda ? 1 : 2;
             if (fname === 'abrunden' || fname === 'aufrunden') {
                 // Empfänger-Typ-getriebene Zielwahl (SPEC § 11.1):
@@ -824,7 +824,7 @@ function resolveBareName(name: string, reg: Registry): IrExpr {
 }
 
 function lowerCallChain(
-    cc: { name?: string; chain: ReadonlyArray<object> },
+    cc: { name?: string; chain: ReadonlyArray<ChainOp> },
     reg: Registry,
 ): IrExpr {
     const name = cc.name;

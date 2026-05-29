@@ -660,8 +660,8 @@ function emitDecl(d: IrDecl, cross: Cross): string {
     // Exhaustiveness-Guard (wie emitExpr): eine künftige IrDecl-Variante
     // wird mit Codegen-Diagnose abgewiesen statt still `undefined` zu
     // emittieren (das `tsc`-Gate fängt das sonst erst spät).
-    const _exhaustive: never = d;
-    throw new Error(`Emit: unbekannte IrDecl-Variante "${(_exhaustive as { kind: string }).kind}".`);
+    d satisfies never;
+    throw new Error(`Emit: unbekannte IrDecl-Variante "${(d as { kind: string }).kind}".`);
 }
 
 // --- `prüfe`-Blöcke → Vitest --------------------------------------------

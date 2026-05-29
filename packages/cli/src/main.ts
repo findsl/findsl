@@ -853,7 +853,8 @@ Beispiele:
             // explizite Bindings für die Werte).
             const worklist = [...byPath.keys()];
             while (worklist.length > 0) {
-                const currentPath = worklist.shift()!;
+                const currentPath = worklist.shift();
+                if (currentPath === undefined) break;
                 const currentMod = modules.get(currentPath);
                 if (currentMod === undefined) continue;
                 for (const b of collectImportBindings(currentMod.program)) {
@@ -1047,10 +1048,14 @@ Beispiele:
         process.exit(missing.length > 0 ? 1 : 0);
     });
 
-// Top-Level-Einstieg: Commander parst und führt die Action aus. Bewusst
-// nicht awaitbar (Modul-Top-Level); Fehler behandeln die Actions selbst
-// via process.exit.
-void program.parseAsync(process.argv);
+// Top-Level-Einstieg: Commander parst und führt die Action aus. Die Actions
+// behandeln erwartete Fehler selbst via process.exit; ein unerwarteter Reject
+// (sonst unformatierte UnhandledRejection) wird hier abgefangen → Meldung +
+// Exit-Code 1.
+program.parseAsync(process.argv).catch((err: unknown) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+});
 
 function severityName(sev: number | undefined): string {
     switch (sev) {

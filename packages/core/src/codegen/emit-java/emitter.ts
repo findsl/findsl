@@ -67,9 +67,33 @@ function irTypeToJavaApi(t: IrType): string {
     }
 }
 
+/**
+ * String → Java-String-Literal. Spiegelt das TS-`JSON.stringify`-Escaping
+ * (emit-ts): neben `\`/`"`/`\n`/`\r` auch `\t`/`\b`/`\f`, restliche ASCII-
+ * Steuerzeichen (U+0000–U+001F) sowie die in JS-Quelltext zeilenbrechenden
+ * U+2028/U+2029 als `\uXXXX` — sonst entstünde invalider/sinnverändernder
+ * Java-Quelltext. Astrale Codepoints bleiben roh (Java-Quelle ist UTF-8).
+ */
 function javaString(s: string): string {
-    return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-        .replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"';
+    let out = '"';
+    for (const ch of s) {
+        switch (ch) {
+            case '\\': out += '\\\\'; break;
+            case '"':  out += '\\"'; break;
+            case '\n': out += '\\n'; break;
+            case '\r': out += '\\r'; break;
+            case '\t': out += '\\t'; break;
+            case '\b': out += '\\b'; break;
+            case '\f': out += '\\f'; break;
+            default: {
+                const code = ch.codePointAt(0)!;
+                out += (code < 0x20 || code === 0x2028 || code === 0x2029)
+                    ? '\\u' + code.toString(16).padStart(4, '0')
+                    : ch;
+            }
+        }
+    }
+    return out + '"';
 }
 
 /**

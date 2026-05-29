@@ -360,8 +360,8 @@ export function buildContext(program: Program): TypeContext {
 
 export type Reporter = (node: AstNode, message: string) => void;
 
-export { infer } from './findsl-inference.js';
 import { infer } from './findsl-inference.js';
+export { infer };
 
 // ---------------------------------------------------------------------------
 // Top-Level: ganzes Programm typchecken

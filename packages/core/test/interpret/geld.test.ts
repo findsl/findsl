@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseSource } from '../helpers/parse.js';
 import { interpretProgram } from '../../src/interpret/interpreter.js';
+import { InterpretError } from '../../src/interpret/values.js';
 import type { NumericValue, Value } from '../../src/interpret/values.js';
 
 /** Wertet `expr` als Modul-Konstante R aus und liefert den Laufzeitwert. */
@@ -40,6 +41,21 @@ async function boolOf(expr: string): Promise<boolean> {
     const v = await evalR(expr);
     if (v.kind !== 'bool') throw new Error(`erwartet bool, war ${v.kind}`);
     return v.value;
+}
+
+/** Wertet `expr` als `konst R: <annot>` aus — die Geld-Annotation greift. */
+async function evalAnnotated(annot: string, expr: string): Promise<NumericValue> {
+    const program = await parseSource(`modul m\nkonst R: ${annot} = ${expr}\n`);
+    const mod = interpretProgram(program);
+    const v = mod.env.lookup('R');
+    if (!v || v.kind !== 'numeric') throw new Error('R nicht numerisch');
+    return v;
+}
+
+/** Erwartet, dass die Geld-Annotation `annot` den Wert von `expr` ablehnt. */
+async function expectAnnotationRejects(annot: string, expr: string): Promise<void> {
+    const program = await parseSource(`modul m\nkonst R: ${annot} = ${expr}\n`);
+    expect(() => interpretProgram(program)).toThrow(InterpretError);
 }
 
 describe('Geld — Cast skaliert & taggt (Euro-kanonisch)', () => {
@@ -131,5 +147,36 @@ describe('Geld — Euro-Ganzzahligkeits-Invariante', () => {
             expect(v.value.isInteger()).toBe(true);
         }
         expect(v.tag).not.toBe('Euro');
+    });
+});
+
+describe('Geld — Annotation erzwingt Euro/Cent-Ganzzahligkeit, EuroCent ungeprüft', () => {
+    // → EuroCent 0,0425 (Sub-Cent-Präzision: weder ganzer Euro noch ganzer Cent).
+    const subCent = '(1 als Euro) * 4,25%';
+
+    it('`: EuroCent` akzeptiert fraktionalen Wert ungeprüft (präzise Mitte)', async () => {
+        const v = await evalAnnotated('EuroCent', subCent);
+        expect(v.tag).toBe('EuroCent');
+        expect(v.value.toString()).toBe('0.0425');
+    });
+
+    it('`: Euro` lehnt nicht-ganzzahligen Euro-Wert ab (explizite Rundung nötig)', async () => {
+        await expectAnnotationRejects('Euro', subCent);
+    });
+
+    it('`: Cent` lehnt Sub-Cent-Wert ab (×100 nicht ganzzahlig)', async () => {
+        await expectAnnotationRejects('Cent', subCent);
+    });
+
+    it('`: Euro` akzeptiert ganzzahligen Euro-Wert', async () => {
+        const v = await evalAnnotated('Euro', '(40 als Euro) + (2 als Euro)');
+        expect(v.tag).toBe('Euro');
+        expect(v.value.toString()).toBe('42');
+    });
+
+    it('`: Cent` akzeptiert ganz-Cent-Wert (50 ct)', async () => {
+        const v = await evalAnnotated('Cent', '(1 als Euro) * 50%');
+        expect(v.tag).toBe('Cent');
+        expect(v.value.toString()).toBe('0.5');
     });
 });

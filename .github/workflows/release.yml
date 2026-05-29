@@ -541,6 +541,12 @@ jobs:
           mkdir -p release
           find artifacts -type f \( -name '*.tar.gz' -o -name '*.tar.gz.asc' \
             -o -name '*.zip' -o -name '*.vsix' \) -exec cp {} release/ \;
+          # Agent Skills (skills/findsl-author …) als eigenes Release-Asset
+          # mitliefern — Endnutzer installieren es in ihren Agenten (Claude
+          # Code / OpenCode / Codex). Landet via *.zip-Glob in SHA256SUMS.
+          if [ -d skills ]; then
+            ( cd skills && zip -qr "../release/findsl-skills-v${VERSION}.zip" . )
+          fi
           cd release
           shasum -a 256 *.tar.gz *.zip *.vsix 2>/dev/null | sort > SHA256SUMS
           ls -la

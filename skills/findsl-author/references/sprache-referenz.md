@@ -1,9 +1,9 @@
 # FinDSL — Sprachreferenz & Fallstricke (für die Code-Generierung)
 
 Verdichtete, generierungsrelevante Referenz. Die **autoritative** und
-vollständige Quelle ist `SPEC.md` (Repo-Wurzel); bei jedem Detailzweifel
-dort nachschlagen. Diese Datei führt das, was beim Schreiben am häufigsten
-schiefgeht.
+vollständige Quelle ist die FinDSL-Sprachspezifikation (SPEC, in der
+FinDSL-Dokumentation); bei jedem Detailzweifel dort nachschlagen. Diese
+Datei führt das, was beim Schreiben am häufigsten schiefgeht.
 
 ## Inhalt
 1. Typsystem (Kurzüberblick)
@@ -184,5 +184,7 @@ fn _Einheiten(wert: Ganzzahl, teiler: Ganzzahl): Ganzzahl =
 (Funktionsnamen mit Großbuchstaben — auch nach führendem `_`: `_NichtNegativ`,
 nicht `_nichtNegativ`.)
 
-Bei „größeres von zwei Werten" / „Spanne" o. ä.: das passende Muster aus
-`examples/est/` bzw. `examples/kraftst/` übernehmen.
+Bei „größeres von zwei Werten" / „Spanne" o. ä.: dasselbe Muster bauen —
+`fn _Groesseres(a: EuroCent, b: EuroCent): EuroCent = a.mindestens(b)` (das
+Maximum) bzw. eine `wähle`-Staffel für Spannen. (Ausgearbeitete Vorbilder:
+FinDSL-Beispielmodule, `github.com/findsl/findsl` → `examples/`.)

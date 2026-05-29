@@ -70,8 +70,10 @@ Höchstbetrag erreicht, jede ausgeschlossene Konstellation per
 
 ## Schritt 5 — Verifizieren
 
-Wie im Hauptdokument: `parse` (0 Diagnosen) · `test` (N/N) · keine
-Regression über `examples/**/*.test.findsl`.
+Mit dem installierten `findsl`-CLI (siehe `SKILL.md` → Verifizieren):
+`findsl parse <verzeichnis>` (0 Diagnosen) und
+`findsl test <name>.test.findsl` (N/N bestanden). Die `@Quelle`-Warnung für
+gesetzlose Konstanten ist hier erwartbar (kein Fehler).
 
 ---
 

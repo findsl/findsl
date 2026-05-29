@@ -34,9 +34,10 @@ Maßgeblich ist `CLAUDE.md` (Projektkontext) und `SPEC.md`
 - Deutsche Bezeichner, wo sinnvoll (Konsistenz mit der DSL); englische
   nur bei Langium-Standard-Schnittstellen.
 - Doc-Kommentare an allen exportierten Symbolen.
-- **Drei-Artefakte-Sync bei Sprachänderungen:** `SPEC.md`,
-  `grammar/findsl.ebnf`, `packages/core/src/language/findsl.langium`
-  müssen synchron bleiben.
+- **Grammatik-Duo-Sync bei Sprachänderungen:** `SPEC.md` (inkl.
+  Anhang-A-EBNF) und `packages/core/src/language/findsl.langium` müssen
+  synchron bleiben (maschinell geprüft via
+  `packages/core/test/grammar-spec-coupling.test.ts`).
 - Vor jeder Sprach-/Provider-Änderung:
   `npm run langium:generate && npm run build && npm run bundle &&
   npm test` (alle Tests grün, Bundle-Smoke 4/4, keine Regression).

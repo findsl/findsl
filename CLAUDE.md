@@ -24,11 +24,16 @@ nicht mehr.** Pfad-Mapping für Altverweise (Doku/Code/Commits):
 
 Build/Run **immer vom Repo-Root** (npm-Workspaces), kein `cd findsl-ts`.
 
-**Grammatik-Trias — bei JEDER Sprachänderung alle drei synchron pflegen:**
+**Grammatik-Duo — bei JEDER Sprachänderung beide synchron pflegen:**
 
 1. `SPEC.md` — autoritative Sprachreferenz (Kapitel + Anhang A EBNF)
-2. `grammar/findsl.ebnf` — eigenständige Grammatik-Datei (für Tooling)
-3. `packages/core/src/language/findsl.langium` — ausführbare Langium-Grammatik
+2. `packages/core/src/language/findsl.langium` — ausführbare Langium-Grammatik
+
+Maschinell abgesichert: `packages/core/test/grammar-spec-coupling.test.ts`
+prüft, dass jedes Keyword-Literal aus `findsl.langium` in `SPEC.md` vorkommt
+(fängt „Keyword zur Grammatik hinzu, SPEC vergessen" ab). Die früher separate
+`grammar/findsl.ebnf` wurde entfernt (Issue #205): sie war eine nicht
+eingekoppelte, bereits divergierte Zweitkopie von SPEC Anhang A.
 
 Danach Pflicht-Roundtrip:
 `npm run langium:generate && npm run build && npm run bundle && npm test`
@@ -53,7 +58,7 @@ funktionen entfernt; Postfix-Kette auf `( … )` (`ParenChain`). Details:
 | Datei | Inhalt |
 |-------|--------|
 | [docs/01-projekt-mission.md](docs/01-projekt-mission.md) | § 1 — Mission, Zielgruppe, erzeugte Artefakte |
-| [docs/02-repository-struktur.md](docs/02-repository-struktur.md) | § 2 — Monorepo-Layout, Modul-Graph, Grammatik-Trias |
+| [docs/02-repository-struktur.md](docs/02-repository-struktur.md) | § 2 — Monorepo-Layout, Modul-Graph, Grammatik-Duo |
 | [docs/03-tech-stack.md](docs/03-tech-stack.md) | § 3 — TypeScript/Langium/Chevrotain/Vitest, Vorgeschichte |
 | [docs/04-sprachdesign.md](docs/04-sprachdesign.md) | § 4.1–4.18 — alle Sprach-Designentscheidungen |
 | [docs/05-implementierungs-status.md](docs/05-implementierungs-status.md) | § 5 — Status-Matrix, Grammatik-Hinweise |

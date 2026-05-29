@@ -146,9 +146,9 @@ Schreibweise wird vom Type-Checker erzwungen (`checkAgainstAnnotation`):
 Nachkommastellen Pflicht (`0`/`oder 0`/`== 0` in EuroCent-Kontext →
 Fehler, bewusst). `parseNumberLiteral` strippt `.`, ersetzt `,`→`.`;
 `formatGerman` (values.ts) erzeugt die Ausgabe (Gruppierung immer,
-`Cent` ×100, `EuroCent` 2 NK, **kein `EUR`-Suffix**). Drei-Artefakt-
-Sync betroffen: NUMBER_TOKEN in findsl.langium · grammar/findsl.ebnf ·
-SPEC Anhang A. Test-Fixtures: eingebettete `.findsl`-Literale migrieren,
+`Cent` ×100, `EuroCent` 2 NK, **kein `EUR`-Suffix**). Grammatik-Duo-
+Sync betroffen: NUMBER_TOKEN in findsl.langium · SPEC Anhang A.
+Test-Fixtures: eingebettete `.findsl`-Literale migrieren,
 **JS-Decimal-Assertion-Strings (`'12.5'`, `Decimal('1.5')`) bleiben mit
 `.`** — nicht mit-migrieren.
 

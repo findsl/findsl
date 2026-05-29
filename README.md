@@ -43,9 +43,8 @@ Vollständige Diskussion in [`SPEC.md`](SPEC.md), Kapitel 1.3.
 ## Repository-Struktur
 
 ```
-SPEC.md                    Sprachspezifikation v1.0 (autoritative Referenz)
-grammar/
-  findsl.ebnf              Kanonische EBNF-Grammatik (eigenständige Datei)
+SPEC.md                    Sprachspezifikation v1.0 (autoritative Referenz,
+                           inkl. kanonischer EBNF in Anhang A)
 examples/
   kst/        KStG — Körperschaftsteuer (.findsl + .test + Doku-Kopf + XML)
   kraftst/    KraftStG — Kfz-Steuer (mehrdateilig: typen/tarif-*/steuer)
@@ -71,8 +70,8 @@ apps/
 ## Implementierungs-Status
 
 - **Sprachgestaltung:** v1.0 abgeschlossen, dokumentiert in `SPEC.md`.
-- **Grammatik:** EBNF kanonisch in `grammar/findsl.ebnf`, Langium-
-  Übersetzung in `packages/core/src/language/findsl.langium`.
+- **Grammatik:** EBNF kanonisch in `SPEC.md` Anhang A, ausführbare
+  Langium-Grammatik in `packages/core/src/language/findsl.langium`.
 - **TypeScript/Langium-Implementation:** npm-Monorepo mit Workspace-
   Wurzel im Repo-Top-Level (`packages/core` Sprachkern, `packages/lsp`
   LSP-Server, `packages/cli` CLI, `apps/vscode` Extension). Build/Test

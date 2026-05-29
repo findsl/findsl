@@ -30,7 +30,6 @@ FinDSL/                                 ← npm-Workspace-Wurzel (privat)
 │                                          = beste DE/EU-Verwaltungs-Akzeptanz.
 │                                          Publish .vsix/Open VSX/npm offen
 │                                          → Publisher-/Namespace-Entscheidung)
-├── grammar/findsl.ebnf                 ← kanonische EBNF-Grammatik
 ├── gesetze/                            (Gesetzesquellen XML/PDF)
 ├── examples/                           ← *.findsl + *.test.findsl + *-doku.*
 │   ├── kst/ · kraftst/ · gewst/ · est/  (je <slug>.findsl + .test + XML)
@@ -61,11 +60,15 @@ Modul-Graph (azyklisch): `lsp → @findsl/core`, `cli → @findsl/core`,
 language}/main.cjs`; kein TS-Import von core). `language ↔ interpret`
 und `language ↔ docs` sind bewusst **paketintern** in `core` (Variante A).
 
-**Drei Artefakte halten die Sprache zusammen — bei Sprachänderungen MÜSSEN alle drei synchron gepflegt werden:**
+**Zwei Artefakte halten die Sprache zusammen — bei Sprachänderungen MÜSSEN beide synchron gepflegt werden:**
 
 1. `SPEC.md` — autoritative Sprachreferenz, Kapitel + Anhang A EBNF
-2. `grammar/findsl.ebnf` — eigenständige Grammatik-Datei (für Tooling)
-3. `packages/core/src/language/findsl.langium` — ausführbare Langium-Grammatik
+2. `packages/core/src/language/findsl.langium` — ausführbare Langium-Grammatik
+
+Maschinell abgesichert durch `packages/core/test/grammar-spec-coupling.test.ts`
+(jedes Keyword-Literal aus `findsl.langium` muss in `SPEC.md` vorkommen). Die
+früher separate `grammar/findsl.ebnf` wurde mit Issue #205 entfernt — sie war
+eine nicht eingekoppelte, bereits divergierte Zweitkopie von SPEC Anhang A.
 
 ---
 

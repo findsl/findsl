@@ -1,8 +1,8 @@
 // FinDSL Grammar — Langium-Syntax
 //
-// Übersetzung der kanonischen EBNF aus ../../../grammar/findsl.ebnf
-// bzw. SPEC.md Anhang A. Bei Sprachänderungen müssen alle drei
-// Artefakte synchron gepflegt werden.
+// Ausführbares Gegenstück zur kanonischen EBNF in SPEC.md Anhang A.
+// Bei Sprachänderungen müssen beide Artefakte synchron gepflegt werden;
+// die Keyword-Kopplung prüft packages/core/test/grammar-spec-coupling.test.ts.
 
 grammar Findsl
 

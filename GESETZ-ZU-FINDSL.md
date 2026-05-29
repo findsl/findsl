@@ -56,8 +56,8 @@ Einstiegsdatei selektiv per Relativpfad `verwende { … } aus "./<slug>"`
 > + Testdatei `kraftst.test.findsl` nach dem Slug, die
 > Dekompositions-/Helferdateien mit Gesetz-Präfix `kraftstg-`).
 
-**Niemals ändern:** Grammatik-Trias (`SPEC.md`, `grammar/findsl.ebnf`,
-`findsl.langium`), Interpreter, Validator. Dieses Vorhaben ist
+**Niemals ändern:** Grammatik-Duo (`SPEC.md`, `findsl.langium`),
+Interpreter, Validator. Dieses Vorhaben ist
 **reine Beispielarbeit** — wenn die Sprache etwas nicht kann, wird der
 Umfang dokumentiert eingeschränkt, **nicht** die Sprache erweitert.
 (Ausnahme: explizite, separat beauftragte Stdlib-/Sprach-Diskussion.)
@@ -430,7 +430,7 @@ Statement-Grenze `)(` (siehe 3.3) oder EuroCent-Literal ohne 2 NK.
   Modul ist die empfohlene Ablage.
 - `CLAUDE.md` aktualisieren: Beispiel-Liste in § 2 und die
   „*Letzte Aktualisierung*"-Fußzeile (neues Modul, Testzahlen,
-  `pruefe`-Ergebnisse) ergänzen. Drei-Artefakt-Sync ist hier **nicht**
+  `pruefe`-Ergebnisse) ergänzen. Grammatik-Duo-Sync ist hier **nicht**
   betroffen (keine Sprachänderung).
 - `@Quelle`-Links stichprobenartig prüfen (richtiges `GESETZ_PFAD`-Slug).
 

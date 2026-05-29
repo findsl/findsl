@@ -7,8 +7,8 @@
 #   - packages/core/src/language/generated/   (Langium: ast/grammar/module)
 #   - packages/core/syntaxes/findsl.tmLanguage.json  (Langium TextMate-Ausgabe)
 # Diese sind reproduzierbar (`npm run langium:generate`), aber Teil des
-# eingecheckten Standes. Grammatik-Quelle bleibt die Trias (SPEC.md /
-# grammar/findsl.ebnf / findsl.langium).
+# eingecheckten Standes. Grammatik-Quelle bleibt das Duo (SPEC.md
+# Anhang A / findsl.langium).
 # ===========================================================================
 
 # --- Abhängigkeiten ---

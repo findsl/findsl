@@ -2091,8 +2091,9 @@ explizite Methoden (`euro.plus(other)`).
 
 Vollständige Grammatik der Sprache. Tokens in `GROSSBUCHSTABEN`
 sind lexikalische Einheiten; Whitespace und Code-Kommentare zwischen
-Tokens werden überall geignored. Die kanonische Grammatik liegt
-zusätzlich als eigenständige Datei `grammar/findsl.ebnf` vor.
+Tokens werden überall geignored. Dieser Anhang ist die **kanonische
+EBNF** der Sprache; das ausführbare Gegenstück ist
+`packages/core/src/language/findsl.langium`.
 
 ```ebnf
 (* === Programm-Struktur === *)

@@ -59,12 +59,19 @@ packages/
     src/language/          Validator, Type-Checker, LSP-Provider, Stdlib
     src/interpret/         Tree-Walking-Interpreter
     src/docgen/            Doku-Generator (md/html/pdf)
-    src/codegen/           (LEER — TODO Java/TS/JS)
+    src/codegen/           Codegen: lower→ir→emit→emit-{java,ts,js}
+    src/papgen/            PAP-Generator (model/mermaid/html)
     langium-config.json · syntaxes/ · test/
   lsp/   src/main.ts        @findsl/lsp — LSP-Server-Entry
   cli/   src/main.ts        @findsl/cli — CLI-Werkzeug (bin `findsl`)
+  web/                     @findsl/web — Browser-Bundle (LSP-Worker + API)
+  editor/                  @findsl/editor — einbettbarer Monaco-Editor
+  editor-react/            @findsl/editor-react — React-<FindslEditor>
 apps/
   vscode/                  VS-Code-Extension (Manifest + Activation)
+runtimes/
+  java/                    Java-Laufzeit (Gradle) — Codegen-Output
+  ts/                      TypeScript-Laufzeit — Quelle für emit-ts/js
 ```
 
 ## Implementierungs-Status

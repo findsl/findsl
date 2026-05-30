@@ -824,6 +824,26 @@ konst R: EuroCent = (A + 1,00).höchstens(9,00).mindestens(0,00)
         expect(zweit).toContain('mindestens');
         expect(zweit).toContain('§ 11.6');
     });
+
+    it('ParenChain-Empfänger mit IMPORTIERTEN Symbolen bekommt Hover (Nutzer-Fall)', async () => {
+        // `(IMPORT_KONST * ImportFn(x)).höchstens(IMPORT_KONST)` — der
+        // Klammer-Empfänger referenziert nur importierte Symbole. Ohne
+        // Import-Bindung in den Hover-Kontext blieb der Empfängertyp
+        // `unknown` → kein Methoden-Hover am `.höchstens`.
+        const typen = `konst ANH_JE_200KG: EuroCent = 7,46
+konst ANH_MAX: EuroCent = 373,24
+fn Einheiten(g: Ganzzahl, teiler: Ganzzahl): Ganzzahl = ((g / teiler) als Dezimal).aufrunden()
+`;
+        const app = `verwende { ANH_JE_200KG, ANH_MAX, Einheiten } aus "./typen"
+
+fn SteuerAnhaenger(gesamtgewichtKg: Ganzzahl): EuroCent =
+    (ANH_JE_200KG * Einheiten(gesamtgewichtKg, 200)).höchstens(ANH_MAX)
+`;
+        const h = await hoverInModules({ typen, app }, 'app', 'höchstens(');
+        const md = content(h);
+        expect(md).toContain('höchstens');
+        expect(md).toContain('§ 11.6');
+    });
 });
 
 describe('Hover auf primitiven Typen in Annotationen', () => {

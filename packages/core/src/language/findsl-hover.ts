@@ -78,6 +78,7 @@ import type { BuiltinMethodDef } from './findsl-stdlib.js';
 import {
     infer,
     type Type,
+    type TypeContext,
 } from './findsl-types.js';
 import type { FindslServices } from './findsl-module.js';
 
@@ -256,6 +257,7 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
             if (idx < 0) return undefined;
             const header = buildModuleHeader(program);
             const ctx = header.context;
+            this.bindImportsInto(program, ctx);
             const localEnv = buildLocalScope(
                 container, ctx, program,
                 (p, n) => this.resolveCrossModuleType(p, n),
@@ -272,6 +274,25 @@ export class FindslHoverProvider extends AstNodeHoverProvider {
         const def = findMethodDef(baseType, name);
         if (!def) return undefined;
         return { kind: 'builtin-method', def };
+    }
+
+    /**
+     * Bindet die per `verwende` importierten Symbole als Globals in den
+     * Hover-Kontext. Ohne das kann `infer` einen Klammer-Empfänger, der
+     * importierte Konstanten/Funktionen referenziert — z. B.
+     * `(IMPORT_KONST * ImportFn(x)).höchstens(…)` — nicht typisieren
+     * (Empfänger → unknown → kein Methoden-Hover). `buildModuleHeader`
+     * registriert nur die LOKALEN Top-Level-Decls; Importe fehlen dort.
+     * Lokale Namen haben Vorrang (kein Überschreiben). Symbol nicht
+     * auflösbar (Quellmodul nicht im Workspace) → übersprungen.
+     */
+    private bindImportsInto(program: Program, ctx: TypeContext): void {
+        const { bindings } = analyzeImports(program);
+        for (const b of bindings) {
+            if (ctx.globals.lookup(b.localName) !== undefined) continue;
+            const t = this.resolveCrossModuleType(program, b.localName);
+            if (t) ctx.globals.define(b.localName, t);
+        }
     }
 
     /**

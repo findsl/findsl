@@ -12,7 +12,7 @@
 - formatter überarbeiten / erweitern
 - code complition
 - @formatter:off / @formatter:on
-
+    
 - matrizen einführen??
 ```
 var tarife = matrix(jahr: Jahr, k: Ganzzahl, satz: Dezimal, betrag: Euro) {

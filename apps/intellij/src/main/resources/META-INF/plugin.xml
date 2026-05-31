@@ -59,4 +59,13 @@
             id="findsl.pruefe.runFromLens"
             class="org.findsl.intellij.RunPruefeFromLensAction"/>
     </actions>
+
+    <!-- Run-Gutter-Icons pro testfall (#255): setzt beim Öffnen einer .findsl-
+         Datei aus den LSP-DocumentSymbols Gutter-Icons; Klick führt den
+         einzelnen Testfall aus. -->
+    <applicationListeners>
+        <listener
+            class="org.findsl.intellij.FinDslTestGutterListener"
+            topic="com.intellij.openapi.editor.event.EditorFactoryListener"/>
+    </applicationListeners>
 </idea-plugin>

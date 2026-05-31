@@ -12,7 +12,11 @@ plugins {
 }
 
 group = providers.gradleProperty("pluginGroup").get()
-version = providers.gradleProperty("pluginVersion").get()
+// Single Source of Truth: die Lockstep-Version lebt an der Repo-Wurzel
+// (`<repo>/VERSION`) und wird hier direkt gelesen — kein zweiter Schreibort,
+// kein Eintrag in gradle.properties, keine sync-version-Sonderbehandlung.
+// `apps/intellij` liegt zwei Ebenen unter der Wurzel (wie `runtimes/java`).
+version = rootDir.parentFile.parentFile.resolve("VERSION").readText().trim()
 
 repositories {
     mavenCentral()

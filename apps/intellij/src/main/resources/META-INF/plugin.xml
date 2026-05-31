@@ -7,26 +7,27 @@
         Sprachunterstützung für <b>FinDSL</b> — die domänenspezifische Sprache für die
         deutsche steuerliche Finanzverwaltung. Bindet den FinDSL-Language-Server über
         <a href="https://github.com/redhat-developer/lsp4ij">LSP4IJ</a> an und liefert
-        damit Syntax-Highlighting, Code-Vervollständigung, Hover-Dokumentation, Diagnosen,
-        Gehe-zu-Definition, Umbenennen, Formatierung und mehr — derselbe Server wie in der
-        VS-Code-Erweiterung.
+        damit Code-Vervollständigung, Hover-Dokumentation, Diagnosen, Gehe-zu-Definition,
+        Umbenennen, Formatierung und mehr — derselbe Server wie in der VS-Code-Erweiterung.
+        Syntaktisches Highlighting kommt über eine mitgelieferte TextMate-Grammar.
     ]]></description>
 
-    <!-- Plattform-Kern + LSP4IJ (Red Hat). LSP4IJ läuft in Community UND Ultimate. -->
+    <!-- Plattform-Kern + LSP4IJ (Red Hat, Community + Ultimate) + TextMate
+         (gebündelt; liefert das syntaktische Highlighting). -->
     <depends>com.intellij.modules.platform</depends>
     <depends>com.redhat.devtools.lsp4ij</depends>
+    <depends>org.jetbrains.plugins.textmate</depends>
 
-    <!-- Dateityp .findsl -->
     <extensions defaultExtensionNs="com.intellij">
-        <fileType
-            name="FinDSL"
-            language="FINDSL"
-            implementationClass="org.findsl.FinDslFileType"
-            fieldName="INSTANCE"
-            extensions="findsl"/>
+        <!-- Syntaktisches Highlighting (Keywords/Kommentare/Strings) über die aus
+             VS Code wiederverwendete TextMate-Grammar. Bewusst KEIN eigener
+             FileType — der würde das TextMate-Highlighting der Community Edition
+             deaktivieren. -->
+        <textmate.bundleProvider implementation="org.findsl.FinDslBundleProvider"/>
     </extensions>
 
-    <!-- LSP4IJ: Server-Definition + Sprach-Mapping -->
+    <!-- LSP4IJ: Server-Definition + Mapping per Dateiname-Muster (kein eigener
+         Language/FileType, damit TextMate das Highlighting übernimmt). -->
     <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
         <server
             id="findslLanguageServer"
@@ -34,8 +35,8 @@
             factoryClass="org.findsl.FinDslLanguageServerFactory">
             <description><![CDATA[FinDSL Language Server (LSP) — startet das native findsl-lsp-Binary über stdio.]]></description>
         </server>
-        <languageMapping
-            language="FINDSL"
+        <fileNamePatternMapping
+            patterns="*.findsl"
             serverId="findslLanguageServer"
             languageId="findsl"/>
     </extensions>

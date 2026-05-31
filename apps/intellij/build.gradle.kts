@@ -34,6 +34,11 @@ dependencies {
         // IDE ausgeliefert.
         plugin("com.redhat.devtools.lsp4ij", providers.gradleProperty("lsp4ijVersion").get())
 
+        // Gebündeltes TextMate-Plugin: liefert die TextMateBundleProvider-API
+        // (syntaktisches Highlighting via TextMate-Grammar, siehe
+        // FinDslBundleProvider) — `bundledPlugin`, da mit der IDE ausgeliefert.
+        bundledPlugin("org.jetbrains.plugins.textmate")
+
         testFramework(TestFrameworkType.Platform)
     }
 }

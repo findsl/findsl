@@ -1,0 +1,22 @@
+{
+  "name": "findsl",
+  "displayName": "FinDSL",
+  "version": "0.1.0",
+  "engines": { "vscode": "*" },
+  "contributes": {
+    "languages": [
+      {
+        "id": "findsl",
+        "aliases": ["FinDSL", "findsl"],
+        "extensions": [".findsl"]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "findsl",
+        "scopeName": "source.findsl",
+        "path": "./syntaxes/findsl.tmLanguage.json"
+      }
+    ]
+  }
+}

@@ -15,6 +15,22 @@ import { NodeFileSystem } from 'langium/node';
 import { createConnection, ProposedFeatures } from 'vscode-languageserver/node.js';
 import { createFindslServices } from '@findsl/core/language/findsl-module.js';
 
+// Robustheit: Ein langlaufender LSP-Server darf nicht an einer einzelnen
+// unbehandelten Promise-Rejection sterben. Konkreter Fall: Sendet der Server
+// einen `window/showMessageRequest` (u. a. über `connection.window.show*Message`,
+// z. B. nach einem `prüfe`-Lauf), kann ein Client wie IntelliJ/LSP4IJ diese
+// Anfrage canceln (RequestCancelled, -32800). Die zurückgegebene Promise rejectet
+// dann; seit Node 15 beendet eine unbehandelte Rejection den Prozess — der Server
+// stürbe still ab und ALLE LSP-Features wären weg (in VS Code via IPC trat das
+// nicht auf, da dort nicht gecancelt wird). Daher global abfangen und auf stderr
+// loggen — NICHT auf stdout, das ist bei `--stdio` der LSP-Transport.
+process.on('unhandledRejection', (reason) => {
+    console.error('[findsl-lsp] Unbehandelte Promise-Rejection (Server läuft weiter):', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('[findsl-lsp] Unbehandelte Ausnahme (Server läuft weiter):', err);
+});
+
 const connection = createConnection(ProposedFeatures.all);
 const { shared } = createFindslServices({ connection, ...NodeFileSystem });
 startLanguageServer(shared);

@@ -24,16 +24,11 @@
              FileType — der würde das TextMate-Highlighting der Community Edition
              deaktivieren. -->
         <textmate.bundleProvider implementation="org.findsl.FinDslBundleProvider"/>
-
-        <!-- Begrenzt Cmd/Ctrl+Hover- und Definition-Links auf einzelne Symbole.
-             Ohne PSI würde LSP4IJ sonst die GANZE Datei als einen Link
-             unterstreichen (bekannter Bug bei TextMate-/PSI-losen Dateien). Dieser
-             FileViewProvider baut aus den LSP-Semantic-Tokens des Servers einen
-             flachen Pseudo-PSI-Baum. `fileType="FinDSL"` = der vom TextMate-Bundle
-             vergebene Dateityp-Name. -->
-        <fileType.fileViewProviderFactory
-            fileType="FinDSL"
-            implementationClass="com.redhat.devtools.lsp4ij.features.semanticTokens.viewProvider.LSPSemanticTokensFileViewProviderFactory"/>
+        <!-- Hinweis Cmd/Ctrl+Hover-Link: KEIN eigener fileViewProviderFactory nötig.
+             LSP4IJ registriert für TextMate-Dateien (language="textmate") selbst
+             einen LSPSemanticTokensStructurelessFileViewProviderFactory (siehe
+             LSP4IJ-plugin.xml) — der begrenzt die Hover-/Definition-Links bereits
+             auf einzelne Symbole. Ein eigener FileType würde das nur kaputt machen. -->
     </extensions>
 
     <!-- LSP4IJ: Server-Definition + Mapping per Dateiname-Muster (kein eigener

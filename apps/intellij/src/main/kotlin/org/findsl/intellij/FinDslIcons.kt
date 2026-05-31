@@ -3,7 +3,7 @@
 // from devtank42 GmbH (see ../../LICENSE-COMMERCIAL.md).
 // SPDX-License-Identifier: EUPL-1.2
 
-package org.findsl
+package org.findsl.intellij
 
 import com.intellij.openapi.util.IconLoader
 

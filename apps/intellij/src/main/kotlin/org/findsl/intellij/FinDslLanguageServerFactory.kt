@@ -3,9 +3,10 @@
 // from devtank42 GmbH (see ../../LICENSE-COMMERCIAL.md).
 // SPDX-License-Identifier: EUPL-1.2
 
-package org.findsl
+package org.findsl.intellij
 
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
@@ -73,24 +74,37 @@ class FinDslStreamConnectionProvider(project: Project) : OSProcessStreamConnecti
                     "FinDSL-LSP-Binary nicht im Plugin gefunden ($resource). Im Dev-Build "
                         + "`npm run binary:lsp` (Repo-Root) ausführen oder FINDSL_LSP_PATH setzen.",
                 )
-            val cacheDir = Path.of(System.getProperty("java.io.tmpdir"), "findsl-lsp")
+            // Per-User IDE-System-Verzeichnis — NICHT das welt-schreibbare
+            // java.io.tmpdir: dort könnte ein anderer lokaler Nutzer/Prozess das
+            // Binary unterschieben, das die IDE dann ausführt (lokale Code-
+            // Ausführung). Konsistent mit FinDslBundleProvider.
+            val cacheDir = PathManager.getSystemDir().resolve("findsl-lsp")
             Files.createDirectories(cacheDir)
+            restrictToOwner(cacheDir)
             val target = cacheDir.resolve(EXE)
             input.use { Files.copy(it, target, StandardCopyOption.REPLACE_EXISTING) }
-            makeExecutable(target)
+            restrictToOwner(target)
             return target
         }
 
-        private fun makeExecutable(path: Path) {
+        /**
+         * Beschränkt Datei/Verzeichnis auf den Eigentümer (`rwx------`) — kein
+         * Group-/Others-Zugriff, damit kein anderer lokaler Nutzer das
+         * extrahierte Binary lesen oder ersetzen kann. No-op auf Windows (kein
+         * POSIX). Das Owner-Execute-Bit macht das Binary zugleich lauffähig.
+         */
+        private fun restrictToOwner(path: Path) {
             if (SystemInfo.isWindows) return
             runCatching {
-                val perms = Files.getPosixFilePermissions(path).toMutableSet().apply {
-                    add(PosixFilePermission.OWNER_EXECUTE)
-                    add(PosixFilePermission.GROUP_EXECUTE)
-                    add(PosixFilePermission.OTHERS_EXECUTE)
-                }
-                Files.setPosixFilePermissions(path, perms)
-            }.onFailure { LOG.warn("chmod +x auf $path fehlgeschlagen", it) }
+                Files.setPosixFilePermissions(
+                    path,
+                    setOf(
+                        PosixFilePermission.OWNER_READ,
+                        PosixFilePermission.OWNER_WRITE,
+                        PosixFilePermission.OWNER_EXECUTE,
+                    ),
+                )
+            }.onFailure { LOG.warn("Owner-only-Berechtigungen für $path fehlgeschlagen", it) }
         }
     }
 }

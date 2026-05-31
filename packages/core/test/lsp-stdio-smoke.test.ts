@@ -115,6 +115,90 @@ function lspInitialize(command: string, args: string[], timeoutMs = 15_000): Pro
     });
 }
 
+/** Ein .findsl-Dokument mit einer Formel im Doc-Kommentar einer Funktion;
+ *  der Hover über `T` zeigt die gerenderte Formel. */
+const HOVER_DOC_URI = 'file:///tmp/findsl-stdio-smoke/T.findsl';
+const HOVER_DOC_TEXT = [
+    '--', 'Datei-Dokumentation.', '--', '',
+    '--', 'Berechnet $T(\\text{zve}) = a \\cdot \\text{zve} + b$.', '--',
+    'fn T(zve: Euro): Euro = zve', '',
+].join('\n');
+
+/**
+ * Vollständiger Hover-Roundtrip über stdio (#250): `initialize` (optional mit
+ * `clientInfo.name`) → `initialized` → `didOpen` → `hover` auf `T`. Liefert das
+ * Hover-Markdown. Beantwortet Server→Client-Requests (z. B.
+ * `workspace/codeLens/refresh`) generisch mit `null`, sonst blockiert der
+ * Server und der Hover käme nie zurück.
+ */
+function lspHoverMarkdown(
+    command: string, args: string[], clientName: string | undefined, timeoutMs = 20_000,
+): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const child = spawn(command, args, { cwd: repoRoot });
+        let buffer = Buffer.alloc(0);
+        let stderr = '';
+        let settled = false;
+
+        const send = (msg: unknown): void => {
+            const body = JSON.stringify(msg);
+            child.stdin.write(`Content-Length: ${Buffer.byteLength(body, 'utf8')}\r\n\r\n${body}`);
+        };
+        const finish = (fn: () => void): void => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            child.kill();
+            fn();
+        };
+        const timer = setTimeout(
+            () => finish(() => reject(new Error(`Hover-Roundtrip-Timeout (${timeoutMs} ms). stderr: ${stderr}`))),
+            timeoutMs,
+        );
+
+        child.stdout.on('data', (chunk: Buffer) => {
+            buffer = Buffer.concat([buffer, chunk]);
+            for (;;) {
+                const headerEnd = buffer.indexOf('\r\n\r\n');
+                if (headerEnd === -1) break;
+                const match = /Content-Length:\s*(\d+)/i.exec(buffer.subarray(0, headerEnd).toString('ascii'));
+                if (!match) { finish(() => reject(new Error('Antwort ohne Content-Length'))); return; }
+                const len = Number(match[1]);
+                const start = headerEnd + 4;
+                if (buffer.length < start + len) break;
+                const msg = JSON.parse(buffer.subarray(start, start + len).toString('utf8')) as {
+                    id?: number; method?: string; result?: { contents?: { value?: string } };
+                };
+                buffer = buffer.subarray(start + len);
+                // Server→Client-Request (id UND method) → generisch null beantworten.
+                if (msg.id !== undefined && msg.method) { send({ jsonrpc: '2.0', id: msg.id, result: null }); continue; }
+                if (msg.id === 1) {
+                    send({ jsonrpc: '2.0', method: 'initialized', params: {} });
+                    send({
+                        jsonrpc: '2.0', method: 'textDocument/didOpen',
+                        params: { textDocument: { uri: HOVER_DOC_URI, languageId: 'findsl', version: 1, text: HOVER_DOC_TEXT } },
+                    });
+                    send({
+                        jsonrpc: '2.0', id: 2, method: 'textDocument/hover',
+                        params: { textDocument: { uri: HOVER_DOC_URI }, position: { line: 7, character: 3 } },
+                    });
+                } else if (msg.id === 2) {
+                    finish(() => resolve(msg.result?.contents?.value ?? ''));
+                }
+            }
+        });
+        child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+        child.on('error', (e) => finish(() => reject(e)));
+        child.on('exit', (code) => finish(() => reject(new Error(`Server endete vor Hover (Code ${code}). stderr: ${stderr}`))));
+
+        const clientInfo = clientName !== undefined ? { clientInfo: { name: clientName, version: '1.0' } } : {};
+        send({
+            jsonrpc: '2.0', id: 1, method: 'initialize',
+            params: { processId: null, rootUri: 'file:///tmp/findsl-stdio-smoke', capabilities: {}, ...clientInfo },
+        });
+    });
+}
+
 /**
  * Capabilities, die jeder Editor (VS Code, IntelliJ) braucht — für Bundle
  * und natives Binary identisch geprüft.
@@ -160,4 +244,35 @@ describe.skipIf(!fs.existsSync(lspBinary))('LSP-Binary-stdio-Smoke (nur wenn geb
         // Das Binary IST die Executable — direkt starten, kein node-Vorspann.
         expectEditorCapabilities(await lspInitialize(lspBinary, ['--stdio']));
     }, 20_000);
+});
+
+/**
+ * #250: Hover-Formeln werden clientabhängig gerendert. VS Code zeigt das
+ * eingebettete MathJax-SVG; IntelliJ/JetBrains (via LSP4IJ) kann kein Bild im
+ * Hover-Markdown anzeigen und bekommt deshalb Unicode-Klartext. Diese Naht
+ * (`initialize.clientInfo.name` → Server-State → Hover-Output) ist nur
+ * end-to-end über stdio prüfbar — die Unit-Tests decken nur die Entscheidung
+ * isoliert ab. Läuft gegen das immer vorhandene Bundle.
+ */
+describe('LSP-stdio Hover-Formel-Rendering nach clientInfo (#250)', () => {
+    it('IntelliJ-Client (clientInfo.name) → Formel als Unicode-Klartext, KEIN SVG', async () => {
+        const md = await lspHoverMarkdown(
+            process.execPath, [lspBundle, '--stdio'], 'IntelliJ IDEA Community Edition 2024.2',
+        );
+        expect(md).not.toContain('data:image/svg');   // kein eingebettetes Bild
+        expect(md).toContain('zve');                   // Formel als Text vorhanden
+        expect(md).toMatch(/`T\(zve\) = a · zve \+ b`/); // texToPlain-Unicode im Code-Span
+    }, 25_000);
+
+    it('VS-Code-Client → Formel als SVG-Bild (Regressionsschutz, unverändert)', async () => {
+        const md = await lspHoverMarkdown(
+            process.execPath, [lspBundle, '--stdio'], 'Visual Studio Code',
+        );
+        expect(md).toContain('data:image/svg+xml');
+    }, 25_000);
+
+    it('ohne clientInfo → konservativ SVG (kein Regress für unbekannte Clients)', async () => {
+        const md = await lspHoverMarkdown(process.execPath, [lspBundle, '--stdio'], undefined);
+        expect(md).toContain('data:image/svg+xml');
+    }, 25_000);
 });

@@ -1,11 +1,13 @@
 /**
  * esbuild-Pipeline (Workspace-Wurzel).
  *
- * Erzeugt die zwei CommonJS-Bundles der VS-Code-Extension:
+ * Erzeugt die CommonJS-Bundles des Projekts:
  *   - apps/vscode/out/extension/main.cjs  — Extension-Activation (VS-Code-Host)
- *   - apps/vscode/out/language/main.cjs   — FinDSL-Language-Server (LSP-Subprozess)
+ *   - apps/vscode/out/language/main.cjs   — FinDSL-Language-Server (LSP-Subprozess, VS Code via IPC)
+ *   - packages/lsp/dist/findsl-lsp.cjs    — host-neutraler Language-Server (andere Editoren, z. B. IntelliJ/LSP4IJ, via --stdio)
+ *   - packages/cli/dist/findsl.cjs        — self-contained CLI (Grundlage des nativen Binarys)
  *
- * Beide CJS, weil VS Code Extension-/Server-Entrypoints nur als CommonJS
+ * Alle CJS, weil VS Code Extension-/Server-Entrypoints nur als CommonJS
  * lädt; das Projekt ist ESM. `@findsl/core` wird über die `source`-
  * Export-Condition direkt aus dem TypeScript-Quelltext gebündelt
  * (kein vorheriges `tsc` nötig → der Bundle-Smoke-Test bleibt
@@ -90,6 +92,18 @@ const builds = [
         outfile:     'apps/vscode/out/language/main.cjs',
     },
     {
+        // Host-neutrales LSP-Server-Bundle (#238): identische Quelle wie das
+        // vscode-`language`-Target, aber an einem eigenständig adressierbaren
+        // Pfad und ohne vscode-`external` — der Server importiert weder
+        // `vscode` noch `vscode-languageclient`, sondern spricht reines LSP.
+        // Grundlage für andere Editoren (IntelliJ via LSP4IJ, #237) und das
+        // Node-SEA-Binary (#239).
+        ...common,
+        entryPoints: ['packages/lsp/src/main.ts'],
+        outfile:     'packages/lsp/dist/findsl-lsp.cjs',
+        external:    [],
+    },
+    {
         // Self-contained CLI: ein CJS-Bundle (alles inkl. @findsl/core
         // aus TS-Quelle, builtins.json statisch inline, pdfmake/langium/
         // markdown-it eingerollt). Braucht weder node_modules noch einen
@@ -112,5 +126,5 @@ if (watchMode) {
     console.log('[esbuild] Watch-Modus aktiv. Strg+C zum Beenden.');
 } else {
     await Promise.all(builds.map((b) => esbuild.build(b)));
-    console.log('[esbuild] Build fertig: apps/vscode/out/{extension,language}/main.cjs, packages/cli/dist/findsl.cjs (AFM eingebettet, self-contained).');
+    console.log('[esbuild] Build fertig: apps/vscode/out/{extension,language}/main.cjs, packages/lsp/dist/findsl-lsp.cjs (host-neutral), packages/cli/dist/findsl.cjs (AFM eingebettet, self-contained).');
 }

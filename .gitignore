@@ -25,6 +25,7 @@ tsconfig.tsbuildinfo
 # --- esbuild-Bundles & self-contained CLI / natives Binary ---
 # apps/vscode/out (Extension-Bundle) deckt `out/` oben bereits ab.
 packages/cli/dist/
+packages/lsp/dist/
 packages/web/dist/
 packages/editor/dist/
 packages/editor-react/dist/

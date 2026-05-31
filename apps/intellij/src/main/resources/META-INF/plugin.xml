@@ -1,0 +1,52 @@
+<idea-plugin>
+    <id>org.findsl.intellij</id>
+    <name>FinDSL</name>
+    <vendor email="contact@devtank42.de" url="https://github.com/findsl/findsl">devtank42</vendor>
+
+    <description><![CDATA[
+        Sprachunterstützung für <b>FinDSL</b> — die domänenspezifische Sprache für die
+        deutsche steuerliche Finanzverwaltung. Bindet den FinDSL-Language-Server über
+        <a href="https://github.com/redhat-developer/lsp4ij">LSP4IJ</a> an und liefert
+        damit Code-Vervollständigung, Hover-Dokumentation, Diagnosen, Gehe-zu-Definition,
+        Umbenennen, Formatierung und mehr — derselbe Server wie in der VS-Code-Erweiterung.
+        Syntaktisches Highlighting kommt über eine mitgelieferte TextMate-Grammar.
+    ]]></description>
+
+    <!-- Plattform-Kern + LSP4IJ (Red Hat, Community + Ultimate) + TextMate
+         (gebündelt; liefert das syntaktische Highlighting). -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.redhat.devtools.lsp4ij</depends>
+    <depends>org.jetbrains.plugins.textmate</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Syntaktisches Highlighting (Keywords/Kommentare/Strings) über die aus
+             VS Code wiederverwendete TextMate-Grammar. Bewusst KEIN eigener
+             FileType — der würde das TextMate-Highlighting der Community Edition
+             deaktivieren. -->
+        <textmate.bundleProvider implementation="org.findsl.FinDslBundleProvider"/>
+
+        <!-- Datei-Icon für .findsl ohne eigenen FileType (FileIconProvider greift
+             vor dem FileType-Icon, ohne das TextMate-Highlighting zu stören). -->
+        <fileIconProvider implementation="org.findsl.FinDslFileIconProvider"/>
+        <!-- Hinweis Cmd/Ctrl+Hover-Link: KEIN eigener fileViewProviderFactory nötig.
+             LSP4IJ registriert für TextMate-Dateien (language="textmate") selbst
+             einen LSPSemanticTokensStructurelessFileViewProviderFactory (siehe
+             LSP4IJ-plugin.xml) — der begrenzt die Hover-/Definition-Links bereits
+             auf einzelne Symbole. Ein eigener FileType würde das nur kaputt machen. -->
+    </extensions>
+
+    <!-- LSP4IJ: Server-Definition + Mapping per Dateiname-Muster (kein eigener
+         Language/FileType, damit TextMate das Highlighting übernimmt). -->
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+        <server
+            id="findslLanguageServer"
+            name="FinDSL Language Server"
+            factoryClass="org.findsl.FinDslLanguageServerFactory">
+            <description><![CDATA[FinDSL Language Server (LSP) — startet das native findsl-lsp-Binary über stdio.]]></description>
+        </server>
+        <fileNamePatternMapping
+            patterns="*.findsl"
+            serverId="findslLanguageServer"
+            languageId="findsl"/>
+    </extensions>
+</idea-plugin>

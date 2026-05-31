@@ -1,0 +1,14 @@
+<svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="findslLight" x1="16" y1="3" x2="16" y2="29" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4385F4"/>
+      <stop offset="1" stop-color="#1C49BE"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="26" height="26" rx="6.5" fill="url(#findslLight)"/>
+  <rect x="3.5" y="3.5" width="25" height="25" rx="6" fill="none" stroke="#11317F" stroke-opacity="0.22" stroke-width="1"/>
+  <g stroke="#FFFFFF" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M20 10.2 H11.8 V21.8"/>
+    <path d="M11.8 15.6 H18"/>
+  </g>
+</svg>

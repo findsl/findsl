@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>org.findsl.intellij</id>
     <name>FinDSL</name>
-    <vendor email="info@devtank42.de" url="https://github.com/findsl/findsl">devtank42</vendor>
+    <vendor email="contact@devtank42.de" url="https://github.com/findsl/findsl">devtank42</vendor>
 
     <description><![CDATA[
         Sprachunterstützung für <b>FinDSL</b> — die domänenspezifische Sprache für die

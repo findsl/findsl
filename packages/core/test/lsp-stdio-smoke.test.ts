@@ -15,6 +15,11 @@
  * Kommandos). Bricht der Prozess vorher ab, schlägt der Test mit dem
  * gesammelten stderr fehl — ein stiller stdio-Totalausfall wäre sonst von
  * den IPC-/`require()`-Tests nicht abgedeckt.
+ *
+ * #239: Wurde zusätzlich das native SEA-Binary gebaut (`npm run binary:lsp`),
+ * läuft derselbe Handshake gegen `findsl-lsp` selbst — ohne installiertes
+ * Node. Da Node-SEA nicht cross-kompiliert, existiert das Binary nur auf dem
+ * Build-Rechner bzw. im jeweiligen CI-Runner; sonst überspringt der Block.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -26,6 +31,10 @@ import { fileURLToPath } from 'node:url';
 // packages/core/test → Workspace-Wurzel (drei Ebenen hoch).
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const lspBundle = path.join(repoRoot, 'packages', 'lsp', 'dist', 'findsl-lsp.cjs');
+const lspBinary = path.join(
+    repoRoot, 'packages', 'lsp', 'dist',
+    process.platform === 'win32' ? 'findsl-lsp.exe' : 'findsl-lsp',
+);
 
 beforeAll(() => {
     // esbuild kompiliert die TS-Entrypoints direkt — frisches, deterministisches
@@ -41,14 +50,15 @@ interface ServerCapabilities {
 }
 
 /**
- * Startet das Bundle mit `--stdio`, sendet einen `initialize`-Request im
- * LSP-Wire-Format (`Content-Length`-Framing) und löst mit den gemeldeten
- * ServerCapabilities auf. Verwirft, wenn der Prozess vor der Antwort endet
- * (mit dem gesammelten stderr) oder das Zeitlimit überschreitet.
+ * Startet `command` mit `args` (Bundle: `node …/findsl-lsp.cjs --stdio`
+ * ODER das native Binary direkt: `findsl-lsp --stdio`), sendet einen
+ * `initialize`-Request im LSP-Wire-Format (`Content-Length`-Framing) und löst
+ * mit den gemeldeten ServerCapabilities auf. Verwirft, wenn der Prozess vor
+ * der Antwort endet (mit gesammeltem stderr) oder das Zeitlimit überschreitet.
  */
-function lspInitialize(bundlePath: string, timeoutMs = 15_000): Promise<ServerCapabilities> {
+function lspInitialize(command: string, args: string[], timeoutMs = 15_000): Promise<ServerCapabilities> {
     return new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [bundlePath, '--stdio'], { cwd: repoRoot });
+        const child = spawn(command, args, { cwd: repoRoot });
         let buffer = Buffer.alloc(0);
         let stderr = '';
         let settled = false;
@@ -105,6 +115,20 @@ function lspInitialize(bundlePath: string, timeoutMs = 15_000): Promise<ServerCa
     });
 }
 
+/**
+ * Capabilities, die jeder Editor (VS Code, IntelliJ) braucht — für Bundle
+ * und natives Binary identisch geprüft.
+ */
+function expectEditorCapabilities(caps: ServerCapabilities): void {
+    // CodeLens (▶ Testfälle ausführen) und Semantic Tokens (Highlighting).
+    expect(caps.codeLensProvider).toBeDefined();
+    expect(caps.semanticTokensProvider).toBeDefined();
+    // Die beiden Server-Kommandos sind die Naht für prüfe-Lauf und Doku
+    // (von der IntelliJ-Integration via workspace/executeCommand genutzt).
+    expect(caps.executeCommandProvider?.commands).toContain('findsl.pruefe.run');
+    expect(caps.executeCommandProvider?.commands).toContain('findsl.doku.generate');
+}
+
 describe('LSP-stdio-Smoke (host-neutrales Bundle, CI-Gate)', () => {
     it('host-neutrales Bundle existiert und ist nicht leer', () => {
         expect(fs.existsSync(lspBundle)).toBe(true);
@@ -120,15 +144,20 @@ describe('LSP-stdio-Smoke (host-neutrales Bundle, CI-Gate)', () => {
     });
 
     it('antwortet über --stdio auf initialize mit den Editor-Capabilities', async () => {
-        const caps = await lspInitialize(lspBundle);
+        expectEditorCapabilities(await lspInitialize(process.execPath, [lspBundle, '--stdio']));
+    }, 20_000);
+});
 
-        // CodeLens (▶ Testfälle ausführen) und Semantic Tokens (Highlighting).
-        expect(caps.codeLensProvider).toBeDefined();
-        expect(caps.semanticTokensProvider).toBeDefined();
-
-        // Die beiden Server-Kommandos sind die Naht für prüfe-Lauf und Doku
-        // (von der IntelliJ-Integration via workspace/executeCommand genutzt).
-        expect(caps.executeCommandProvider?.commands).toContain('findsl.pruefe.run');
-        expect(caps.executeCommandProvider?.commands).toContain('findsl.doku.generate');
+/**
+ * Binary-Smoke (#239): nur wenn das native SEA-Binary vorab gebaut wurde
+ * (`npm run binary:lsp`). Node-SEA kann nicht cross-kompilieren → das Binary
+ * existiert nur auf dem Build-Rechner bzw. im jeweiligen CI-Runner; die
+ * normale `npm test`-Suite überspringt diesen Block. Beweist den
+ * Akzeptanzpunkt von #239: `findsl-lsp --stdio` spricht LSP OHNE Node.
+ */
+describe.skipIf(!fs.existsSync(lspBinary))('LSP-Binary-stdio-Smoke (nur wenn gebaut)', () => {
+    it('natives Binary antwortet über --stdio ohne installiertes Node', async () => {
+        // Das Binary IST die Executable — direkt starten, kein node-Vorspann.
+        expectEditorCapabilities(await lspInitialize(lspBinary, ['--stdio']));
     }, 20_000);
 });

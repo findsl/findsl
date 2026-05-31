@@ -23,6 +23,7 @@
 
 import { DefaultLanguageServer } from 'langium/lsp';
 import { CodeActionKind, type InitializeParams, type InitializeResult } from 'vscode-languageserver';
+import { setClientName } from './client-math-mode.js';
 
 /** Die vom CodeActionProvider real erzeugten Kinds. */
 const FINDSL_CODE_ACTION_KINDS: readonly string[] = [
@@ -33,6 +34,9 @@ const FINDSL_CODE_ACTION_KINDS: readonly string[] = [
 
 export class FindslLanguageServer extends DefaultLanguageServer {
     protected override buildInitializeResult(params: InitializeParams): InitializeResult {
+        // Client-Namen merken (#250): bestimmt, ob Hover-Formeln als SVG (VS Code)
+        // oder Unicode-Klartext (z. B. IntelliJ/LSP4IJ, kein Bild im Hover) kommen.
+        setClientName(params.clientInfo?.name);
         const result = super.buildInitializeResult(params);
         // Nur ersetzen, wenn der Provider tatsächlich gebunden ist (Langium
         // setzt dann `true`); sonst die Default-Entscheidung respektieren.

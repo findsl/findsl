@@ -74,19 +74,26 @@ export interface RenderInput {
  * initialisiert werden muss. Nachfolgende Aufrufe sind ohne Latenz
  * (Cache via `readyMathJax`).
  */
-export async function renderDocForHover(input: RenderInput): Promise<string> {
+export async function renderDocForHover(
+    input: RenderInput,
+    options?: { readonly plainMath?: boolean },
+): Promise<string> {
     const { docRaw, paramOrder, quellen } = input;
     const stripped = stripDocMarkers(docRaw);
     const sections: string[] = [];
 
-    // MathJax frühzeitig initialisieren — falls die Prosa Formeln
-    // enthält, brauchen wir den synchronen SVG-Renderer. Bei Fehlschlag
-    // fällt `formatProse` automatisch auf `texToPlain` zurück.
-    let mathReady = true;
-    try {
-        await readyMathJax();
-    } catch {
-        mathReady = false;
+    // `plainMath` (Issue #250): Clients ohne SVG-Hover (z. B. IntelliJ/LSP4IJ)
+    // bekommen Formeln über `texToPlain` als Unicode-Klartext — kein MathJax,
+    // kein SVG-Bild. Sonst MathJax frühzeitig initialisieren (synchroner
+    // SVG-Renderer); bei Fehlschlag fällt `formatProse` auf `texToPlain` zurück.
+    let mathReady = false;
+    if (!(options?.plainMath ?? false)) {
+        try {
+            await readyMathJax();
+            mathReady = true;
+        } catch {
+            mathReady = false;
+        }
     }
 
     if (stripped) {

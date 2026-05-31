@@ -24,6 +24,10 @@
              FileType — der würde das TextMate-Highlighting der Community Edition
              deaktivieren. -->
         <textmate.bundleProvider implementation="org.findsl.FinDslBundleProvider"/>
+
+        <!-- Datei-Icon für .findsl ohne eigenen FileType (FileIconProvider greift
+             vor dem FileType-Icon, ohne das TextMate-Highlighting zu stören). -->
+        <fileIconProvider implementation="org.findsl.FinDslFileIconProvider"/>
         <!-- Hinweis Cmd/Ctrl+Hover-Link: KEIN eigener fileViewProviderFactory nötig.
              LSP4IJ registriert für TextMate-Dateien (language="textmate") selbst
              einen LSPSemanticTokensStructurelessFileViewProviderFactory (siehe

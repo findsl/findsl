@@ -30,6 +30,12 @@ packages/web/dist/
 packages/editor/dist/
 packages/editor-react/dist/
 
+# --- IntelliJ-Plugin (Gradle): Build-Output. Wrapper-JAR + gradlew bleiben
+#     bewusst eingecheckt (kein globales Gradle nötig). ---
+apps/intellij/.gradle/
+apps/intellij/build/
+apps/intellij/.intellijPlatform/
+
 # --- Generierte Audit-Doku (regenerierbar via `findsl docgen`) ---
 # Konvention: examples/<Gesetz>/out/<slug>-doku.{md,html,pdf}.
 # Die kuratierte <slug>-doku.kopf.md (Input) liegt AUSSERHALB out/.

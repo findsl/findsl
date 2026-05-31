@@ -49,4 +49,14 @@
             serverId="findslLanguageServer"
             languageId="findsl"/>
     </extensions>
+
+    <!-- Client-Handler für das CodeLens-Kommando `findsl.pruefe.runFromLens`
+         (vom Server NICHT als executeCommand registriert). Die action-id MUSS
+         exakt die Kommando-id sein — LSP4IJ findet die Action darüber und
+         reicht den Lauf an `findsl.pruefe.run` weiter. -->
+    <actions>
+        <action
+            id="findsl.pruefe.runFromLens"
+            class="org.findsl.intellij.RunPruefeFromLensAction"/>
+    </actions>
 </idea-plugin>

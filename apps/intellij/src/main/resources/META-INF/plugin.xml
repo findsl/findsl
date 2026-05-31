@@ -23,11 +23,11 @@
              VS Code wiederverwendete TextMate-Grammar. Bewusst KEIN eigener
              FileType — der würde das TextMate-Highlighting der Community Edition
              deaktivieren. -->
-        <textmate.bundleProvider implementation="org.findsl.FinDslBundleProvider"/>
+        <textmate.bundleProvider implementation="org.findsl.intellij.FinDslBundleProvider"/>
 
         <!-- Datei-Icon für .findsl ohne eigenen FileType (FileIconProvider greift
              vor dem FileType-Icon, ohne das TextMate-Highlighting zu stören). -->
-        <fileIconProvider implementation="org.findsl.FinDslFileIconProvider"/>
+        <fileIconProvider implementation="org.findsl.intellij.FinDslFileIconProvider"/>
         <!-- Hinweis Cmd/Ctrl+Hover-Link: KEIN eigener fileViewProviderFactory nötig.
              LSP4IJ registriert für TextMate-Dateien (language="textmate") selbst
              einen LSPSemanticTokensStructurelessFileViewProviderFactory (siehe
@@ -41,7 +41,7 @@
         <server
             id="findslLanguageServer"
             name="FinDSL Language Server"
-            factoryClass="org.findsl.FinDslLanguageServerFactory">
+            factoryClass="org.findsl.intellij.FinDslLanguageServerFactory">
             <description><![CDATA[FinDSL Language Server (LSP) — startet das native findsl-lsp-Binary über stdio.]]></description>
         </server>
         <fileNamePatternMapping

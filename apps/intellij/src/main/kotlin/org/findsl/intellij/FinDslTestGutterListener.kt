@@ -9,14 +9,16 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.event.EditorFactoryEvent
-import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
-import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.redhat.devtools.lsp4ij.LSPIJUtils
 import com.redhat.devtools.lsp4ij.LanguageServerManager
 import com.redhat.devtools.lsp4ij.commands.CommandExecutor
@@ -40,16 +42,20 @@ import javax.swing.Icon
  * `RunLineMarkerContributor`: Die `.findsl`-Dateien sind PSI-los (TextMate),
  * es gibt also kein PsiElement pro `testfall`-Zeile. Die Positionen kommen aus
  * den LSP-DocumentSymbols (`prüfe` = Namespace, `testfall` = Method-Kinder).
+ *
+ * Angebunden als `FileEditorManagerListener` (projectListeners) — NICHT als
+ * EditorFactoryListener: letzterer ist kein Message-Bus-Topic und feuert über
+ * `<applicationListeners>` nicht.
  */
-class FinDslTestGutterListener : EditorFactoryListener {
+class FinDslTestGutterListener : FileEditorManagerListener {
 
-    override fun editorCreated(event: EditorFactoryEvent) {
-        val editor = event.editor
-        val project = editor.project ?: return
-        val vfile = FileDocumentManager.getInstance().getFile(editor.document) ?: return
-        if (!vfile.name.endsWith(SUFFIX)) return
+    override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
+        if (!file.name.endsWith(SUFFIX)) return
+        val project = source.project
+        val editors = source.getEditors(file).filterIsInstance<TextEditor>().map { it.editor }
+        if (editors.isEmpty()) return
 
-        val uri = LSPIJUtils.toUriAsString(vfile)
+        val uri = LSPIJUtils.toUriAsString(file)
         // Asynchron: Server (bei Bedarf gestartet) → DocumentSymbols → auf dem EDT
         // die Gutter-Icons setzen. Kein blockierendes Warten.
         LanguageServerManager.getInstance(project)
@@ -61,9 +67,19 @@ class FinDslTestGutterListener : EditorFactoryListener {
                     .thenAccept { symbols ->
                         if (symbols.isNullOrEmpty()) return@thenAccept
                         ApplicationManager.getApplication().invokeLater {
-                            if (!editor.isDisposed) renderTestGutters(project, editor, uri, symbols)
+                            for (editor in editors) {
+                                if (!editor.isDisposed) renderTestGutters(project, editor, uri, symbols)
+                            }
                         }
                     }
+                    .exceptionally { ex ->
+                        LOG.warn("DocumentSymbols für Test-Gutter fehlgeschlagen ($uri)", ex)
+                        null
+                    }
+            }
+            .exceptionally { ex ->
+                LOG.warn("Language-Server für Test-Gutter nicht verfügbar", ex)
+                null
             }
     }
 
@@ -103,6 +119,7 @@ class FinDslTestGutterListener : EditorFactoryListener {
     }
 
     companion object {
+        private val LOG = logger<FinDslTestGutterListener>()
         private const val SUFFIX = ".findsl"
         private const val SERVER_ID = "findslLanguageServer"
     }

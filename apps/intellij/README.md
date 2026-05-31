@@ -62,9 +62,21 @@ FINDSL_LSP_PATH="$(pwd)/../../packages/lsp/dist/findsl-lsp" \
 In der gestarteten IDE eine `.findsl`-Datei öffnen — Highlighting, Completion,
 Hover, Diagnosen, Gehe-zu-Definition, Rename und Formatierung sind aktiv.
 
+## Bekannte Einschränkungen
+
+- **§-/`@Quelle`-Links (documentLink):** Cmd/Ctrl+Click öffnet die Norm im
+  Browser, aber der Mauszeiger wird beim Hover nicht zur Hand. LSP4IJ rendert
+  documentLinks PSI-gebunden (`ExternalAnnotator` + `GotoDeclarationHandler`);
+  bei TextMate-Dateien ohne echtes PSI fehlt daher nur das Hand-Cursor-Feedback
+  — die Navigation funktioniert.
+- **Formeln im Hover:** LaTeX-Formeln in der Doku werden (anders als in VS Code)
+  noch nicht gerendert — LSP4IJ kann im Hover-Markdown kein Math. Geplant:
+  server-seitig TeX-freier Unicode-Hover für IntelliJ.
+
 ## Status / Roadmap
 
-- **#240** (dieses Gerüst): LSP-Anbindung, FileType, Server-Start. ✅
+- **#240** (dieses Gerüst): LSP-Anbindung über `fileNamePatternMapping`,
+  TextMate-Highlighting, Datei-Icon, Server-Start. ✅
 - **#241**: `prüfe`-Testfälle per CodeLens ausführen.
 - **#242**: Action „Dokumentation generieren".
 - **#243/#244/#245**: Binary-Distribution, CI/Publishing, Signierung.

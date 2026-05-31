@@ -62,8 +62,21 @@ FINDSL_LSP_PATH="$(pwd)/../../packages/lsp/dist/findsl-lsp" \
 In der gestarteten IDE eine `.findsl`-Datei öffnen — Highlighting, Completion,
 Hover, Diagnosen, Gehe-zu-Definition, Rename und Formatierung sind aktiv.
 
+## `prüfe`-Tests ausführen
+
+- **CodeLens „▶ N Testfälle ausführen"** über jedem `prüfe`-Block (führt den
+  ganzen Block aus).
+- **Run-Gutter-Icon** links pro `testfall` (führt genau diesen Testfall aus).
+
+Beide gehen über das Server-Kommando `findsl.pruefe.run`; das Ergebnis erscheint
+als Notification, fehlgeschlagene Testfälle als Annotation.
+
 ## Bekannte Einschränkungen
 
+- **Gutter-Icons aktualisieren sich beim Öffnen der Datei:** Werden Testfälle
+  hinzugefügt/entfernt, erscheinen/verschwinden die Icons erst beim erneuten
+  Öffnen. (Bestehende Icons wandern bei Edits korrekt mit.) Ein Live-Refresh ist
+  als Folge geplant.
 - **§-/`@Quelle`-Links (documentLink):** Cmd/Ctrl+Click öffnet die Norm im
   Browser, aber der Mauszeiger wird beim Hover nicht zur Hand. LSP4IJ rendert
   documentLinks PSI-gebunden (`ExternalAnnotator` + `GotoDeclarationHandler`);
@@ -71,12 +84,14 @@ Hover, Diagnosen, Gehe-zu-Definition, Rename und Formatierung sind aktiv.
   — die Navigation funktioniert.
 - **Formeln im Hover:** LaTeX-Formeln in der Doku werden (anders als in VS Code)
   noch nicht gerendert — LSP4IJ kann im Hover-Markdown kein Math. Geplant:
-  server-seitig TeX-freier Unicode-Hover für IntelliJ.
+  server-seitig TeX-freier Unicode-Hover für IntelliJ (#250).
 
 ## Status / Roadmap
 
-- **#240** (dieses Gerüst): LSP-Anbindung über `fileNamePatternMapping`,
+- **#240** (Gerüst): LSP-Anbindung über `fileNamePatternMapping`,
   TextMate-Highlighting, Datei-Icon, Server-Start. ✅
-- **#241**: `prüfe`-Testfälle per CodeLens ausführen.
+- **#241**: `prüfe`-Testfälle per CodeLens ausführen. ✅
+- **#255**: Run-Gutter-Icons pro Testfall. ✅
 - **#242**: Action „Dokumentation generieren".
+- **#250**: LaTeX-Hover server-seitig.
 - **#243/#244/#245**: Binary-Distribution, CI/Publishing, Signierung.

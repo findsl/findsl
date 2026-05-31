@@ -49,4 +49,24 @@
             serverId="findslLanguageServer"
             languageId="findsl"/>
     </extensions>
+
+    <!-- Client-Handler für das CodeLens-Kommando `findsl.pruefe.runFromLens`
+         (vom Server NICHT als executeCommand registriert). Die action-id MUSS
+         exakt die Kommando-id sein — LSP4IJ findet die Action darüber und
+         reicht den Lauf an `findsl.pruefe.run` weiter. -->
+    <actions>
+        <action
+            id="findsl.pruefe.runFromLens"
+            class="org.findsl.intellij.RunPruefeFromLensAction"/>
+    </actions>
+
+    <!-- Run-Gutter-Icons pro testfall (#255): setzt beim Öffnen einer .findsl-
+         Datei aus den LSP-DocumentSymbols Gutter-Icons; Klick führt den
+         einzelnen Testfall aus. FileEditorManagerListener (projectListeners),
+         NICHT EditorFactoryListener (kein Message-Bus-Topic → feuert nicht). -->
+    <projectListeners>
+        <listener
+            class="org.findsl.intellij.FinDslTestGutterListener"
+            topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+    </projectListeners>
 </idea-plugin>

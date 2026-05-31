@@ -3,7 +3,7 @@
 // from devtank42 GmbH (see ../../LICENSE-COMMERCIAL.md).
 // SPDX-License-Identifier: EUPL-1.2
 
-package de.devtank42.findsl.intellij
+package org.findsl
 
 import com.intellij.lang.Language
 

@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>de.devtank42.findsl.intellij</id>
+    <id>org.findsl.intellij</id>
     <name>FinDSL</name>
     <vendor email="info@devtank42.de" url="https://github.com/findsl/findsl">devtank42</vendor>
 
@@ -21,7 +21,7 @@
         <fileType
             name="FinDSL"
             language="FINDSL"
-            implementationClass="de.devtank42.findsl.intellij.FinDslFileType"
+            implementationClass="org.findsl.FinDslFileType"
             fieldName="INSTANCE"
             extensions="findsl"/>
     </extensions>
@@ -31,7 +31,7 @@
         <server
             id="findslLanguageServer"
             name="FinDSL Language Server"
-            factoryClass="de.devtank42.findsl.intellij.FinDslLanguageServerFactory">
+            factoryClass="org.findsl.FinDslLanguageServerFactory">
             <description><![CDATA[FinDSL Language Server (LSP) — startet das native findsl-lsp-Binary über stdio.]]></description>
         </server>
         <languageMapping

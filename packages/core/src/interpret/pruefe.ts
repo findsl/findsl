@@ -19,6 +19,7 @@ import {
     type InterpretedModule,
     type ModuleRegistry,
 } from './interpreter.js';
+import type { AstNode } from 'langium';
 import type { Environment } from './environment.js';
 import type { Program, PruefeDecl } from '../language/generated/ast.js';
 import type { LoadedModule } from './module-loader.js';
@@ -32,6 +33,14 @@ export interface TestfallReport {
     readonly status: TestfallStatus;
     /** Ausgewerteter Wert bei pass/fail, Fehlermeldung bei error. */
     readonly detail: string;
+    /** 1-basierte Quellposition des `testfall` (für die Editor-Navigation aus
+     *  dem Test-Runner-Fenster, #256). Fehlt, wenn kein CST-Knoten vorliegt. */
+    readonly line?: number;
+    readonly column?: number;
+    /** 1-basierte Quellposition des umschließenden `prüfe`-Blocks — für die
+     *  Navigation vom Suite-(Parent-)Knoten im Test-Runner-Fenster (#256). */
+    readonly pruefeLine?: number;
+    readonly pruefeColumn?: number;
 }
 
 export interface PruefeReport {
@@ -140,57 +149,55 @@ export function runPruefeDecl(
         : decl.testfaelle[testfallIndex] !== undefined
             ? [decl.testfaelle[testfallIndex]]
             : [];
+    // Position des prüfe-Blocks (1-basiert) — für die Navigation vom Suite-Knoten.
+    const pruefePos = cstStartOf(decl);
     const results: TestfallReport[] = [];
     for (const testfall of testfaelle) {
+        // Quellposition des testfall (1-basiert) — für die Sprung-Navigation aus
+        // dem Test-Runner-Fenster. Einmal pro testfall, in jedes Ergebnis gesetzt.
+        const pos = cstStartOf(testfall);
+        const mk = (status: TestfallStatus, detail: string): TestfallReport => ({
+            pruefeName:    decl.name,
+            testfallLabel: testfall.label,
+            status,
+            detail,
+            line:          pos?.line,
+            column:        pos?.column,
+            pruefeLine:    pruefePos?.line,
+            pruefeColumn:  pruefePos?.column,
+        });
         const erwartetAbbruch = testfall.erwartetAbbruch === true;
         try {
             const value: Value = evalTestfall(testfall, env);
             if (erwartetAbbruch) {
-                results.push({
-                    pruefeName:    decl.name,
-                    testfallLabel: testfall.label,
-                    status:        'fail',
-                    detail:        `erwartete abbruch, ergab ${valueToString(value)}`,
-                });
+                results.push(mk('fail', `erwartete abbruch, ergab ${valueToString(value)}`));
             } else if (value.kind === 'bool' && value.value) {
-                results.push({
-                    pruefeName:    decl.name,
-                    testfallLabel: testfall.label,
-                    status:        'pass',
-                    detail:        'wahr',
-                });
+                results.push(mk('pass', 'wahr'));
             } else {
-                results.push({
-                    pruefeName:    decl.name,
-                    testfallLabel: testfall.label,
-                    status:        'fail',
-                    detail:        `ergab ${valueToString(value)}`,
-                });
+                results.push(mk('fail', `ergab ${valueToString(value)}`));
             }
         } catch (err) {
             if (err instanceof AbbruchSignal) {
                 // Abbruch ist nicht abfangbar — hier an der Lauf-Grenze
                 // wird er ausgewertet: erwartet → pass, sonst → fail
                 // (mit Anzeige der Begründung, SPEC § 10.2).
-                results.push({
-                    pruefeName:    decl.name,
-                    testfallLabel: testfall.label,
-                    status:        erwartetAbbruch ? 'pass' : 'fail',
-                    detail:        erwartetAbbruch
-                        ? `Abbruch wie erwartet: "${err.grund}"`
-                        : `abbruch: "${err.grund}"`,
-                });
+                results.push(mk(
+                    erwartetAbbruch ? 'pass' : 'fail',
+                    erwartetAbbruch ? `Abbruch wie erwartet: "${err.grund}"` : `abbruch: "${err.grund}"`,
+                ));
             } else {
-                results.push({
-                    pruefeName:    decl.name,
-                    testfallLabel: testfall.label,
-                    status:        'error',
-                    detail:        formatError(err),
-                });
+                results.push(mk('error', formatError(err)));
             }
         }
     }
     return results;
+}
+
+/** 1-basierte Startposition eines AST-Knotens aus seinem CST-Knoten (oder
+ *  `undefined`, wenn keiner vorliegt — z. B. bei programmatisch erzeugten Knoten). */
+function cstStartOf(node: AstNode): { line: number; column: number } | undefined {
+    const start = node.$cstNode?.range.start;
+    return start ? { line: start.line + 1, column: start.character + 1 } : undefined;
 }
 
 /**

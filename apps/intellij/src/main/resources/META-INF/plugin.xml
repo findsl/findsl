@@ -33,6 +33,13 @@
              einen LSPSemanticTokensStructurelessFileViewProviderFactory (siehe
              LSP4IJ-plugin.xml) — der begrenzt die Hover-/Definition-Links bereits
              auf einzelne Symbole. Ein eigener FileType würde das nur kaputt machen. -->
+
+        <!-- Test-Runner (#256): RunConfiguration „FinDSL-Test" startet das CLI
+             mit dem TeamCity-Reporter; IntelliJ rendert die Service Messages
+             nativ als Test-Baum. Der Producer bietet „Run" im Kontext einer
+             .findsl-Datei an. -->
+        <configurationType implementation="org.findsl.intellij.FinDslTestRunConfigurationType"/>
+        <runConfigurationProducer implementation="org.findsl.intellij.FinDslTestRunConfigurationProducer"/>
     </extensions>
 
     <!-- LSP4IJ: Server-Definition + Mapping per Dateiname-Muster (kein eigener

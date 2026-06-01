@@ -65,6 +65,19 @@
         <action
             id="findsl.pruefe.runFromLens"
             class="org.findsl.intellij.RunPruefeFromLensAction"/>
+
+        <!-- Doku-Action (#242): ruft das Server-Kommando findsl.doku.generate für
+             die aktive .findsl-Datei auf und öffnet das Markdown als Editor-Tab
+             (Vorschau via gebündeltem Markdown-Plugin). Im Editor-Kontextmenü und
+             im Tools-Menü. -->
+        <action
+            id="findsl.doku.generate.action"
+            class="org.findsl.intellij.FinDslGenerateDocsAction"
+            text="FinDSL-Dokumentation generieren"
+            description="Generiert die Dokumentation der aktiven .findsl-Datei und öffnet sie als Markdown-Tab">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 
     <!-- Run-Gutter-Icons pro testfall (#255): setzt beim Öffnen einer .findsl-

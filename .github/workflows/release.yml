@@ -30,8 +30,9 @@
 # **Signaturen:** npm via Sigstore (OIDC, kostenfrei). Linux-Tar per detached
 # GPG-Signatur. Aggregiertes SHA256SUMS GPG-signiert. **macOS- und Windows-
 # Binaries werden bewusst NICHT signiert** (Entscheidung: keine
-# kostenpflichtigen Zertifikate). Nutzer-Doku zur Gatekeeper/SmartScreen-
-# Umgehung: `docs/install.md`.
+# kostenpflichtigen Zertifikate; #245, ADR apps/intellij/docs/binary-signing.md).
+# Integrität via SHA256SUMS/GPG + (Plugin) SHA-256-Pinning gegen checksums.json.
+# Nutzer-Doku zur Gatekeeper/SmartScreen-Umgehung: `docs/install.md`.
 #
 # **Sicherheit:** sämtliche Werte aus `${{ … }}` (inputs, needs, matrix) werden
 # über `env:` in Shell-Variablen exportiert und nirgends direkt in `run:`-

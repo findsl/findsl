@@ -124,7 +124,9 @@ als Notification, fehlgeschlagene Testfälle als Annotation.
   als Release-Assets; `signPlugin`/`publishPlugin` gated. ✅
   *(Folge: Client-Lazy-Download in `FinDslNativeBinary` — lädt das Binary zur
   Laufzeit; erst nach erstem Release mit Assets sinnvoll testbar.)*
-- **#245**: Plugin-Signierung/Notarisierung (Zertifikate) — offen.
+- **#245**: Binary-Signierung/Notarisierung — bewusst unsigniert; für den
+  Lazy-Download nicht nötig (Integrität via SHA-256-Pinning, ADR
+  [docs/binary-signing.md](docs/binary-signing.md)). ✅
 - **Marketplace-Aktivierung**: JetBrains-Vendor/-Account + Secrets
   (`JETBRAINS_PUBLISH_TOKEN` …) nötig. Die **erste** Veröffentlichung muss laut
   JetBrains **manuell** erfolgen (Plugin-`.zip` aus dem GitHub-Release über

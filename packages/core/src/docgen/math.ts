@@ -97,7 +97,7 @@ function mathBlock(
     const firstLineRest = state.src.slice(pos, max);
     // Einzeiliges `$$ … $$`?
     const single = firstLineRest.indexOf('$$');
-    let content = '';
+    let content: string;
     let nextLine = startLine;
     if (single >= 0) {
         content = firstLineRest.slice(0, single).trim();

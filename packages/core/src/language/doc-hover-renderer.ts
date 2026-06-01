@@ -108,7 +108,7 @@ export async function renderDocForHover(
         await readyMathJax();
         mathReady = true;
     } catch {
-        mathReady = false;
+        // `mathReady` bleibt `false` → formatProse fällt auf texToPlain zurück.
     }
 
     if (stripped) {

@@ -31,6 +31,17 @@
 import { parseDocTags, stripDocMarkers } from './doc-tags.js';
 import { texToPlain } from './tex-to-plain.js';
 import { ensureMathJax, texToSvg } from '../docgen/math.js';
+import type { HoverMathMode } from './client-math-mode.js';
+
+/**
+ * Schreibt ein gerendertes Formel-SVG in eine Datei und liefert eine
+ * `file://`-URL (für Clients ohne `data:`-URL-Bild, s. `svg-file`-Modus).
+ * Per Dependency-Injection vom serverseitigen Aufrufer (`findsl-hover.ts`)
+ * gereicht, damit dieses Modul Node-frei bleibt (`node:fs`/`crypto`) und im
+ * Browser-Bundle (`@findsl/web`) lauffähig ist — der nimmt nur den
+ * `data:`-Pfad und braucht den Writer nie.
+ */
+export type SvgFileWriter = (svg: string, isDark: boolean, display: boolean) => string;
 
 /** Cached MathJax-Init-Promise. Pro Prozess einmalig — bei jedem
  *  `renderDocForHover`-Aufruf wird das gleiche Promise awaited (no-op
@@ -74,24 +85,35 @@ export interface RenderInput {
  * initialisiert werden muss. Nachfolgende Aufrufe sind ohne Latenz
  * (Cache via `readyMathJax`).
  */
-export async function renderDocForHover(input: RenderInput): Promise<string> {
+export async function renderDocForHover(
+    input: RenderInput,
+    options?: {
+        readonly mathMode?: HoverMathMode;
+        readonly svgDark?: boolean;
+        readonly svgFileWriter?: SvgFileWriter;
+    },
+): Promise<string> {
     const { docRaw, paramOrder, quellen } = input;
+    const mathMode: HoverMathMode = options?.mathMode ?? 'svg-data';
+    const svgDark = options?.svgDark ?? false;
+    const svgFileWriter = options?.svgFileWriter;
     const stripped = stripDocMarkers(docRaw);
     const sections: string[] = [];
 
-    // MathJax frühzeitig initialisieren — falls die Prosa Formeln
-    // enthält, brauchen wir den synchronen SVG-Renderer. Bei Fehlschlag
-    // fällt `formatProse` automatisch auf `texToPlain` zurück.
-    let mathReady = true;
+    // Beide Bild-Modi (`svg-data`/`svg-file`, Issue #250) brauchen den
+    // synchronen MathJax-SVG-Renderer → einmalig initialisieren. Bei Fehlschlag
+    // fällt `formatProse` automatisch auf `texToPlain` (Unicode-Klartext) zurück.
+    let mathReady = false;
     try {
         await readyMathJax();
+        mathReady = true;
     } catch {
         mathReady = false;
     }
 
     if (stripped) {
         const tags = parseDocTags(stripped);
-        const prose = formatProse(tags.prose, mathReady);
+        const prose = formatProse(tags.prose, mathReady, mathMode, svgDark, svgFileWriter);
         if (prose) sections.push(prose);
 
         // Parameter-Sektion: Reihenfolge folgt `paramOrder`, falls vorhanden;
@@ -141,35 +163,45 @@ export async function renderDocForHover(input: RenderInput): Promise<string> {
  * MathJax nicht initialisiert ist oder der Render-Pfad eine Exception
  * wirft (z. B. ungültiges TeX, kaputte Math-Lib).
  */
-function formatProse(prose: string, mathReady: boolean): string {
+function formatProse(
+    prose: string, mathReady: boolean, mathMode: HoverMathMode, svgDark: boolean, svgFileWriter?: SvgFileWriter,
+): string {
     if (!prose) return '';
     let out = prose;
     // Block-Math: `$$ ... $$` → SVG-Bild als Block.
     out = out.replace(/\$\$([\s\S]+?)\$\$/g, (_m, inner: string) =>
-        renderMath(inner.trim(), /* display */ true, mathReady));
+        renderMath(inner.trim(), /* display */ true, mathReady, mathMode, svgDark, svgFileWriter));
     // Inline-Math: `$x + y$` → SVG-Bild inline.
     out = out.replace(/\$([^\n$]+?)\$/g, (_m, inner: string) =>
-        renderMath(inner.trim(), /* display */ false, mathReady));
+        renderMath(inner.trim(), /* display */ false, mathReady, mathMode, svgDark, svgFileWriter));
     out = out.replace(/\n{3,}/g, '\n\n');
     return out.trim();
 }
 
-/** TeX → Markdown-Bild (SVG-data-URL) oder Klartext-Fallback. */
-function renderMath(tex: string, display: boolean, mathReady: boolean): string {
+/**
+ * TeX → Markdown-Bild oder Klartext-Fallback. Bild-URL je nach Client:
+ * - `svg-data` (VS Code): `data:image/svg+xml`-URL, Theme via Media-Query.
+ * - `svg-file` (IntelliJ): `file://`-URL einer Cache-Datei (via `svgFileWriter`),
+ *   feste Theme-Farbe. Fehlt der Writer (z. B. Browser), fällt es auf `svg-data`.
+ */
+function renderMath(
+    tex: string, display: boolean, mathReady: boolean, mathMode: HoverMathMode, svgDark: boolean,
+    svgFileWriter?: SvgFileWriter,
+): string {
     if (mathReady) {
         try {
             const { svg } = texToSvg(tex, display);
-            const themed = themeAwareSvg(svg);
-            // SVG ohne XML-Deklaration und ohne `<?xml`-Header (MathJax
-            // liefert reines `<svg …>…</svg>`) → direkt URL-kodieren.
-            // `#`/`%`/`<` etc. müssen escaped sein; `encodeURIComponent`
-            // ist die sicherste Variante für `data:image/svg+xml;utf8,…`.
-            const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(themed)}`;
+            const url = (mathMode === 'svg-file' && svgFileWriter)
+                ? svgFileWriter(svg, svgDark, display)
+                // SVG ohne XML-Deklaration (MathJax liefert reines `<svg …>…</svg>`)
+                // → direkt URL-kodieren. `encodeURIComponent` escapt `#`/`%`/`<`
+                // sicher für `data:image/svg+xml;utf8,…`.
+                : `data:image/svg+xml;utf8,${encodeURIComponent(themeAwareSvg(svg))}`;
             const alt = altText(tex);
             // Display-Math: leere Zeile davor/danach, sodass Markdown das
             // Bild als Block rendert statt inline. Inline-Math: kein
             // Umbruch, fließt im Satz.
-            return display ? `\n\n![${alt}](${dataUrl})\n\n` : `![${alt}](${dataUrl})`;
+            return display ? `\n\n![${alt}](${url})\n\n` : `![${alt}](${url})`;
         } catch {
             // Fall-through → Klartext
         }

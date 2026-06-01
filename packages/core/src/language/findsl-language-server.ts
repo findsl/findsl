@@ -23,6 +23,7 @@
 
 import { DefaultLanguageServer } from 'langium/lsp';
 import { CodeActionKind, type InitializeParams, type InitializeResult } from 'vscode-languageserver';
+import { setClientName, setClientTheme } from './client-math-mode.js';
 
 /** Die vom CodeActionProvider real erzeugten Kinds. */
 const FINDSL_CODE_ACTION_KINDS: readonly string[] = [
@@ -33,6 +34,13 @@ const FINDSL_CODE_ACTION_KINDS: readonly string[] = [
 
 export class FindslLanguageServer extends DefaultLanguageServer {
     protected override buildInitializeResult(params: InitializeParams): InitializeResult {
+        // Client-Kontext merken (#250): Name bestimmt den Hover-Formel-Modus
+        // (VS Code → data:-URL-SVG; IntelliJ/LSP4IJ → file://-SVG). Das Theme aus
+        // den initializationOptions setzt die feste Formelfarbe im file://-Pfad
+        // (IntelliJs SVG-Loader wertet keine prefers-color-scheme-Query aus).
+        setClientName(params.clientInfo?.name);
+        const initOpts = params.initializationOptions as { findsl?: { theme?: unknown } } | undefined;
+        setClientTheme(initOpts?.findsl?.theme);
         const result = super.buildInitializeResult(params);
         // Nur ersetzen, wenn der Provider tatsächlich gebunden ist (Langium
         // setzt dann `true`); sonst die Default-Entscheidung respektieren.

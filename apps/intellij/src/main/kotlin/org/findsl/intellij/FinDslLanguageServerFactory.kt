@@ -10,6 +10,8 @@ import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.util.ui.StartupUiUtil
 import com.redhat.devtools.lsp4ij.LanguageServerFactory
 import com.redhat.devtools.lsp4ij.server.OSProcessStreamConnectionProvider
 import com.redhat.devtools.lsp4ij.server.StreamConnectionProvider
@@ -50,6 +52,18 @@ class FinDslStreamConnectionProvider(project: Project) : OSProcessStreamConnecti
         val commandLine = GeneralCommandLine(server.toString(), "--stdio")
         project.basePath?.let { commandLine.withWorkDirectory(it) }
         super.setCommandLine(commandLine)
+    }
+
+    /**
+     * Meldet dem Server das aktuelle IDE-Theme (#250): Hover-Formeln werden als
+     * `file://`-SVG mit fester Farbe gerendert (IntelliJs SVG-Loader wertet keine
+     * `prefers-color-scheme`-Query aus), daher muss der Server „dark" vs. „light"
+     * kennen, damit die Formel auf dem Hover-Hintergrund lesbar ist. Wird beim
+     * `initialize` als `initializationOptions.findsl.theme` übertragen.
+     */
+    override fun getInitializationOptions(rootUri: VirtualFile?): Any {
+        val dark = runCatching { StartupUiUtil.isDarkTheme }.getOrDefault(false)
+        return mapOf("findsl" to mapOf("theme" to if (dark) "dark" else "light"))
     }
 
     companion object {

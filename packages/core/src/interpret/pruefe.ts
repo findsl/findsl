@@ -37,6 +37,10 @@ export interface TestfallReport {
      *  dem Test-Runner-Fenster, #256). Fehlt, wenn kein CST-Knoten vorliegt. */
     readonly line?: number;
     readonly column?: number;
+    /** 1-basierte Quellposition des umschließenden `prüfe`-Blocks — für die
+     *  Navigation vom Suite-(Parent-)Knoten im Test-Runner-Fenster (#256). */
+    readonly pruefeLine?: number;
+    readonly pruefeColumn?: number;
 }
 
 export interface PruefeReport {
@@ -145,6 +149,8 @@ export function runPruefeDecl(
         : decl.testfaelle[testfallIndex] !== undefined
             ? [decl.testfaelle[testfallIndex]]
             : [];
+    // Position des prüfe-Blocks (1-basiert) — für die Navigation vom Suite-Knoten.
+    const pruefePos = cstStartOf(decl);
     const results: TestfallReport[] = [];
     for (const testfall of testfaelle) {
         // Quellposition des testfall (1-basiert) — für die Sprung-Navigation aus
@@ -157,6 +163,8 @@ export function runPruefeDecl(
             detail,
             line:          pos?.line,
             column:        pos?.column,
+            pruefeLine:    pruefePos?.line,
+            pruefeColumn:  pruefePos?.column,
         });
         const erwartetAbbruch = testfall.erwartetAbbruch === true;
         try {

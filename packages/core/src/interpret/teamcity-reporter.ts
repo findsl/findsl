@@ -67,20 +67,16 @@ function message(name: string, attrs: Record<string, string | undefined>): strin
  */
 const LOCATION_PROTOCOL = 'findsl';
 
-/** locationHint auf Datei-Ebene (Suiten — kein Zeilenbezug). `undefined` ohne Pfad. */
-function fileHint(filePath?: string): string | undefined {
-    return filePath ? `${LOCATION_PROTOCOL}://${filePath}` : undefined;
-}
-
-/** `findsl://<abs>:<line>:<column>`-locationHint (1-basiert) für einen Testfall —
- *  `FinDslTestLocator` springt damit an die Quellzeile. Ohne Position (kein
- *  CST-Knoten) Fallback auf die Datei; ohne Pfad `undefined`. */
-function testfallHint(filePath: string | undefined, r: TestfallReport): string | undefined {
+/**
+ * Baut einen locationHint `findsl://<abs>[:<line>[:<column>]]` (1-basiert), den
+ * `FinDslTestLocator` zeilengenau auflöst. Ohne Zeile (Datei-Suite oder fehlende
+ * Position) nur die Datei; ohne Pfad `undefined`.
+ */
+function hint(filePath: string | undefined, line?: number, column?: number): string | undefined {
     if (!filePath) return undefined;
-    if (r.line === undefined) return `${LOCATION_PROTOCOL}://${filePath}`;
-    return r.column !== undefined
-        ? `${LOCATION_PROTOCOL}://${filePath}:${r.line}:${r.column}`
-        : `${LOCATION_PROTOCOL}://${filePath}:${r.line}`;
+    const base = `${LOCATION_PROTOCOL}://${filePath}`;
+    if (line === undefined) return base;
+    return column !== undefined ? `${base}:${line}:${column}` : `${base}:${line}`;
 }
 
 /**
@@ -89,14 +85,23 @@ function testfallHint(filePath: string | undefined, r: TestfallReport): string |
  * Auftretens), sodass IntelliJ sie als verschachtelte Suiten zeigt.
  */
 export function teamCityReport(report: PruefeReport, opts: TeamCityOptions): string[] {
-    const fileLevelHint = fileHint(opts.filePath);
+    const fp = opts.filePath;
     const lines: string[] = [];
-    lines.push(message('testSuiteStarted', { name: opts.suiteName, locationHint: fileLevelHint }));
+    // Datei-Suite: nur die Datei (keine sinnvolle Zeile).
+    lines.push(message('testSuiteStarted', { name: opts.suiteName, locationHint: hint(fp) }));
 
     for (const group of groupByPruefe(report.results)) {
         const inSuite = group.pruefeName.length > 0;
-        if (inSuite) lines.push(message('testSuiteStarted', { name: group.pruefeName, locationHint: fileLevelHint }));
-        for (const r of group.results) emitTestfall(lines, r, opts.filePath);
+        if (inSuite) {
+            // prüfe-Suite zeigt auf die prüfe-Block-Zeile (alle Testfälle der
+            // Gruppe tragen dieselbe pruefe-Position — erste genügt).
+            const first = group.results[0];
+            lines.push(message('testSuiteStarted', {
+                name: group.pruefeName,
+                locationHint: hint(fp, first?.pruefeLine, first?.pruefeColumn),
+            }));
+        }
+        for (const r of group.results) emitTestfall(lines, r, fp);
         if (inSuite) lines.push(message('testSuiteFinished', { name: group.pruefeName }));
     }
 
@@ -127,7 +132,7 @@ function groupByPruefe(results: ReadonlyArray<TestfallReport>): PruefeGroup[] {
 
 /** testStarted → (bei fail/error) testFailed → testFinished für einen Testfall. */
 function emitTestfall(lines: string[], r: TestfallReport, filePath?: string): void {
-    lines.push(message('testStarted', { name: r.testfallLabel, locationHint: testfallHint(filePath, r) }));
+    lines.push(message('testStarted', { name: r.testfallLabel, locationHint: hint(filePath, r.line, r.column) }));
     if (r.status !== 'pass') {
         // fail = Testfall ergab nicht `wahr` (detail = ausgewerteter Wert);
         // error = Laufzeitfehler (detail = Fehlermeldung). IntelliJ kennt nur

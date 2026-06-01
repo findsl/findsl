@@ -119,6 +119,15 @@ describe('teamCityReport', () => {
         expect(lines.join('\n')).toContain("testSuiteStarted name='s' locationHint='findsl:///abs/kst.test.findsl'");
     });
 
+    it('prüfe-Suite (Parent-Knoten) trägt die prüfe-Block-Position', () => {
+        const lines = teamCityReport(report([
+            { pruefeName: 'P', testfallLabel: 't', status: 'pass', detail: 'wahr', line: 31, column: 9, pruefeLine: 30, pruefeColumn: 1 },
+        ]), { suiteName: 's', filePath: '/abs/x.findsl' });
+        // Parent (prüfe) springt auf die prüfe-Zeile, Kind (testfall) auf seine eigene.
+        expect(lines.join('\n')).toContain("testSuiteStarted name='P' locationHint='findsl:///abs/x.findsl:30:1'");
+        expect(lines.join('\n')).toContain("testStarted name='t' locationHint='findsl:///abs/x.findsl:31:9'");
+    });
+
     it('escaped Sonderzeichen in Test-/Suite-Namen und Messages', () => {
         const lines = teamCityReport(report([
             { pruefeName: "P'1", testfallLabel: 'a[b]', status: 'fail', detail: "wert='x'" },

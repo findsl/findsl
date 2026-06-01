@@ -34,7 +34,7 @@ import {
     isKonstDecl,
     isLetStmt,
 } from '../language/generated/ast.js';
-import { moneyAnnotationName, numericArith } from './interpret-money.js';
+import { castNumeric, moneyAnnotationName, numericArith } from './interpret-money.js';
 
 /** Funktion/Lambda/Builtin auf bereits ausgewertete Wert-Argumente anwenden. */
 export type ApplyValueFn = (fnVal: Value, argValues: ReadonlyArray<Value>) => Value;
@@ -162,6 +162,19 @@ export function scalarRoundingValue(
     const make = target === 'Cent' ? NumericValue.cent : NumericValue.euro;
     return new BuiltinValue(`${target}.${name}`, () =>
         make(recv.value.toDecimalPlaces(nk, mode)));
+}
+
+/**
+ * Umwandlungs-Methoden (SPEC § 11.7) als Aufruf-Methoden — Methoden-Form des
+ * `als`-Casts: `.alsProzent()` (Ganzzahl/Dezimal → Prozent, Zahl als
+ * Prozentangabe; intern ÷100) und `.alsDezimal()` (Prozent → Dezimal,
+ * Bruchwert; Wert bleibt, nur Tag). Delegiert an `castNumeric` — dieselbe
+ * Semantik wie `… als Prozent`/`… als Dezimal`. Die Empfänger-Restriktion ist
+ * ein statischer Gate (`conversionMethod`).
+ */
+export function conversionMethodValue(recv: NumericValue, name: string): Value {
+    const target = name === 'alsProzent' ? 'Prozent' : 'Dezimal';
+    return new BuiltinValue(`${target}.${name}`, () => castNumeric(recv, target));
 }
 
 /**

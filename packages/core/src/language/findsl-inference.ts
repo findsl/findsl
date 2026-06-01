@@ -57,6 +57,7 @@ import {
     type ParenChain,
 } from './generated/ast.js';
 import {
+    conversionMethod,
     listMethod,
     scalarArgMethod,
     scalarRoundingMethod,
@@ -560,13 +561,10 @@ function arithResult(op: string, lt: Type, rt: Type, node: AstNode, report: Repo
         if (rIsGeld && l === 'Ganzzahl')  return rt;
         if (lIsGeld && (r === 'Dezimal' || r === 'Prozent')) return TEuroCent;
         if (rIsGeld && (l === 'Dezimal' || l === 'Prozent')) return TEuroCent;
-        if (l === 'Prozent' && r === 'Prozent') return TProzent;
-        if (l === 'Prozent' && r === 'Ganzzahl') return TProzent;
-        if (r === 'Prozent' && l === 'Ganzzahl') return TProzent;
-        if (l === 'Prozent' || r === 'Prozent') {
-            report(node, `Prozent * ${l === 'Prozent' ? r : l} ist nicht definiert.`);
-            return TUnknown;
-        }
+        // Prozent verhält sich bei `*` mit reinen Zahlen wie sein Bruchwert
+        // (SPEC § 3.4): `100 * 10% == 10`, nicht `1000%`. Jede Nicht-Geld-
+        // Kombination mit Prozent (inkl. Prozent*Prozent) → Dezimal; der Geld-
+        // Sonderfall (Betragsanwendung → EuroCent) ist oben abgehandelt.
         if (l === 'Ganzzahl' && r === 'Ganzzahl') return TGanzzahl;
         return TDezimal;
     }
@@ -574,10 +572,9 @@ function arithResult(op: string, lt: Type, rt: Type, node: AstNode, report: Repo
     if (op === '/') {
         if (lIsGeld && rIsGeld) return TDezimal;
         if (lIsGeld && r === 'Ganzzahl') return TDezimal;      // SPEC § 3.2.3 Anmerkung
-        if (l === 'Prozent' && r === 'Prozent') return TDezimal;
-        if (l === 'Prozent' && r === 'Ganzzahl') return TProzent;
+        // Prozent verhält sich bei `/` mit reinen Zahlen wie sein Bruchwert
+        // (SPEC § 3.4): `9,3% / 2 == 0,0465`. Prozent/Prozent ebenfalls Dezimal.
         if (l === 'Ganzzahl' && r === 'Ganzzahl') return TGanzzahl;
-        if (l === 'Dezimal' || r === 'Dezimal') return TDezimal;
         if (rIsGeld) {
             report(node, `Division durch Geldtyp nur sinnvoll Geld/Geld; ${l} / ${r} ist nicht definiert.`);
             return TUnknown;
@@ -745,6 +742,19 @@ export function walkChain(
                 current, op.name, isTerminal ? expected : undefined,
                 op, report,
             );
+            if (callOp) k++;                      // folgendes () konsumieren
+            continue;
+        }
+
+        // Umwandlungs-Methoden (SPEC § 11.7): `.alsProzent()`/`.alsDezimal()`
+        // auf primitivem Empfänger — Methoden-Form des `als`-Casts, kontextfrei
+        // (der Empfänger bestimmt das Ziel). Record-/Listen-Felder bleiben
+        // unberührt (nur `current.kind === 'primitive'`).
+        if (current.kind === 'primitive' && isFieldAccess(op)
+            && (op.name === 'alsProzent' || op.name === 'alsDezimal')) {
+            const next = chain[k + 1];
+            const callOp = next && isCall(next) ? next : undefined;
+            current = conversionMethod(current, op.name, op, report);
             if (callOp) k++;                      // folgendes () konsumieren
             continue;
         }

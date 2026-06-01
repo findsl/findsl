@@ -641,6 +641,17 @@ function lowerChainOps(
                     ? 'Prozent'
                     : (governingMoneyTarget(op) ?? 'Ganzzahl');
                 cur = { kind: 'round', receiver: cur, mode: fname, target: target as ZielTyp };
+            } else if (fname === 'alsProzent' || fname === 'alsDezimal') {
+                // § 11.7 Umwandlungs-Methode → bestehender Cast-IR-Knoten; die
+                // Runtime-`cast()` macht die Konvertierung (Spiegel castNumeric).
+                if (call.args.length !== 0) {
+                    throw new Error(`\`.${fname}()\` erwartet keine Argumente.`);
+                }
+                cur = {
+                    kind: 'cast',
+                    value: cur,
+                    target: fname === 'alsProzent' ? 'Prozent' : 'Dezimal',
+                };
             } else if (fname === 'zuordnen' || fname === 'filtern' || fname === 'zähle') {
                 // .zähle() ohne Args → parameterloser Listen-Methoden-Pfad
                 // (kein Lambda-Scope nötig).

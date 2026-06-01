@@ -372,9 +372,9 @@ Suffix `%` direkt nach Zahl-Literal:
 100%
 ```
 
-Typ ist `Prozent`. Der numerische Wert ist die Prozentangabe (nicht
-der Bruchteil); `9.3%` repräsentiert intern den Wert "9.3 in
-Prozent-Einheit", also die Bruchzahl 0.093.
+Typ ist `Prozent`. Intern wird der **Bruchteil** gespeichert (`9,3%` =
+`0.093`, `42%` = `0.42`); die Prozentangabe (`9,3`) ist die Anzeige
+(`Wert × 100`, mit `%`-Suffix). Zur Arithmetik siehe [§ 3.4](#34-prozent).
 
 #### 2.7.5 Boolean-Literale
 
@@ -581,21 +581,28 @@ willkürlicher Präzision (`BigInteger`-Semantik).
 
 ### 3.4 Prozent
 
-`Prozent` repräsentiert einen Prozentsatz. Der numerische Wert ist
-die Prozentangabe (z. B. ist `9.3%` intern der Wert `9.3` in
-Prozent-Einheit, was dem Bruchteil 0.093 entspricht).
+`Prozent` repräsentiert einen Prozentsatz. Der numerische Wert wird
+**intern als Bruchzahl** gespeichert (`9.3%` = `0.093`, `42%` = `0.42`); die
+Prozentangabe (`9.3`) ist die Anzeige (`Wert × 100`, mit `%`-Suffix).
 
-Arithmetik:
+Arithmetik. Bei `+`/`-` ist `Prozent` eine **Einheit** (Sätze werden addiert).
+Bei `*`/`/` mit **reinen Zahlen** verhält sich `Prozent` wie sein **Bruchwert**
+→ das Ergebnis ist `Dezimal` (kein Prozent-Tag): `100 * 10%` ist `10`, nicht
+`1000%`. Einzige Ausnahme ist die **Betragsanwendung** `Geld × Prozent`
+(→ `EuroCent`, siehe § 3.2.3).
 
-| Operation                | Ergebnistyp            | Beispiel                       |
-| ------------------------ | ---------------------- | ------------------------------ |
-| `Prozent + Prozent`      | `Prozent`              | `9.3% + 1.7% == 11.0%`         |
-| `Prozent - Prozent`      | `Prozent`              | `100% - 9.3% == 90.7%`         |
-| `Prozent * Geld`         | `EuroCent`             | `42% * 100 als Euro == 42 EuroCent` |
-| `Geld * Prozent`         | `EuroCent`             | (kommutativ)                   |
-| `Prozent / Prozent`      | `Dezimal`              | `42% / 14% == 3`               |
-| `Prozent * Ganzzahl`     | `Prozent`              | `9.3% * 2 == 18.6%`            |
-| `Prozent / Ganzzahl`     | `Prozent`              | `9.3% / 2 == 4.65%`            |
+| Operation                | Ergebnistyp            | Beispiel                            |
+| ------------------------ | ---------------------- | ----------------------------------- |
+| `Prozent + Prozent`      | `Prozent`              | `9,3% + 1,7% == 11,0%`              |
+| `Prozent - Prozent`      | `Prozent`              | `100% - 9,3% == 90,7%`             |
+| `Geld * Prozent`         | `EuroCent`             | `42% * (100 als Euro) == 42 EuroCent` (kommutativ) |
+| `Zahl * Prozent`         | `Dezimal`              | `100 * 10% == 10`; `9,3% * 2 == 0,186` |
+| `Prozent * Prozent`      | `Dezimal`              | `10% * 10% == 0,01`                |
+| `Prozent / Prozent`      | `Dezimal`              | `42% / 14% == 3`                   |
+| `Prozent / Zahl`         | `Dezimal`              | `9,3% / 2 == 0,0465`               |
+
+(`Zahl` = `Ganzzahl` oder `Dezimal`.) Soll aus einer Zahl wieder ein
+Prozentsatz werden, dient der `als`-Cast (§ 4.8) bzw. `.alsProzent()` (§ 11.7).
 
 `Prozent + Geld`, `Prozent + Dezimal` sind *Typfehler*.
 
@@ -2013,6 +2020,29 @@ betrag.mindestens(untergrenze).höchstens(obergrenze)
 
 **`vielfaches` muss größer als `0` sein** — andernfalls ist der Aufruf ein
 Laufzeitfehler (kein sinnvoller Rundungsschritt).
+
+### 11.7 Umwandlungs-Methoden
+
+Methoden-Form des `als`-Casts ([§ 4.8](#48-cast-operator-als)) zwischen
+`Prozent` und reiner Zahl — identisch zu `x als Prozent` bzw. `x als Dezimal`,
+nur flüssiger an einen Ausdruck verkettbar (`(grundbetrag * satz).alsDezimal()`).
+
+| Methode          | Empfängertyp          | Ergebnistyp | Bedeutung                                       |
+| ---------------- | --------------------- | ----------- | ----------------------------------------------- |
+| `.alsProzent()`  | `Ganzzahl`, `Dezimal` | `Prozent`   | **Stellenwert** als Prozentangabe deuten (`9,3.alsProzent() == 9,3 %`) |
+| `.alsDezimal()`  | `Prozent`             | `Dezimal`   | **Bruchwert** des Prozentsatzes (`9,3%.alsDezimal() == 0,093`)         |
+
+**Semantik.** `.alsProzent()` liest den Stellenwert der Zahl als
+Prozent*angabe* — `9,3` wird zu `9,3 %`, intern also dem Bruchwert `0,093`
+(Stellenwert ÷ 100, siehe [§ 2.7.4](#274-prozent-literale)). `.alsDezimal()`
+liefert umgekehrt den intern gespeicherten Bruchwert eines Prozentsatzes
+(`9,3 %` → `0,093`). Die beiden sind daher **nicht** invers
+(`9,3.alsProzent().alsDezimal()` ergibt `0,093`, nicht `9,3`) — sie spiegeln
+exakt die Richtung des jeweiligen `als`-Casts.
+
+**Eigenschaften.** Beide sind arglos und auf anderen Empfängertypen ein
+**Fehler** (`.alsProzent()` auf `Prozent`, `.alsDezimal()` auf einer Zahl
+oder einem Geldtyp).
 
 ---
 

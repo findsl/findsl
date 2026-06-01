@@ -23,6 +23,8 @@
  */
 
 import {
+    ALS_DEZIMAL_METHOD_DEFS,
+    ALS_PROZENT_METHOD_DEFS,
     LIMIT_STEP_METHOD_DEFS,
     LIST_METHOD_DEFS,
     SCALAR_METHOD_DEFS,
@@ -42,6 +44,8 @@ const EMPTY: ReadonlyArray<BuiltinMethodDef> = [];
  *    § 11.1 Rundung **und** § 11.6 Grenzwert/Stufen.
  *  - `Euro` / `Cent` / `Ganzzahl` → nur § 11.6 (kein `.abrunden` auf
  *    Werten ohne Nachkommastellen).
+ *  - § 11.7 Umwandlung kommt **receiver-beschränkt** obendrauf: `.alsProzent()`
+ *    auf `Ganzzahl`/`Dezimal`, `.alsDezimal()` auf `Prozent`.
  *  - `Text` → § 11.5 Text-Methoden.
  *  - Alles andere (Wahrheitswert, Record, unknown, Enum, Function) → leer.
  *
@@ -53,9 +57,12 @@ export function getMethodDefs(recv: Type): ReadonlyArray<BuiltinMethodDef> {
     const t = recv.kind === 'nullable' ? recv.inner : recv;
     if (t.kind === 'list') return LIST_METHOD_DEFS;
     if (t.kind !== 'primitive') return EMPTY;
-    if (t.name === 'EuroCent' || t.name === 'Dezimal' || t.name === 'Prozent') {
-        return SCALAR_METHOD_DEFS;
-    }
+    // Werte mit Nachkommastellen: Rundung + Grenzwert/Stufen.
+    if (t.name === 'EuroCent') return SCALAR_METHOD_DEFS;
+    if (t.name === 'Dezimal') return [...SCALAR_METHOD_DEFS, ...ALS_PROZENT_METHOD_DEFS];
+    if (t.name === 'Prozent') return [...SCALAR_METHOD_DEFS, ...ALS_DEZIMAL_METHOD_DEFS];
+    // Werte ohne Nachkommastellen: nur Grenzwert/Stufen (Ganzzahl zusätzlich .alsProzent()).
+    if (t.name === 'Ganzzahl') return [...LIMIT_STEP_METHOD_DEFS, ...ALS_PROZENT_METHOD_DEFS];
     if (isNumeric(t)) return LIMIT_STEP_METHOD_DEFS;
     if (t.name === 'Text') return TEXT_METHOD_DEFS;
     return EMPTY;

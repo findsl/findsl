@@ -15,6 +15,9 @@ Java-Codegen verfügbar:
 - **§ 11.6 Grenzwert-/Stufen-Methoden** — `.höchstens`, `.mindestens`
   (Min/Max, Clamp via Verkettung), `.abrundenAuf` / `.aufrundenAuf`
   (Rundung auf ein Vielfaches); typ-erhaltend auf allen numerischen Typen.
+- **§ 11.7 Umwandlungs-Methoden** — `.alsProzent()` (Zahl → `Prozent`,
+  Stellenwert als Prozentangabe) und `.alsDezimal()` (`Prozent` →
+  Bruchwert); Methoden-Form des `als`-Casts (§ 4.8).
 
 > **Hinweis:** Die weiteren § 11.5-Text-Methoden (`.alsText`,
 > `.alsGroßbuchstaben`/`.alsKleinbuchstaben`, `.beginntMit`,
@@ -81,6 +84,25 @@ fn AbrundenAufVielfachesDez(betrag: Dezimal, vielfaches: Dezimal): Dezimal = bet
 
 -- Gegenrichtung zur Dezimal-Stufung (aufrunden auf Vielfaches), Issue #206. --
 fn AufrundenAufVielfachesDez(betrag: Dezimal, vielfaches: Dezimal): Dezimal = betrag.aufrundenAuf(vielfaches)
+
+// ===========================================================================
+// § 11.7 Umwandlungs-Methoden
+// ===========================================================================
+
+-- Ganzzahl.alsProzent() → Prozent (Stellenwert als Prozentangabe; 5 → 5 %). --
+fn GanzzahlAlsProzent(n: Ganzzahl): Prozent = n.alsProzent()
+
+-- Dezimal.alsProzent() → Prozent (9,3 → 9,3 %; intern Bruchwert 0,093). --
+fn DezimalAlsProzent(d: Dezimal): Prozent = d.alsProzent()
+
+-- Prozent.alsDezimal() → Dezimal (Bruchwert; 9,3 % → 0,093). --
+fn ProzentAlsDezimal(p: Prozent): Dezimal = p.alsDezimal()
+
+--
+Verkettung an einen Klammer-Ausdruck (Methoden-Form, § 11.7): die
+Dezimal-Multiplikation als Prozentsatz deuten ((100 × 10%) = 10 → 10 %).
+--
+fn KetteAlsProzent(n: Ganzzahl, p: Prozent): Prozent = (n * p).alsProzent()
 
 // ===========================================================================
 // § 11.2 Listen-Methoden

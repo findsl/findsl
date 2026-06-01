@@ -132,7 +132,8 @@ export function numericMul(l: Value, r: Value): NumericValue {
     return new NumericValue(a.value.mul(b.value), combineMul(a.tag, b.tag));
 }
 
-/** SPEC § 3.2.3 / § 3.4: `Geld*Ganzzahl`→Geld; `Geld*{Dezimal,Prozent}`→EuroCent. */
+/** SPEC § 3.2.3 / § 3.4: `Geld*Ganzzahl`→Geld; `Geld*{Dezimal,Prozent}`→EuroCent;
+ *  Prozent mit reinen Zahlen verhält sich wie sein Bruchwert → Dezimal. */
 function combineMul(a: NumericValue['tag'], b: NumericValue['tag']): NumericValue['tag'] {
     const aM = isMoneyTag(a), bM = isMoneyTag(b);
     if (aM && bM) return 'EuroCent';                       // statisch verboten
@@ -142,10 +143,8 @@ function combineMul(a: NumericValue['tag'], b: NumericValue['tag']): NumericValu
         if (other === 'Ganzzahl') return money;            // Geld * Ganzzahl
         return 'EuroCent';                                 // Geld * Dezimal/Prozent
     }
-    if ((a === 'Prozent' && b === 'Ganzzahl') || (a === 'Ganzzahl' && b === 'Prozent')) {
-        return 'Prozent';
-    }
-    if (a === 'Prozent' && b === 'Prozent') return 'Dezimal';
+    // Prozent ist hier ein dimensionsloser Bruch-Skalar (`100 * 10% == 10`,
+    // nicht `1000%`); jede Nicht-Geld-Kombination mit Prozent → Dezimal.
     if (a === 'Ganzzahl' && b === 'Ganzzahl') return 'Ganzzahl';
     return 'Dezimal';
 }
@@ -159,9 +158,9 @@ export function numericDiv(l: Value, r: Value): NumericValue {
     return new NumericValue(a.value.div(b.value), combineDiv(a.tag, b.tag));
 }
 
-/** SPEC § 3.2.3 / § 3.4: `Geld/…`→Dezimal; `Prozent/Ganzzahl`→Prozent. */
+/** SPEC § 3.2.3 / § 3.4: `Geld/…`→Dezimal; Prozent mit reinen Zahlen verhält sich
+ *  wie sein Bruchwert → Dezimal (`9,3% / 2 == 0,0465`). */
 function combineDiv(a: NumericValue['tag'], b: NumericValue['tag']): NumericValue['tag'] {
     if (isMoneyTag(a)) return 'Dezimal';
-    if (a === 'Prozent' && b === 'Ganzzahl') return 'Prozent';
     return 'Dezimal';
 }

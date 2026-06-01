@@ -12,6 +12,10 @@ verwende {
     Subtraktion,
     MultiplikationEuroProzent,
     Division,
+    ZahlMalProzent,
+    ProzentMalProzent,
+    ProzentDurchZahl,
+    ProzentKette,
     IstGleich,
     IstUngleich,
     IstKleiner,
@@ -57,6 +61,21 @@ prüfe "§ 4.2 Arithmetik" {
     }
     testfall "Division 10,0 / 4,0 = 2,5" {
         Division(10,0, 4,0) == 2,5
+    }
+}
+
+prüfe "§ 3.4 Prozent als dimensionsloser Bruch (× / ÷ mit Zahlen → Dezimal)" {
+    testfall "100 × 10% = 10 (nicht 1000%)" {
+        ZahlMalProzent(100, 10%) == 10,0
+    }
+    testfall "10% × 10% = 0,01" {
+        ProzentMalProzent(10%, 10%) == 0,01
+    }
+    testfall "9,3% / 2 = 0,0465" {
+        ProzentDurchZahl(9,3%, 2) == 0,0465
+    }
+    testfall "(100 × 10%) × 2 = 20 (Klammer ist Dezimal, Weiterrechnung definiert)" {
+        ProzentKette(100, 10%, 2) == 20,0
     }
 }
 

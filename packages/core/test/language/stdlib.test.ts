@@ -11,6 +11,7 @@ import {
     BUILTIN_PRIMITIVE_TYPES,
     BUILTIN_ENUM_VALUE_TO_ENUM,
     BUILTIN_NAMES,
+    CONVERSION_METHOD_DEFS,
     LIST_METHOD_DEFS,
     SCALAR_METHOD_DEFS,
     TEXT_METHOD_DEFS,
@@ -50,6 +51,16 @@ describe('Builtin-Methoden-Kataloge (seit 2026-05-18, § 11)', () => {
             'abrundenAuf', 'aufrundenAuf',              // § 11.6 Stufen
         ]);
         expect(SCALAR_METHOD_DEFS.every((m) => m.property === false)).toBe(true);
+    });
+
+    it('CONVERSION_METHOD_DEFS (§ 11.7): alsProzent + alsDezimal, receiver-beschränkt', () => {
+        const names = CONVERSION_METHOD_DEFS.map((m) => m.name);
+        expect(names).toEqual(['alsProzent', 'alsDezimal']);
+        expect(CONVERSION_METHOD_DEFS.every((m) => m.property === false)).toBe(true);
+        expect(CONVERSION_METHOD_DEFS.every((m) => m.quelle === 'SPEC § 11.7')).toBe(true);
+        // § 11.7-Methoden sind NICHT in den generischen Skalar-Katalog gefaltet:
+        expect(SCALAR_METHOD_DEFS.map((m) => m.name)).not.toContain('alsProzent');
+        expect(SCALAR_METHOD_DEFS.map((m) => m.name)).not.toContain('alsDezimal');
     });
 
     it('TEXT_METHOD_DEFS: Properties + Aufruf-Methoden (§ 11.5)', () => {

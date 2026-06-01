@@ -272,11 +272,9 @@ public sealed class FinDslNumber
             if (other == Type.Ganzzahl) return money;   // Geld * Ganzzahl
             return Type.EuroCent;                        // Geld * Dezimal/Prozent
         }
-        if ((a == Type.Prozent && b == Type.Ganzzahl)
-                || (a == Type.Ganzzahl && b == Type.Prozent)) {
-            return Type.Prozent;
-        }
-        if (a == Type.Prozent && b == Type.Prozent) return Type.Dezimal;
+        // Prozent ist hier ein dimensionsloser Bruch-Skalar (SPEC § 3.4):
+        // `100 * 10% == 10`, nicht `1000%`. Jede Nicht-Geld-Kombination mit
+        // Prozent → Dezimal; nur Ganzzahl*Ganzzahl bleibt Ganzzahl.
         if (a == Type.Ganzzahl && b == Type.Ganzzahl) return Type.Ganzzahl;
         return Type.Dezimal;
     }
@@ -291,7 +289,7 @@ public sealed class FinDslNumber
      */
     static Type combineDiv(Type a, Type b) {
         if (isMoneyType(a)) return Type.Dezimal;
-        if (a == Type.Prozent && b == Type.Ganzzahl) return Type.Prozent;
+        // Prozent / Zahl → Dezimal (Bruchwert, SPEC § 3.4): `9,3% / 2 == 0,0465`.
         return Type.Dezimal;
     }
 

@@ -2,6 +2,27 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-06-01 — **`Prozent`-Arithmetik bei `*`/`/`
+→ `Dezimal` + Umwandlungs-Methoden `.alsProzent()`/`.alsDezimal()` (§ 11.7).**
+Nutzer-Befund: `(ganzzahl * prozent) * dezimal` schlug mit „Prozent * Dezimal
+ist nicht definiert" fehl, weil `Zahl × Prozent` als `Prozent` getaggt wurde —
+da `Prozent` intern eine Bruchzahl ist (`42%` = `0,42`), ergab `42% * 100`
+intern `42`/Prozent → angezeigt `4200 %`. **Fix:** bei `*`/`/` ist `Prozent`
+ein dimensionsloser Bruch-Skalar → jede Nicht-Geld-Kombination ergibt
+**`Dezimal`** (`100 * 10% == 10`, `9,3% / 2 == 0,0465`); `Geld × Prozent →
+EuroCent` und `Prozent ± Prozent → Prozent` bleiben. Umgesetzt konsistent über
+Typinferenz (`findsl-inference`), Interpreter (`combineMul`/`combineDiv`),
+Java- **und** TS-Runtime. **Neu (§ 11.7):** `.alsProzent()` (Zahl → `Prozent`,
+Stellenwert als Prozentangabe) und `.alsDezimal()` (`Prozent` → Bruchwert) als
+Methoden-Form des `als`-Casts — receiver-präziser Dispatch in `getMethodDefs`
+(`.alsProzent()` nur auf Ganzzahl/Dezimal, `.alsDezimal()` nur auf Prozent),
+IR-seitig der bestehende `cast`-Knoten (kein neuer Runtime-Code). **Keine
+Grammatikänderung** (`*`/`.methode()` längst geparst) → Grammatik-Duo
+unberührt. SPEC § 2.7.4 (Selbstwiderspruch „Bruchteil" behoben), § 3.4
+(Arithmetik-Tabelle), neue § 11.7. **Korpus +8 testfall** (§ 3.4 inkl.
+Nutzer-Snippet `ProzentKette`; § 11.7), ts-gate-Floor 128 → 136; Cross-Gate
+Interpreter ⇄ Java ⇄ TS ⇄ JS bit-genau grün; 1537 Tests grün.*
+
 *Letzte Aktualisierung: 2026-05-29 — **Formatter: fn-Parameter als
 4-Spalten-Tabelle (Folge zu #202).** Mehrzeilige `fn`-Signaturen
 fluchten jetzt analog zu mehrzeiligen Datensätzen — Name · Typ · `=

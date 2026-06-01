@@ -57,21 +57,30 @@ function message(name: string, attrs: Record<string, string | undefined>): strin
     return `##teamcity[${name}${parts.length ? ' ' + parts.join(' ') : ''}]`;
 }
 
-/** `file://<abs>`-locationHint auf Datei-Ebene (Suiten — kein Zeilenbezug).
- *  `undefined`, wenn kein Pfad. */
+/**
+ * Protokoll der locationHints. Bewusst NICHT `file` — IntelliJs Test-Runner
+ * routet das `file`-Protokoll im `CombinedTestLocator` hart an seinen eingebauten
+ * `FileUrlProvider`, der bei TextMate-Dateien (`.findsl`) nicht zur Zeile springt.
+ * Ein eigenes Protokoll erreicht stattdessen unseren `FinDslTestLocator`
+ * (`apps/intellij`), der zeilengenau navigiert. MUSS mit dessen `PROTOCOL`
+ * übereinstimmen.
+ */
+const LOCATION_PROTOCOL = 'findsl';
+
+/** locationHint auf Datei-Ebene (Suiten — kein Zeilenbezug). `undefined` ohne Pfad. */
 function fileHint(filePath?: string): string | undefined {
-    return filePath ? `file://${filePath}` : undefined;
+    return filePath ? `${LOCATION_PROTOCOL}://${filePath}` : undefined;
 }
 
-/** `file://<abs>:<line>:<column>`-locationHint (1-basiert) für einen Testfall —
- *  IntelliJs `FileUrlProvider` springt damit an die Quellzeile. Ohne Position
- *  (kein CST-Knoten) Fallback auf die Datei; ohne Pfad `undefined`. */
+/** `findsl://<abs>:<line>:<column>`-locationHint (1-basiert) für einen Testfall —
+ *  `FinDslTestLocator` springt damit an die Quellzeile. Ohne Position (kein
+ *  CST-Knoten) Fallback auf die Datei; ohne Pfad `undefined`. */
 function testfallHint(filePath: string | undefined, r: TestfallReport): string | undefined {
     if (!filePath) return undefined;
-    if (r.line === undefined) return `file://${filePath}`;
+    if (r.line === undefined) return `${LOCATION_PROTOCOL}://${filePath}`;
     return r.column !== undefined
-        ? `file://${filePath}:${r.line}:${r.column}`
-        : `file://${filePath}:${r.line}`;
+        ? `${LOCATION_PROTOCOL}://${filePath}:${r.line}:${r.column}`
+        : `${LOCATION_PROTOCOL}://${filePath}:${r.line}`;
 }
 
 /**

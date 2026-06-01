@@ -9,6 +9,7 @@ import com.intellij.execution.Location
 import com.intellij.execution.PsiLocation
 import com.intellij.execution.testframework.sm.runner.SMTestLocator
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiFile
@@ -16,18 +17,23 @@ import com.intellij.psi.PsiManager
 import com.intellij.psi.search.GlobalSearchScope
 
 /**
- * Löst die `file://<pfad>:<zeile>:<spalte>`-locationHints des TeamCity-Reporters
+ * Löst die `findsl://<pfad>:<zeile>:<spalte>`-locationHints des TeamCity-Reporters
  * (#256) zu einer navigierbaren Location auf — mit explizitem
  * {@link OpenFileDescriptor} (zeilen-/spaltengenau), UNABHÄNGIG vom PSI-Typ.
  *
- * Warum nicht der eingebaute `FileUrlProvider`? Dessen zeilengenaue Navigation
- * greift nur für `PsiPlainText`-Dateien (`createLocationFor` prüft explizit
- * `instanceof PsiPlainText`); `.findsl` ist eine **TextMate**-Datei (bewusst kein
- * eigener FileType, damit das TextMate-Highlighting greift), für die
- * `FileUrlProvider` auf `PsiLocation.fromPsiElement(psiFile)` zurückfällt → die
- * Datei öffnet, der Cursor springt aber NICHT zur Zeile.
+ * **Eigenes Protokoll (`findsl`), NICHT `file`:** IntelliJs Test-Runner wrappt
+ * den Locator in einen `CombinedTestLocator`, der das `file`-Protokoll HART an
+ * den eingebauten `FileUrlProvider` routet (unser Locator käme nie dran).
+ * `FileUrlProvider` wiederum springt nur in `PsiPlainText`-Dateien zur Zeile
+ * (`createLocationFor` prüft `instanceof PsiPlainText`); `.findsl` ist eine
+ * **TextMate**-Datei → dort öffnet nur die Datei, ohne Cursor-Sprung. Ein
+ * eigenes Protokoll erreicht stattdessen diesen Locator. `PROTOCOL` MUSS mit dem
+ * Reporter (`teamcity-reporter.ts`, `LOCATION_PROTOCOL`) übereinstimmen.
+ *
+ * `DumbAware`, damit der `CombinedTestLocator` ihn auch während der Indizierung
+ * aufruft (sonst keine Navigation im Dumb-Mode).
  */
-object FinDslTestLocator : SMTestLocator {
+object FinDslTestLocator : SMTestLocator, DumbAware {
     override fun getLocation(
         protocol: String,
         path: String,
@@ -71,5 +77,6 @@ object FinDslTestLocator : SMTestLocator {
         return if (lastValue > 0) Triple(path.substring(0, lastColon), lastValue, -1) else Triple(path, -1, -1)
     }
 
-    private const val PROTOCOL = "file"
+    /** Muss mit `LOCATION_PROTOCOL` im Reporter (`teamcity-reporter.ts`) übereinstimmen. */
+    private const val PROTOCOL = "findsl"
 }

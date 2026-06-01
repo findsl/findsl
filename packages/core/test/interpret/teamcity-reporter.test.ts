@@ -96,11 +96,18 @@ describe('teamCityReport', () => {
         expect(lines.filter((l) => l.includes("testSuiteStarted name='A'")).length).toBe(1);
     });
 
-    it('setzt locationHint auf file://<pfad>, wenn filePath gegeben (ohne Position)', () => {
+    it('setzt locationHint auf findsl://<pfad>, wenn filePath gegeben (ohne Position)', () => {
         const lines = teamCityReport(report([
             { pruefeName: 'P', testfallLabel: 't', status: 'pass', detail: 'wahr' },
         ]), { suiteName: 's', filePath: '/abs/kst.test.findsl' });
-        expect(lines.join('\n')).toContain("locationHint='file:///abs/kst.test.findsl'");
+        expect(lines.join('\n')).toContain("locationHint='findsl:///abs/kst.test.findsl'");
+    });
+
+    it('eigenes Protokoll (findsl), NICHT file — sonst kapert IntelliJs FileUrlProvider die Navigation', () => {
+        const lines = teamCityReport(report([
+            { pruefeName: 'P', testfallLabel: 't', status: 'pass', detail: 'wahr', line: 12, column: 5 },
+        ]), { suiteName: 's', filePath: '/abs/kst.test.findsl' });
+        expect(lines.join('\n')).not.toContain('file://');
     });
 
     it('setzt zeilengenauen locationHint, wenn der Testfall eine Position hat', () => {
@@ -108,8 +115,8 @@ describe('teamCityReport', () => {
             { pruefeName: 'P', testfallLabel: 't', status: 'pass', detail: 'wahr', line: 12, column: 5 },
         ]), { suiteName: 's', filePath: '/abs/kst.test.findsl' });
         // Der testStarted-Hint zeigt auf Zeile:Spalte; die Datei-Suite bleibt ohne.
-        expect(lines.join('\n')).toContain("testStarted name='t' locationHint='file:///abs/kst.test.findsl:12:5'");
-        expect(lines.join('\n')).toContain("testSuiteStarted name='s' locationHint='file:///abs/kst.test.findsl'");
+        expect(lines.join('\n')).toContain("testStarted name='t' locationHint='findsl:///abs/kst.test.findsl:12:5'");
+        expect(lines.join('\n')).toContain("testSuiteStarted name='s' locationHint='findsl:///abs/kst.test.findsl'");
     });
 
     it('escaped Sonderzeichen in Test-/Suite-Namen und Messages', () => {

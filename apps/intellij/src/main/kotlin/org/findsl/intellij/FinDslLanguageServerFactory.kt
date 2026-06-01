@@ -62,7 +62,7 @@ class FinDslStreamConnectionProvider(project: Project) : OSProcessStreamConnecti
      * `initialize` als `initializationOptions.findsl.theme` übertragen.
      */
     override fun getInitializationOptions(rootUri: VirtualFile?): Any {
-        val dark = runCatching { StartupUiUtil.isDarkTheme() }.getOrDefault(false)
+        val dark = runCatching { StartupUiUtil.isDarkTheme }.getOrDefault(false)
         return mapOf("findsl" to mapOf("theme" to if (dark) "dark" else "light"))
     }
 

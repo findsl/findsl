@@ -84,6 +84,14 @@ als Notification, fehlgeschlagene Testfälle als Annotation.
   Test-Baum mit Pass/Fail, Re-Run-Failed, Statistiken und Doppelklick-Navigation
   zur Quelldatei — die zentrale Übersicht analog zum VS-Code-Test-Explorer.
 
+## Dokumentation generieren
+
+- **Action „FinDSL-Dokumentation generieren"** (#242) im Editor-Kontextmenü und
+  im Tools-Menü, aktiv bei `.findsl`-Dateien. Ruft das Server-Kommando
+  `findsl.doku.generate` auf und öffnet das erzeugte Markdown in einem
+  ungespeicherten Tab; die `.md`-Endung aktiviert die Vorschau des gebündelten
+  IntelliJ-Markdown-Plugins. Pendant zu `findsl.generateDocs` in VS Code.
+
 ## Bekannte Einschränkungen
 
 - **Gutter-Icons aktualisieren sich beim Öffnen der Datei:** Werden Testfälle
@@ -104,5 +112,5 @@ als Notification, fehlgeschlagene Testfälle als Annotation.
 - **#255**: Run-Gutter-Icons pro Testfall. ✅
 - **#250**: Formel-Rendering im Hover (file://-SVG, theme-bewusst). ✅
 - **#256**: Test-Runner-Fenster (RunConfiguration + TeamCity-Reporter). ✅
-- **#242**: Action „Dokumentation generieren".
+- **#242**: Action „Dokumentation generieren" (Markdown-Tab mit Vorschau). ✅
 - **#243/#244/#245**: Binary-Distribution, CI/Publishing, Signierung.

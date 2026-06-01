@@ -119,4 +119,11 @@ als Notification, fehlgeschlagene Testfälle als Annotation.
 - **#250**: Formel-Rendering im Hover (file://-SVG, theme-bewusst). ✅
 - **#256**: Test-Runner-Fenster (RunConfiguration + TeamCity-Reporter). ✅
 - **#242**: Action „Dokumentation generieren" (Markdown-Tab mit Vorschau). ✅
-- **#243/#244/#245**: Binary-Distribution, CI/Publishing, Signierung.
+- **#243**: Binary-Distribution — Lazy-Download entschieden (ADR). ✅
+- **#244**: CI — Multi-Plattform-Binaries + `checksums.json` + `buildPlugin`
+  als Release-Assets; `signPlugin`/`publishPlugin` gated. ✅
+  *(Folge: Client-Lazy-Download in `FinDslNativeBinary` — lädt das Binary zur
+  Laufzeit; erst nach erstem Release mit Assets sinnvoll testbar.)*
+- **#245**: Plugin-Signierung/Notarisierung (Zertifikate) — offen.
+- **Marketplace-Aktivierung**: JetBrains-Vendor/-Account + Secrets
+  (`JETBRAINS_PUBLISH_TOKEN` …) nötig, dann greift `publishPlugin` automatisch.

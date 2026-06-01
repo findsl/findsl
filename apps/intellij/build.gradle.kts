@@ -59,9 +59,22 @@ intellijPlatform {
             untilBuild = provider { null }
         }
     }
-    // Signing/Publishing (signPlugin/publishPlugin) werden erst im Release-Setup
-    // (#244/#245) mit Zertifikaten/Token konfiguriert — lokal `buildPlugin`/
-    // `runIde` brauchen sie nicht.
+    // Signing/Publishing (#244). Werte aus Umgebungsvariablen (CI-Secrets) —
+    // leer ⇒ `buildPlugin`/`runIde` bleiben unberührt; NUR `signPlugin`/
+    // `publishPlugin` brauchen sie. Zertifikat-Beschaffung = #245.
+    signing {
+        certificateChain = providers.environmentVariable("JETBRAINS_CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("JETBRAINS_PRIVATE_KEY")
+        password = providers.environmentVariable("JETBRAINS_PRIVATE_KEY_PASSWORD")
+    }
+    publishing {
+        token = providers.environmentVariable("JETBRAINS_PUBLISH_TOKEN")
+        // Pre-Releases (rc/eap) gehen in einen separaten Marketplace-Kanal;
+        // Default = stabiler Kanal. Steuerbar über JETBRAINS_PUBLISH_CHANNEL.
+        channels = providers.environmentVariable("JETBRAINS_PUBLISH_CHANNEL")
+            .map { listOf(it) }
+            .orElse(listOf("default"))
+    }
 }
 
 // ---------------------------------------------------------------------------

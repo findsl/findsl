@@ -86,13 +86,24 @@ Konstellation ein `erwartet abbruch`-Test. EuroCent-Sollwerte 2-stellig.
 
 ```bash
 findsl parse <verzeichnis>                 # 0 Diagnosen (auch keine hints)
-findsl test  <name>.test.findsl            # N/N bestanden
+findsl test  <name>.test.findsl            # N/N bestanden — N = deine testfall-Zahl
 ```
 
-Bei Fehlern Sollwerte gegen den **Wortlaut** nachrechnen — nie den Test
-passend machen. Häufige Parse-Fehler: Statement-Grenze `)(` oder
-EuroCent-Literal ohne genau 2 Nachkommastellen
-(siehe `references/sprache-referenz.md`).
+Vollständige Erfolgskriterien (notwendig **und** hinreichend) in `SKILL.md` →
+**Verifizieren**. Kurz: `test` auf die `.test.findsl`/das Verzeichnis zielen und
+prüfen, dass **die gelaufene Fallzahl deiner `testfall`-Zahl entspricht**
+(„keine prüfe-Blöcke" / `0/0` = **kein** Erfolg, trotz Exit 0). Bei Fehlern
+Sollwerte gegen den **Wortlaut** nachrechnen — nie den Test passend machen.
+Häufige Parse-Fehler: Statement-Grenze `)(`, EuroCent-Literal ohne genau 2 NK,
+`modul`-Header (gibt es nicht). Zeigt das wiederholte Nachrechnen, dass der
+**Wortlaut selbst mehrdeutig** ist → **anhalten und fragen** (s. u.), nicht
+eine Lesart bis zum grünen Test erzwingen.
+
+> **Mehrdeutiger/widersprüchlicher Wortlaut ist ein Stopp-Trigger, nicht eine
+> stille Designentscheidung.** Lassen zwei Auslegungen unterschiedliche Beträge
+> zu, fehlt eine Rundungsrichtung/-einheit, oder widersprechen sich Normen —
+> benenne die Auslegungsfrage und frag nach, bevor du eine Variante festschreibst
+> (goldene Regel: nie raten).
 
 ---
 

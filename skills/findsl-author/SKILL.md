@@ -76,11 +76,28 @@ schreibst:
 
 ### Phasen
 
-0. **Verstehen & trennen.** Sammle die Regel vollständig. Ordne jeden
-   Inhalt zu: **Rechenvorschrift** (→ exakt implementieren als `konst`/`fn`)
-   vs. **geprüfte Eingabe** (Bemessungsbasis, Einstufung → Datensatz-Feld/
-   Enum) vs. **nicht modelliert** (Verfahren, Fristen → im Doc benennen).
-   Bei A: fehlt eine Zahl/Schwelle/Reihenfolge, **frag nach** statt zu raten.
+0. **Verstehen, trennen, rückspiegeln.** Sammle die Regel vollständig. Ordne
+   jeden Inhalt zu: **Rechenvorschrift** (→ exakt implementieren als
+   `konst`/`fn`) vs. **geprüfte Eingabe** (Bemessungsbasis, Einstufung →
+   Datensatz-Feld/Enum) vs. **nicht modelliert** (Verfahren, Fristen → im Doc
+   benennen).
+
+   **Eindeutigkeit ist Pflicht — im Zweifel fragen, nie raten.** Bevor du Code
+   schreibst, **spiegele die interpretierte Regel knapp zurück** (Werte ·
+   Reihenfolge der Schritte · Rundungsregel/-richtung · Einheiten · Rand-/
+   Sonderfälle) und hol dir bei jeder offenen Stelle eine Antwort. **Stopp-und-
+   frag-Trigger** (Pfad A *und* B):
+   - eine Zahl/Schwelle/Satz/Frist fehlt;
+   - die **Reihenfolge** ist unklar (Freibetrag vor/nach Satz? Cap vor/nach
+     Rundung?);
+   - die **Rundung** ist offen (ab-/auf-/kaufmännisch? auf welche Einheit? nach
+     welchem Schritt?);
+   - die **Einheit** ist unklar (volle Euro vs. mit Cent; Brutto/Netto);
+   - der **Wortlaut ist mehrdeutig** oder zwei Normen **widersprechen** sich;
+   - das Verhalten am **Rand** ist offen (negativ → auf 0 kappen oder Fehler?).
+
+   Sagt der Nutzer ausdrücklich „nimm sinnvolle Defaults", **dokumentiere die
+   Annahme sichtbar im Datei-Doc** — niemals stillschweigend.
 1. **Architektur** — Reihenfolge der Regel 1:1 als Funktionskette (Bausteine
    unten). Bei Größe/mehreren Bereichen auf **mehrere kohäsive Dateien**
    aufteilen (`references/workflow-gesetz.md` → Abschnitt „Mehrere Dateien").
@@ -88,10 +105,17 @@ schreibst:
    dann Konstanten/Typen/Stufen-Funktionen/Orchestrator, jede Decl mit
    eigenem `--…--`-Doc + (norm-gebunden) `@Quelle`.
 3. **`<name>.test.findsl` schreiben** — nur `verwende` + `prüfe`-Blöcke;
-   Sollwerte von Hand aus der Regel rechnen, Knotenpunkte abdecken
-   (bevorzugt **gerundete Endgrößen** prüfen — krumme `Geld*Prozent`-
-   Zwischenwerte tragen >2 NK und lassen sich nicht als EuroCent-Literal
-   asserten).
+   Sollwerte **unabhängig aus der Regel** rechnen (nicht aus dem Modell
+   ablesen), Rechnung im Label zeigen, Knotenpunkte abdecken. Exaktheit:
+   - `EuroCent`-Sollwerte tragen **genau 2 NK** — krumme Zwischenwerte (>2 NK)
+     dort NICHT asserten.
+   - Einen krummen Zwischenwert **exakt** prüfen: als **`Dezimal`**-Feld/-Wert
+     ausgeben und die volle-Präzision-`Dezimal`-Zahl asserten (`Dezimal` erlaubt
+     beliebig viele NK). So bleibt die Berechnung exakt nachprüfbar statt nur am
+     gerundeten Endbetrag.
+   - **Divisionsergebnisse** nie als handgeschriebenen Dezimalbruch asserten
+     (`/` rundet auf ~20 Stellen) — die vorgeschriebene Rundung explizit
+     modellieren und den gerundeten Wert prüfen.
 4. **Verifizieren** (Pflicht, keine Abkürzung) — siehe unten.
 
 ---
@@ -150,24 +174,64 @@ Diese verursachen die meisten Fehler — Details + alle weiteren in
 
 ## Verifizieren (Pflicht)
 
-Mit dem installierten **`findsl`-CLI**:
+Ergebnisse gelten **erst dann** als in Ordnung, wenn die CLI **keine Fehler**
+meldet **und** die `prüfe`-Blöcke die **richtigen** Ergebnisse liefern. Mit dem
+installierten **`findsl`-CLI**:
 
 ```bash
 # 1. Modul + Test müssen DIAGNOSEFREI parsen (Verzeichnis = beide Dateien):
-findsl parse <verzeichnis-oder-datei>
-# 2. Alle prüfe-Fälle grün:
-findsl test <name>.test.findsl
+findsl parse <verzeichnis>
+# 2. Alle prüfe-Fälle grün — Ziel ist die .test.findsl bzw. das Verzeichnis:
+findsl test <verzeichnis-oder-name>.test.findsl
 ```
 
 `findsl parse|test` akzeptieren eine Datei, ein Verzeichnis (rekursiv) oder
 ein gequotetes Glob (`'**/*.test.findsl'`).
 
-**Erfolgskriterien:** `parse` meldet *„keine Diagnosen"*; `test` meldet
-`N/N bestanden`. Bei Fehlern Sollwerte gegen die Regel nachrechnen — **nie
-den Test passend biegen**. `hint`s (z. B. ungenutzte Importe) vorher
-beseitigen. Die `@Quelle`-**Warnung** für gesetzlose Konstanten (Pfad A)
-ist erwartbar und kein Fehler. Die benigne Meldung `Ambiguous Alternatives
-Detected … <Program>` ist **kein** Fehler.
+### Notwendig (CLI ohne Fehler)
+
+- `parse` meldet für **jede** Datei *„keine Diagnosen"* (Impl **und** Test).
+- `test` meldet `N/N bestanden` — und **N ist die tatsächliche Anzahl deiner
+  `testfall`** (von Hand abgleichen!). **Falle:** `findsl test` auf einer Datei
+  **ohne** `prüfe`-Block gibt „keine prüfe-Blöcke" aus und **endet mit Erfolg
+  (Exit 0)** — das ist KEIN bestandener Test. Genauso ist `0/0 bestanden`
+  **kein** Erfolg. Immer auf die `.test.findsl` (oder das Verzeichnis) zielen
+  und die gelaufene Fallzahl prüfen.
+- **`error` ≠ `fail`:** ein `error` (Parse-/Laufzeitfehler, z. B. nicht
+  importiertes Symbol, EuroCent-Literal mit falscher NK-Zahl, Division durch 0)
+  ist ein **Code-/Syntaxfehler** → Code reparieren. Ein `fail` („ergab falsch")
+  ist eine **Sollwert-Abweichung** → Modell *und* Sollwert gegen die Regel
+  nachrechnen, **nie den Test passend biegen**.
+- `hint`s (z. B. ungenutzte Importe) vorher beseitigen.
+
+### Hinreichend (Ergebnisse wirklich richtig)
+
+Grün allein genügt **nicht** — ein Test besteht auch, wenn Modell und
+selbstgeschriebener Sollwert **denselben Fehler** teilen. Deshalb:
+
+- **Sollwerte unabhängig aus der Regel herleiten** (nicht aus dem Modell
+  ablesen) und die Rechnung im `testfall`-Label zeigen.
+- **Knotenpunkte** abdecken (Schwellen ±1, Freibetrag genau/drunter/drüber,
+  Null/Negativ, Höchstbetrag, **jede** Enum-Variante, **jede** Staffelstufe,
+  jeder `abbruch` per `erwartet abbruch`).
+- **Exakt statt nur gerundet prüfen, wo es geht:** krumme Zwischenwerte (>2 NK)
+  lassen sich als **`Dezimal`** voll-präzise asserten (nur `EuroCent` ist auf
+  2 NK fixiert) — siehe `sprache-referenz.md` § 2/§ 4.
+- **Bei Divisionsergebnissen** nie einen handgeschriebenen Dezimalbruch
+  asserten (`/` rundet auf ~20 Stellen) — die gesetzlich vorgeschriebene
+  Rundung **explizit modellieren** und den gerundeten Wert prüfen.
+
+### Stop-and-ask statt Test-Biegen
+
+Schlägt ein `fail` fehl und das wiederholte Nachrechnen zeigt, dass nicht das
+Modell, sondern die **Regel selbst unklar/widersprüchlich** ist (zwei lesbare
+Auslegungen, fehlende Rundungsrichtung, unklare Reihenfolge) → **anhalten und
+fragen**, nicht eine Auslegung erzwingen, bis der Test grün wird.
+
+### Erwartbares Rauschen (kein Fehler)
+
+Die `@Quelle`-**Warnung** für gesetzlose Konstanten (Pfad A) und die benigne
+Meldung `Ambiguous Alternatives Detected … <Program>` sind **keine** Fehler.
 
 ---
 

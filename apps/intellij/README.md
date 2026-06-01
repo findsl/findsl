@@ -126,4 +126,7 @@ als Notification, fehlgeschlagene Testfälle als Annotation.
   Laufzeit; erst nach erstem Release mit Assets sinnvoll testbar.)*
 - **#245**: Plugin-Signierung/Notarisierung (Zertifikate) — offen.
 - **Marketplace-Aktivierung**: JetBrains-Vendor/-Account + Secrets
-  (`JETBRAINS_PUBLISH_TOKEN` …) nötig, dann greift `publishPlugin` automatisch.
+  (`JETBRAINS_PUBLISH_TOKEN` …) nötig. Die **erste** Veröffentlichung muss laut
+  JetBrains **manuell** erfolgen (Plugin-`.zip` aus dem GitHub-Release über
+  plugins.jetbrains.com hochladen); erst **ab der zweiten** Version greift
+  `publishPlugin` automatisch (der CI-Schritt ist dafür nicht-blockierend).

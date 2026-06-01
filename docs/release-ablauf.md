@@ -47,8 +47,11 @@ GitHub-Repo-Secrets hinterlegt sein. Danach nie wieder.
 - [ ] **npm-Org `findsl`** angelegt, 2FA aktiv, Automation-Token erstellt
 - [ ] **VS-Marketplace-Publisher `devtank42`** angelegt (über Azure DevOps)
 - [ ] **Open-VSX-Account** registriert
-- [ ] **JetBrains-Marketplace-Vendor** angelegt + Plugin `org.findsl.intellij`
-      erstanlegt (https://plugins.jetbrains.com) — für das IntelliJ-Plugin (#244)
+- [ ] **JetBrains-Marketplace-Vendor** angelegt **und Plugin `org.findsl.intellij`
+      einmalig MANUELL erstveröffentlicht** — laut JetBrains Pflicht, kein Token/
+      keine Automation kann das ersetzen (https://plugins.jetbrains.com/author/me
+      → „Add new plugin", das Plugin-`.zip` aus dem GitHub-Release hochladen).
+      Erst **ab der zweiten** Version greift `publishPlugin` automatisch (#244).
 - [ ] **JetBrains-Plugin-Signing-Zertifikat** erzeugt (#245)
 
 ### Checkliste Secrets
@@ -78,6 +81,12 @@ Unter `Settings → Secrets and variables → Actions` im Repo `findsl/findsl`:
 > Plugin-`.zip` + die nativen Binaries (`findsl-lsp-<os>-<arch>`,
 > `findsl-<os>-<arch>`) + das `checksums.json` hängen am GitHub-Release. Die
 > Lazy-Download-Strategie dahinter: [../apps/intellij/docs/binary-distribution.md](../apps/intellij/docs/binary-distribution.md).
+>
+> **Erstveröffentlichung manuell:** `publishPlugin` schlägt beim allerersten
+> Release zwangsläufig fehl (JetBrains verlangt den ersten Upload manuell, s. o.)
+> — das ist **bewusst nicht-blockierend** (nur `::warning::`). Lade das
+> Plugin-`.zip` aus dem GitHub-Release einmalig über die Marketplace-Web-Oberfläche
+> hoch; ab dann veröffentlicht `publishPlugin` jede Folgeversion automatisch.
 
 ### Empfehlung: erst ein Dry-Run
 

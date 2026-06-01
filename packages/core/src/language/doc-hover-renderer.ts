@@ -41,7 +41,7 @@ import type { HoverMathMode } from './client-math-mode.js';
  * Browser-Bundle (`@findsl/web`) lauffähig ist — der nimmt nur den
  * `data:`-Pfad und braucht den Writer nie.
  */
-export type SvgFileWriter = (svg: string, isDark: boolean) => string;
+export type SvgFileWriter = (svg: string, isDark: boolean, display: boolean) => string;
 
 /** Cached MathJax-Init-Promise. Pro Prozess einmalig — bei jedem
  *  `renderDocForHover`-Aufruf wird das gleiche Promise awaited (no-op
@@ -192,7 +192,7 @@ function renderMath(
         try {
             const { svg } = texToSvg(tex, display);
             const url = (mathMode === 'svg-file' && svgFileWriter)
-                ? svgFileWriter(svg, svgDark)
+                ? svgFileWriter(svg, svgDark, display)
                 // SVG ohne XML-Deklaration (MathJax liefert reines `<svg …>…</svg>`)
                 // → direkt URL-kodieren. `encodeURIComponent` escapt `#`/`%`/`<`
                 // sicher für `data:image/svg+xml;utf8,…`.

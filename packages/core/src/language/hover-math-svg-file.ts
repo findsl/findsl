@@ -28,17 +28,23 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-/** MathJax-`ex` → `px` für IntelliJs Bild-Renderer. 8 px/ex ergibt eine
- *  Formelgröße knapp über dem Hover-Fließtext — gut lesbar, nicht überdimensioniert. */
-const EX_TO_PX = 8;
+/**
+ * MathJax-`ex` → `px` für IntelliJs Bild-Renderer (im `<img>` fehlt der Font-
+ * Bezug, an dem `ex` hinge). Getrennt nach Kontext:
+ * - **Display** (Block, eigene Zeile) darf etwas größer sein.
+ * - **Inline** muss zur umgebenden Hover-Textgröße passen — bei gleichem (großen)
+ *   Faktor wirken Inline-Formeln im Fließtext stark überdimensioniert.
+ */
+const EX_TO_PX_DISPLAY = 8;
+const EX_TO_PX_INLINE = 5.5;
 
 const CACHE_DIR = path.join(os.tmpdir(), `findsl-hover-math-${process.getuid?.() ?? 'win'}`);
 
-/** `width="X ex"`/`height="Y ex"` → feste `px`-Maße (s. EX_TO_PX). */
-function toPixelSize(svg: string): string {
+/** `width="X ex"`/`height="Y ex"` → feste `px`-Maße mit dem kontextabhängigen Faktor. */
+function toPixelSize(svg: string, exToPx: number): string {
     return svg
-        .replace(/width="([\d.]+)ex"/, (_m, v: string) => `width="${(parseFloat(v) * EX_TO_PX).toFixed(1)}px"`)
-        .replace(/height="([\d.]+)ex"/, (_m, v: string) => `height="${(parseFloat(v) * EX_TO_PX).toFixed(1)}px"`);
+        .replace(/width="([\d.]+)ex"/, (_m, v: string) => `width="${(parseFloat(v) * exToPx).toFixed(1)}px"`)
+        .replace(/height="([\d.]+)ex"/, (_m, v: string) => `height="${(parseFloat(v) * exToPx).toFixed(1)}px"`);
 }
 
 /** Feste Formelfarbe (statt der `data:`-Pfad-Media-Query) — JSVG wertet keine
@@ -57,11 +63,13 @@ function ensureCacheDir(): void {
 
 /**
  * Bereitet das MathJax-SVG für IntelliJ auf (px-Größe + Theme-Farbe), schreibt es
- * als Datei und liefert eine `file://`-URL für ein Markdown-`<img>`.
+ * als Datei und liefert eine `file://`-URL für ein Markdown-`<img>`. `display`
+ * unterscheidet Block- (größer) von Inline-Formeln (textnah, s. EX_TO_PX_*).
  */
-export function svgToHoverFileUrl(svg: string, isDark: boolean): string {
+export function svgToHoverFileUrl(svg: string, isDark: boolean, display: boolean): string {
     ensureCacheDir();
-    const prepared = withThemeColor(toPixelSize(svg), isDark);
+    const exToPx = display ? EX_TO_PX_DISPLAY : EX_TO_PX_INLINE;
+    const prepared = withThemeColor(toPixelSize(svg, exToPx), isDark);
     const hash = createHash('sha1').update(prepared).digest('hex').slice(0, 16);
     const file = path.join(CACHE_DIR, `${hash}.svg`);
     fs.writeFileSync(file, prepared, { mode: 0o600 });

@@ -95,9 +95,6 @@ als Notification, fehlgeschlagene Testfälle als Annotation.
   documentLinks PSI-gebunden (`ExternalAnnotator` + `GotoDeclarationHandler`);
   bei TextMate-Dateien ohne echtes PSI fehlt daher nur das Hand-Cursor-Feedback
   — die Navigation funktioniert.
-- **Test-Runner-Navigation:** Doppelklick im Test-Baum öffnet die Quelldatei,
-  springt aber (noch) nicht zur Testfall-Zeile — der `PruefeReport` liefert die
-  Range derzeit nicht, daher zeigt der `locationHint` nur auf die Datei.
 
 ## Status / Roadmap
 

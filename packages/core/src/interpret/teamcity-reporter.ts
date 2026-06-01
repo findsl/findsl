@@ -57,10 +57,21 @@ function message(name: string, attrs: Record<string, string | undefined>): strin
     return `##teamcity[${name}${parts.length ? ' ' + parts.join(' ') : ''}]`;
 }
 
-/** `file://<abs>`-locationHint (ohne Zeile — die Range liegt nicht im Report
- *  vor; IntelliJ öffnet immerhin die Datei). `undefined`, wenn kein Pfad. */
+/** `file://<abs>`-locationHint auf Datei-Ebene (Suiten — kein Zeilenbezug).
+ *  `undefined`, wenn kein Pfad. */
 function fileHint(filePath?: string): string | undefined {
     return filePath ? `file://${filePath}` : undefined;
+}
+
+/** `file://<abs>:<line>:<column>`-locationHint (1-basiert) für einen Testfall —
+ *  IntelliJs `FileUrlProvider` springt damit an die Quellzeile. Ohne Position
+ *  (kein CST-Knoten) Fallback auf die Datei; ohne Pfad `undefined`. */
+function testfallHint(filePath: string | undefined, r: TestfallReport): string | undefined {
+    if (!filePath) return undefined;
+    if (r.line === undefined) return `file://${filePath}`;
+    return r.column !== undefined
+        ? `file://${filePath}:${r.line}:${r.column}`
+        : `file://${filePath}:${r.line}`;
 }
 
 /**
@@ -69,14 +80,14 @@ function fileHint(filePath?: string): string | undefined {
  * Auftretens), sodass IntelliJ sie als verschachtelte Suiten zeigt.
  */
 export function teamCityReport(report: PruefeReport, opts: TeamCityOptions): string[] {
-    const hint = fileHint(opts.filePath);
+    const fileLevelHint = fileHint(opts.filePath);
     const lines: string[] = [];
-    lines.push(message('testSuiteStarted', { name: opts.suiteName, locationHint: hint }));
+    lines.push(message('testSuiteStarted', { name: opts.suiteName, locationHint: fileLevelHint }));
 
     for (const group of groupByPruefe(report.results)) {
         const inSuite = group.pruefeName.length > 0;
-        if (inSuite) lines.push(message('testSuiteStarted', { name: group.pruefeName, locationHint: hint }));
-        for (const r of group.results) emitTestfall(lines, r, hint);
+        if (inSuite) lines.push(message('testSuiteStarted', { name: group.pruefeName, locationHint: fileLevelHint }));
+        for (const r of group.results) emitTestfall(lines, r, opts.filePath);
         if (inSuite) lines.push(message('testSuiteFinished', { name: group.pruefeName }));
     }
 
@@ -106,8 +117,8 @@ function groupByPruefe(results: ReadonlyArray<TestfallReport>): PruefeGroup[] {
 }
 
 /** testStarted → (bei fail/error) testFailed → testFinished für einen Testfall. */
-function emitTestfall(lines: string[], r: TestfallReport, hint?: string): void {
-    lines.push(message('testStarted', { name: r.testfallLabel, locationHint: hint }));
+function emitTestfall(lines: string[], r: TestfallReport, filePath?: string): void {
+    lines.push(message('testStarted', { name: r.testfallLabel, locationHint: testfallHint(filePath, r) }));
     if (r.status !== 'pass') {
         // fail = Testfall ergab nicht `wahr` (detail = ausgewerteter Wert);
         // error = Laufzeitfehler (detail = Fehlermeldung). IntelliJ kennt nur

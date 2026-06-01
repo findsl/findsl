@@ -640,7 +640,16 @@ jobs:
             echo "::warning::JETBRAINS_PUBLISH_TOKEN nicht gesetzt — publishPlugin übersprungen (Marketplace-Account/-Token nötig)."
             exit 0
           fi
-          ./gradlew publishPlugin --no-daemon --console=plain --stacktrace
+          # Nicht-blockierend: Die ERSTE Marketplace-Veröffentlichung MUSS laut
+          # JetBrains manuell erfolgen (plugins.jetbrains.com → „Add new plugin",
+          # Plugin-.zip aus dem GH-Release bzw. dem `intellij-plugin`-Artefakt) —
+          # `publishPlugin` (API/Token) greift erst ab der zweiten Version. Ein
+          # Fehlschlag (erste Version noch nicht manuell hochgeladen, Review
+          # ausstehend, transienter Marketplace-Fehler) darf das Release NICHT
+          # kippen — das Plugin-.zip hängt ohnehin am GH-Release.
+          if ! ./gradlew publishPlugin --no-daemon --console=plain --stacktrace; then
+            echo "::warning::publishPlugin fehlgeschlagen — nicht blockierend. Erste Veröffentlichung manuell nötig (plugins.jetbrains.com), danach greift es automatisch. Sonst Token/Review prüfen."
+          fi
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -24,6 +24,13 @@ nicht mehr.** Pfad-Mapping für Altverweise (Doku/Code/Commits):
 
 Build/Run **immer vom Repo-Root** (npm-Workspaces), kein `cd findsl-ts`.
 
+**Zwei Editoren, ein Sprachkern.** Neben `apps/vscode` (VS Code) gibt es
+`apps/intellij` (JetBrains-Plugin, Kotlin/Gradle via LSP4IJ) — beide nutzen
+**denselben** LSP-Server (`packages/lsp`), kein zweiter Sprachkern. VS Code
+bündelt das `.cjs`; IntelliJ startet das **native `findsl-lsp`-SEA-Binary**
+(`npm run binary:lsp` bzw. `npm run all` — `npm run bundle` allein baut es
+NICHT). Details + Editor-Matrix: [docs/02-repository-struktur.md](docs/02-repository-struktur.md).
+
 **Grammatik-Duo — bei JEDER Sprachänderung beide synchron pflegen:**
 
 1. `SPEC.md` — autoritative Sprachreferenz (Kapitel + Anhang A EBNF)

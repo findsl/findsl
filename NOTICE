@@ -7,8 +7,9 @@ Licensed under the EUPL
 -------------------------------------------------------------------------------
 
 Dieses Werk ("FinDSL", einschließlich Sprachkern, Interpreter, LSP-Server,
-CLI, VS-Code-Extension, Dokumentationsgenerator und sämtlicher Quelltexte
-in packages/ und apps/) ist urheberrechtlich geschützt.
+CLI, VS-Code-Extension, IntelliJ-/JetBrains-Plugin, Dokumentationsgenerator
+und sämtlicher Quelltexte in packages/ und apps/) ist urheberrechtlich
+geschützt.
 
 Alleinige Rechteinhaberin: devtank42 GmbH.
 
@@ -45,3 +46,14 @@ sind amtliche Werke (§ 5 UrhG) und als solche gemeinfrei. Der
 urheberrechtliche Schutz dieses Werks erstreckt sich auf Sprachdesign,
 Implementierung, Toolchain und Dokumentationsgenerator — nicht auf den
 kodifizierten Normtext selbst.
+
+-------------------------------------------------------------------------------
+
+Drittanbieter-Abhängigkeiten:
+
+Das IntelliJ-/JetBrains-Plugin (apps/intellij) baut gegen LSP4IJ, eine unter
+der Eclipse Public License 2.0 (EPL-2.0) stehende Bibliothek von Red Hat
+(https://github.com/redhat-developer/lsp4ij). LSP4IJ wird als
+Plugin-Abhängigkeit über den JetBrains-Marketplace aufgelöst und NICHT als
+Quelltext mit FinDSL mitverteilt; die EPL-2.0 gilt allein für LSP4IJ selbst,
+nicht für FinDSL. EPL-2.0-Lizenztext: https://www.eclipse.org/legal/epl-2.0/

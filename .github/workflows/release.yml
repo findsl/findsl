@@ -389,11 +389,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build + Bundle + Binary
+      - name: Build + Bundle + Binaries (CLI + LSP)
         run: |
           npm run langium:generate
           npm run build
-          npm run binary
+          npm run bundle
+          node scripts/build-binary.mjs all
 
       - name: Pack archive (POSIX)
         if: matrix.archive == 'tar.gz'
@@ -435,12 +436,40 @@ jobs:
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
               --armor --detach-sign "findsl-${VERSION}-${TARGET}.tar.gz"
 
-      - name: Upload artifacts
+      # Rohe Binaries (ohne Archiv) für den IntelliJ-Lazy-Download (#244, ADR
+      # apps/intellij/docs/binary-distribution.md): Asset-Namen mit OS/Arch-Suffix.
+      - name: Stage raw binaries — plugin lazy-download (POSIX)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p raw
+          cp packages/lsp/dist/findsl-lsp "raw/findsl-lsp-${TARGET}"
+          cp packages/cli/dist/findsl "raw/findsl-${TARGET}"
+
+      - name: Stage raw binaries — plugin lazy-download (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path raw | Out-Null
+          Copy-Item packages/lsp/dist/findsl-lsp.exe "raw/findsl-lsp-$env:TARGET.exe"
+          Copy-Item packages/cli/dist/findsl.exe "raw/findsl-$env:TARGET.exe"
+
+      - name: Upload artifacts (CLI-Archiv)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: binary-${{ matrix.target }}
           path: |
             findsl-${{ needs.prepare.outputs.version }}-${{ matrix.target }}.*
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload artifacts (rohe Binaries für Plugin)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: raw-binary-${{ matrix.target }}
+          path: raw/*
           retention-days: 14
           if-no-files-found: error
 
@@ -477,11 +506,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build + Bundle + Binary
+      - name: Build + Bundle + Binaries (CLI + LSP)
         run: |
           npm run langium:generate
           npm run build
-          npm run binary
+          npm run bundle
+          node scripts/build-binary.mjs all
 
       - name: Pack archive (POSIX)
         shell: bash
@@ -496,12 +526,129 @@ jobs:
           tar -czf "$STAGE.tar.gz" "$STAGE"
           shasum -a 256 "$STAGE.tar.gz" > "$STAGE.tar.gz.sha256"
 
-      - name: Upload artifacts
+      - name: Stage raw binaries — plugin lazy-download (#244)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p raw
+          cp packages/lsp/dist/findsl-lsp "raw/findsl-lsp-${TARGET}"
+          cp packages/cli/dist/findsl "raw/findsl-${TARGET}"
+
+      - name: Upload artifacts (CLI-Archiv)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: binary-darwin-x64
           path: |
             findsl-${{ needs.prepare.outputs.version }}-darwin-x64.*
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload artifacts (rohe Binaries für Plugin)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: raw-binary-darwin-x64
+          path: raw/*
+          retention-days: 14
+          if-no-files-found: error
+
+  # -------------------------------------------------------------------------
+  # `intellij` — IntelliJ-Plugin bauen (+ gated sign/publish), #244
+  #
+  # Lädt die rohen Plattform-Binaries (raw-binary-*), generiert daraus das
+  # eingebettete checksums.json (Lazy-Download-Manifest, ADR #243) und baut das
+  # Plugin. In CI liegen KEINE Binaries in packages/{lsp,cli}/dist/ → embed-Tasks
+  # greifen nicht → das Release-Plugin ist schlank (nur Manifest), wie gewollt.
+  # `signPlugin`/`publishPlugin` laufen nur, wenn die jeweiligen Secrets gesetzt
+  # sind (Zertifikat = #245, Marketplace-Token/-Account = Nutzer-Setup); sonst
+  # graceful skip. Wartet auf binary-intel-mac (continue-on-error → blockiert
+  # nicht), damit das Manifest deterministisch auch darwin-x64 enthält.
+  # -------------------------------------------------------------------------
+  intellij:
+    needs: [prepare, binaries, binary-intel-mac]
+    if: always() && needs.binaries.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download raw binaries (alle Plattformen)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: raw-binary-*
+          path: raw-binaries
+          merge-multiple: true
+
+      - name: Checksums-Manifest erzeugen (Lazy-Download, ADR #243)
+        run: |
+          set -euo pipefail
+          node scripts/gen-binary-checksums.mjs \
+            raw-binaries "$VERSION" \
+            apps/intellij/src/main/resources/binaries/checksums.json
+          echo "::group::checksums.json"
+          cat apps/intellij/src/main/resources/binaries/checksums.json
+          echo "::endgroup::"
+
+      - name: Build plugin
+        working-directory: apps/intellij
+        run: ./gradlew buildPlugin --no-daemon --console=plain --stacktrace
+
+      - name: Sign plugin (nur mit Zertifikat-Secret, #245)
+        if: needs.prepare.outputs.dry_run == 'false'
+        working-directory: apps/intellij
+        env:
+          JETBRAINS_CERTIFICATE_CHAIN: ${{ secrets.JETBRAINS_CERTIFICATE_CHAIN }}
+          JETBRAINS_PRIVATE_KEY: ${{ secrets.JETBRAINS_PRIVATE_KEY }}
+          JETBRAINS_PRIVATE_KEY_PASSWORD: ${{ secrets.JETBRAINS_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # secrets.* in step-`if` unzuverlässig → Gate im Skript (Muster wie GPG/website-dispatch).
+          if [ -z "${JETBRAINS_CERTIFICATE_CHAIN:-}" ]; then
+            echo "::warning::JETBRAINS_CERTIFICATE_CHAIN nicht gesetzt — signPlugin übersprungen (Zertifikat = #245)."
+            exit 0
+          fi
+          ./gradlew signPlugin --no-daemon --console=plain --stacktrace
+
+      - name: Publish plugin (nur mit Marketplace-Token, kein Pre-Release)
+        if: needs.prepare.outputs.dry_run == 'false' && needs.prepare.outputs.prerelease == 'false'
+        working-directory: apps/intellij
+        env:
+          JETBRAINS_PUBLISH_TOKEN: ${{ secrets.JETBRAINS_PUBLISH_TOKEN }}
+          JETBRAINS_CERTIFICATE_CHAIN: ${{ secrets.JETBRAINS_CERTIFICATE_CHAIN }}
+          JETBRAINS_PRIVATE_KEY: ${{ secrets.JETBRAINS_PRIVATE_KEY }}
+          JETBRAINS_PRIVATE_KEY_PASSWORD: ${{ secrets.JETBRAINS_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${JETBRAINS_PUBLISH_TOKEN:-}" ]; then
+            echo "::warning::JETBRAINS_PUBLISH_TOKEN nicht gesetzt — publishPlugin übersprungen (Marketplace-Account/-Token nötig)."
+            exit 0
+          fi
+          ./gradlew publishPlugin --no-daemon --console=plain --stacktrace
+
+      - name: Upload plugin artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: intellij-plugin
+          path: |
+            apps/intellij/build/distributions/*.zip
+            apps/intellij/src/main/resources/binaries/checksums.json
           retention-days: 14
           if-no-files-found: error
 
@@ -520,7 +667,10 @@ jobs:
   # Release — der Stage-Schritt sammelt vorhandene Artefakte tolerant ein.
   # -------------------------------------------------------------------------
   release:
-    needs: [prepare, npm, vsix, binaries]
+    needs: [prepare, npm, vsix, binaries, intellij]
+    # `intellij` bewusst NICHT im `if` — ein Plugin-Fehlschlag darf das Release
+    # (npm + Binaries) nicht kippen (tolerant, analog vsix). Die Plugin-Artefakte
+    # werden mitgenommen, falls vorhanden.
     if: always() && needs.npm.result == 'success' && needs.binaries.result == 'success'
     runs-on: ubuntu-latest
     env:
@@ -541,6 +691,14 @@ jobs:
           mkdir -p release
           find artifacts -type f \( -name '*.tar.gz' -o -name '*.tar.gz.asc' \
             -o -name '*.zip' -o -name '*.vsix' \) -exec cp {} release/ \;
+          # Rohe Plattform-Binaries für den IntelliJ-Lazy-Download (#244, ADR
+          # apps/intellij/docs/binary-distribution.md): findsl-lsp-<os>-<arch> +
+          # findsl-<os>-<arch> (kein Archiv). Liegen unter artifacts/raw-binary-*/.
+          find artifacts/raw-binary-* -type f -exec cp {} release/ \; 2>/dev/null || true
+          # Checksums-Manifest mit ins Release (Transparenz + manuelle Verifikation).
+          if [ -f artifacts/intellij-plugin/checksums.json ]; then
+            cp artifacts/intellij-plugin/checksums.json "release/findsl-binaries-checksums-v${VERSION}.json"
+          fi
           # Agent Skills (skills/findsl-author …) als eigenes Release-Asset
           # mitliefern — Endnutzer installieren es in ihren Agenten (Claude
           # Code / OpenCode / Codex). Landet via *.zip-Glob in SHA256SUMS.
@@ -548,7 +706,10 @@ jobs:
             ( cd skills && zip -qr "../release/findsl-skills-v${VERSION}.zip" . )
           fi
           cd release
-          shasum -a 256 *.tar.gz *.zip *.vsix 2>/dev/null | sort > SHA256SUMS
+          # SHA256SUMS über ALLE Release-Assets (inkl. rohe Binaries + Plugin-zip),
+          # außer der Summen-Datei selbst.
+          find . -maxdepth 1 -type f ! -name 'SHA256SUMS*' -printf '%P\n' \
+            | sort | xargs shasum -a 256 > SHA256SUMS
           ls -la
 
       - name: GPG-sign SHA256SUMS

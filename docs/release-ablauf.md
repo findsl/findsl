@@ -47,6 +47,9 @@ GitHub-Repo-Secrets hinterlegt sein. Danach nie wieder.
 - [ ] **npm-Org `findsl`** angelegt, 2FA aktiv, Automation-Token erstellt
 - [ ] **VS-Marketplace-Publisher `devtank42`** angelegt (über Azure DevOps)
 - [ ] **Open-VSX-Account** registriert
+- [ ] **JetBrains-Marketplace-Vendor** angelegt + Plugin `org.findsl.intellij`
+      erstanlegt (https://plugins.jetbrains.com) — für das IntelliJ-Plugin (#244)
+- [ ] **JetBrains-Plugin-Signing-Zertifikat** erzeugt (#245)
 
 ### Checkliste Secrets
 
@@ -57,6 +60,9 @@ Unter `Settings → Secrets and variables → Actions` im Repo `findsl/findsl`:
 - [ ] `OVSX_PAT`
 - [ ] `GPG_PRIVATE_KEY`
 - [ ] `GPG_PASSPHRASE`
+- [ ] `JETBRAINS_PUBLISH_TOKEN` — Marketplace-Upload des IntelliJ-Plugins (#244)
+- [ ] `JETBRAINS_CERTIFICATE_CHAIN` / `JETBRAINS_PRIVATE_KEY` /
+      `JETBRAINS_PRIVATE_KEY_PASSWORD` — Plugin-Signierung (#245)
 
 > Woher jedes Token kommt, steht in [../RELEASING.md](../RELEASING.md)
 > (Abschnitt „Vorbereitung — einmalig pro Konto/Secret"). Fehlt ein Secret,
@@ -65,6 +71,13 @@ Unter `Settings → Secrets and variables → Actions` im Repo `findsl/findsl`:
 > jeweilige Marktplatz mit Warnung übersprungen (der `vsix`-Job bleibt grün,
 > das `.vsix` hängt am GitHub-Release). So lässt sich z. B. nur Open VSX
 > bedienen, solange der VS-Marketplace-Publisher (Azure DevOps) noch fehlt.
+>
+> **IntelliJ (`intellij`-Job, #244) genauso nicht blockierend:** Ohne
+> `JETBRAINS_CERTIFICATE_CHAIN` wird `signPlugin` übersprungen, ohne
+> `JETBRAINS_PUBLISH_TOKEN` `publishPlugin` — der Job bleibt grün, das
+> Plugin-`.zip` + die nativen Binaries (`findsl-lsp-<os>-<arch>`,
+> `findsl-<os>-<arch>`) + das `checksums.json` hängen am GitHub-Release. Die
+> Lazy-Download-Strategie dahinter: [../apps/intellij/docs/binary-distribution.md](../apps/intellij/docs/binary-distribution.md).
 
 ### Empfehlung: erst ein Dry-Run
 
@@ -159,14 +172,15 @@ git push origin v0.1.1                     # ← dieser Push startet das Release
 
 `GitHub → Actions → Release → <dein Tag>`
 
-Fünf Job-Spuren müssen grün werden:
+Diese Job-Spuren müssen grün werden:
 
 | Spur | Was sie tut |
 |---|---|
 | `prepare` | prüft Tag-Version == `VERSION`-Datei |
 | `npm` | veröffentlicht `@findsl/core`, `@findsl/cli`, `@findsl/lsp` (mit Sigstore-Provenance) |
 | `vsix` | baut + veröffentlicht die VS-Code-Extension (Marketplace + Open VSX) |
-| `binaries` | baut native Binaries für macOS (x64/arm64), Linux (x64), Windows (x64) |
+| `binaries` | baut native Binaries (CLI **+** LSP) für macOS (x64/arm64), Linux (x64), Windows (x64) |
+| `intellij` | erzeugt das `checksums.json` aus den Binaries, baut das IntelliJ-Plugin (`buildPlugin`), gated `signPlugin`/`publishPlugin` (#244) |
 | `release` | sammelt alles, erzeugt das GitHub Release + signierte `SHA256SUMS` |
 
 ### Schritt 6 — Ergebnis prüfen
@@ -198,7 +212,11 @@ Fünf Job-Spuren müssen grün werden:
       ┌───────┐   ┌───────┐   ┌──────────┐
       │  npm  │   │ vsix  │   │ binaries │   (parallel)
       └───┬───┘   └───┬───┘   └────┬─────┘
-          └───────────┼────────────┘
+          │           │           ▼
+          │           │      ┌──────────┐
+          │           │      │ intellij │   checksums.json + buildPlugin
+          │           │      └────┬─────┘   (gated sign/publish)
+          └───────────┼───────────┘
                       ▼
               ┌───────────────┐
               │   release     │   GitHub Release + SHA256SUMS (GPG)

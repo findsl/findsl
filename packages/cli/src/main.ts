@@ -23,6 +23,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createFindslServices } from '@findsl/core/language/findsl-module.js';
 import { runPruefe } from '@findsl/core/interpret/pruefe.js';
+import { teamCityReport } from '@findsl/core/interpret/teamcity-reporter.js';
 import { loadModuleGraph, type ParseFile } from '@findsl/core/interpret/module-loader.js';
 import { asImportResolver, buildHeaderRegistry } from '@findsl/core/language/findsl-scope.js';
 import { typeCheckProgram } from '@findsl/core/language/findsl-types.js';
@@ -315,12 +316,21 @@ program
         + 'Muster in Anführungszeichen setzen, sonst expandiert die Shell '
         + 'sie selbst')
     .option('-v, --verbose', 'Auch bestandene Testfälle auflisten')
+    .option('--reporter <fmt>',
+        'Ausgabeformat: human (lesbar) | teamcity (TeamCity Service Messages '
+        + 'für IntelliJs Test-Runner-Fenster)', 'human')
     .addHelpText('after', `
 Beispiele:
   $ findsl test examples/kst/kst.test.findsl   eine Test-Datei
   $ findsl test examples                       alle Tests rekursiv
-  $ findsl test 'examples/**/*.test.findsl'    Glob-Muster (quoten!)`)
-    .action(async (ziele: string[], options: { verbose?: boolean }) => {
+  $ findsl test 'examples/**/*.test.findsl'    Glob-Muster (quoten!)
+  $ findsl test examples/kst --reporter=teamcity   für IntelliJ`)
+    .action(async (ziele: string[], options: { verbose?: boolean; reporter?: string }) => {
+        const teamcity = options.reporter === 'teamcity';
+        if (options.reporter && options.reporter !== 'human' && !teamcity) {
+            console.error(`✗ Unbekannter --reporter „${options.reporter}" — erlaubt: human | teamcity.`);
+            process.exit(2);
+        }
         const services = createFindslServices(NodeFileSystem).Findsl;
         const { files, missing } = await resolveTargets(ziele);
         for (const m of missing) {
@@ -378,8 +388,24 @@ Beispiele:
                 });
                 report = runPruefe(modules);
             } catch (err) {
-                if ((err as Error).message !== 'parse-error') {
-                    console.error(`✗ ${disp(fullPath)}: ${(err as Error).message}`);
+                const msg = (err as Error).message;
+                if (msg !== 'parse-error') {
+                    console.error(`✗ ${disp(fullPath)}: ${msg}`);
+                }
+                if (teamcity) {
+                    // Datei lädt/parst nicht → als fehlgeschlagene Suite im
+                    // Test-Baum zeigen (Detail-Diagnostik ging auf stderr).
+                    const detail = msg === 'parse-error'
+                        ? 'Parsing/Validierung fehlgeschlagen (siehe Konsole)'
+                        : msg;
+                    const lines = teamCityReport(
+                        {
+                            total: 1, passed: 0, failed: 0, errored: 1, ausgaben: [],
+                            results: [{ pruefeName: '', testfallLabel: 'Laden/Parsing', status: 'error', detail }],
+                        },
+                        { suiteName: disp(fullPath), filePath: fullPath },
+                    );
+                    for (const line of lines) console.log(line);
                 }
                 fileFailures++;
                 continue;
@@ -388,39 +414,44 @@ Beispiele:
             // Quell-/Nicht-Test-Dateien (keine prüfe-Blöcke) überspringen
             // — relevant bei Verzeichnis-/Glob-Zielen.
             if (report.total === 0) {
-                if (files.length === 1 || options.verbose) {
+                if (!teamcity && (files.length === 1 || options.verbose)) {
                     console.log(`— ${disp(fullPath)}: keine prüfe-Blöcke —`);
                 }
                 continue;
             }
             ranAny = true;
-
-            for (const r of report.results) {
-                if (r.status === 'pass' && !options.verbose) continue;
-                const icon = r.status === 'pass' ? '✓' : (r.status === 'fail' ? '✗' : '!');
-                const where = r.pruefeName
-                    ? `[${r.pruefeName}] ${r.testfallLabel}`
-                    : r.testfallLabel;
-                console.log(`  ${icon} ${where} — ${r.detail}`);
-            }
-
-            if (report.ausgaben.length > 0) {
-                console.log('  — ausgabe —');
-                for (const line of report.ausgaben) console.log(`  ${line}`);
-            }
-
-            const summary = `${report.passed}/${report.total} bestanden`
-                + (report.failed   ? `, ${report.failed} fehlgeschlagen` : '')
-                + (report.errored  ? `, ${report.errored} Fehler`        : '');
             const ok = report.failed === 0 && report.errored === 0;
-            console.log(`${ok ? '✓' : '✗'} ${disp(fullPath)}: ${summary}`);
+
+            if (teamcity) {
+                const lines = teamCityReport(report, { suiteName: disp(fullPath), filePath: fullPath });
+                for (const line of lines) console.log(line);
+            } else {
+                for (const r of report.results) {
+                    if (r.status === 'pass' && !options.verbose) continue;
+                    const icon = r.status === 'pass' ? '✓' : (r.status === 'fail' ? '✗' : '!');
+                    const where = r.pruefeName
+                        ? `[${r.pruefeName}] ${r.testfallLabel}`
+                        : r.testfallLabel;
+                    console.log(`  ${icon} ${where} — ${r.detail}`);
+                }
+
+                if (report.ausgaben.length > 0) {
+                    console.log('  — ausgabe —');
+                    for (const line of report.ausgaben) console.log(`  ${line}`);
+                }
+
+                const summary = `${report.passed}/${report.total} bestanden`
+                    + (report.failed   ? `, ${report.failed} fehlgeschlagen` : '')
+                    + (report.errored  ? `, ${report.errored} Fehler`        : '');
+                console.log(`${ok ? '✓' : '✗'} ${disp(fullPath)}: ${summary}`);
+            }
 
             gTotal += report.total; gPassed += report.passed;
             gFailed += report.failed; gErrored += report.errored;
             if (!ok) fileFailures++;
         }
 
-        if (files.length > 1 && ranAny) {
+        if (!teamcity && files.length > 1 && ranAny) {
             const ok = gFailed === 0 && gErrored === 0 && fileFailures === 0;
             console.log(`${ok ? '✓' : '✗'} Gesamt: ${gPassed}/${gTotal} bestanden`
                 + (gFailed  ? `, ${gFailed} fehlgeschlagen` : '')

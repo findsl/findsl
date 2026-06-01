@@ -36,7 +36,7 @@ import { pathToFileURL } from 'node:url';
  *   Faktor wirken Inline-Formeln im Fließtext stark überdimensioniert.
  */
 const EX_TO_PX_DISPLAY = 8;
-const EX_TO_PX_INLINE = 5.5;
+const EX_TO_PX_INLINE = 4;
 
 const CACHE_DIR = path.join(os.tmpdir(), `findsl-hover-math-${process.getuid?.() ?? 'win'}`);
 

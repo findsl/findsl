@@ -19,7 +19,6 @@ import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessTerminatedListener
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.execution.runners.ProgramRunner
-import com.intellij.execution.testframework.sm.FileUrlProvider
 import com.intellij.execution.testframework.sm.SMTestRunnerConnectionUtil
 import com.intellij.execution.testframework.sm.runner.SMRunnerConsolePropertiesProvider
 import com.intellij.execution.testframework.sm.runner.SMTRunnerConsoleProperties
@@ -73,14 +72,16 @@ class FinDslTestRunConfiguration(
 }
 
 /**
- * Test-Console-Properties. `getTestLocator` löst die `file://`-locationHints des
- * Reporters auf — Doppelklick im Test-Baum öffnet die Quelldatei.
+ * Test-Console-Properties. `getTestLocator` löst die
+ * `file://<pfad>:<zeile>:<spalte>`-locationHints des Reporters auf — Doppelklick
+ * im Test-Baum springt an die testfall-Zeile (eigener Locator, PSI-typ-unabhängig
+ * — der eingebaute FileUrlProvider springt bei TextMate-Dateien nicht zur Zeile).
  */
 private class FinDslTestConsoleProperties(
     config: FinDslTestRunConfiguration,
     executor: Executor,
 ) : SMTRunnerConsoleProperties(config, FINDSL_TEST_FRAMEWORK, executor) {
-    override fun getTestLocator(): SMTestLocator = FileUrlProvider.INSTANCE
+    override fun getTestLocator(): SMTestLocator = FinDslTestLocator
 }
 
 /** Startet den CLI-Prozess und hängt das Test-Runner-Fenster an dessen stdout. */

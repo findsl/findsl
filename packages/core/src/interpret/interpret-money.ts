@@ -155,12 +155,13 @@ export function numericDiv(l: Value, r: Value): NumericValue {
     if (b.value.isZero()) {
         throw new InterpretError('Division durch Null.');
     }
-    return new NumericValue(a.value.div(b.value), combineDiv(a.tag, b.tag));
+    return new NumericValue(a.value.div(b.value), combineDiv());
 }
 
-/** SPEC § 3.2.3 / § 3.4: `Geld/…`→Dezimal; Prozent mit reinen Zahlen verhält sich
- *  wie sein Bruchwert → Dezimal (`9,3% / 2 == 0,0465`). */
-function combineDiv(a: NumericValue['tag'], b: NumericValue['tag']): NumericValue['tag'] {
-    if (isMoneyTag(a)) return 'Dezimal';
+/** SPEC § 3.2.3 / § 3.4: Division ergibt **immer** `Dezimal` — Geld/Geld und
+ *  Geld/Ganzzahl (§ 3.2.3 Anmerkung) genauso wie Prozent mit reinen Zahlen
+ *  (Bruchwert, `9,3% / 2 == 0,0465`). Die Operanden-Tags sind daher irrelevant
+ *  (anders als `combineMul`/`combineAddSub`), die Funktion ist parameterlos. */
+function combineDiv(): NumericValue['tag'] {
     return 'Dezimal';
 }

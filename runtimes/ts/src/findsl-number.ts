@@ -105,10 +105,10 @@ export class FinDslNumber {
         return 'Dezimal';
     }
 
-    /** SPEC § 3.2.3 / § 3.4 — combineDiv (interpreter.ts:558). */
-    static combineDiv(a: FinDslNumberType, b: FinDslNumberType): FinDslNumberType {
-        if (FinDslNumber.isMoney(a)) return 'Dezimal';
-        // Prozent / Zahl → Dezimal (Bruchwert, SPEC § 3.4): `9,3% / 2 == 0,0465`.
+    /** SPEC § 3.2.3 / § 3.4 — combineDiv (interpret-money.ts). Division ergibt
+     *  **immer** `Dezimal` (Geld/Geld, Geld/Ganzzahl, Prozent/Zahl als Bruchwert:
+     *  `9,3% / 2 == 0,0465`) — Operanden-Tags irrelevant, daher parameterlos. */
+    static combineDiv(): FinDslNumberType {
         return 'Dezimal';
     }
 
@@ -125,7 +125,7 @@ export class FinDslNumber {
     }
     div(b: FinDslNumber): FinDslNumber {
         if (b.value.isZero()) throw new FinDslRuntimeError('Division durch Null.');
-        return new FinDslNumber(this.value.div(b.value), FinDslNumber.combineDiv(this.type, b.type));
+        return new FinDslNumber(this.value.div(b.value), FinDslNumber.combineDiv());
     }
     neg(): FinDslNumber {
         return new FinDslNumber(this.value.neg(), this.type);

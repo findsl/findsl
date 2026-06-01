@@ -469,7 +469,7 @@ async function runTarget(
         run.started(target.item);
     }
 
-    let report: PruefeReport | null = null;
+    let report: PruefeReport | null;
     const timeoutMs = runTimeoutMs();
     try {
         report = await withTimeout(

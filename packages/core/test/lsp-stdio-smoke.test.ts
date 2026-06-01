@@ -264,7 +264,7 @@ describe('LSP-stdio Hover-Formel-Rendering nach clientInfo (#250)', () => {
             'IntelliJ IDEA Community Edition 2024.2', { findsl: { theme: 'dark' } },
         );
         expect(md).not.toContain('data:image/svg');     // kein data:-URL-Bild (lädt IntelliJ nicht)
-        expect(md).toMatch(/!\[[^\]]*]\(file:\/\/[^)]*\.svg\)/); // Markdown-Bild mit file://…​.svg
+        expect(md).toMatch(/!\[[^\]]*]\(file:\/\/[^)]*\.svg\)/); // Markdown-Bild mit file://….svg
     }, 25_000);
 
     it('VS-Code-Client → Formel als data:-URL-SVG (Regressionsschutz, unverändert)', async () => {

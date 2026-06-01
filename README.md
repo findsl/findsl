@@ -69,6 +69,7 @@ packages/
   editor-react/            @findsl/editor-react — React-<FindslEditor>
 apps/
   vscode/                  VS-Code-Extension (Manifest + Activation)
+  intellij/                JetBrains-Plugin (Kotlin/Gradle, via LSP4IJ)
 runtimes/
   java/                    Java-Laufzeit (Gradle) — Codegen-Output
   ts/                      TypeScript-Laufzeit — Quelle für emit-ts/js
@@ -81,13 +82,47 @@ runtimes/
   Langium-Grammatik in `packages/core/src/language/findsl.langium`.
 - **TypeScript/Langium-Implementation:** npm-Monorepo mit Workspace-
   Wurzel im Repo-Top-Level (`packages/core` Sprachkern, `packages/lsp`
-  LSP-Server, `packages/cli` CLI, `apps/vscode` Extension). Build/Test
-  vom Repo-Root (`npm install && npm run build && npm test`).
+  LSP-Server, `packages/cli` CLI, `apps/vscode` VS-Code-Extension,
+  `apps/intellij` JetBrains-Plugin). Build/Test vom Repo-Root
+  (`npm install && npm run build && npm test`).
 - **Self-contained CLI:** `npm run bundle` → ein eigenständiges
   `packages/cli/dist/findsl.cjs` (+ `data/`); `npm run binary` → ein
   **natives, Node-freies** `findsl`-Binary (Node-SEA, Host-Plattform).
   Öffentliches Publishing (`.vsix`/Open VSX/npm) ist offen (Phase 6b,
   Publisher-Entscheidung).
+
+## Editoren & Installation
+
+Sprachunterstützung (Highlighting, Completion, Hover, Diagnostics,
+`prüfe`-CodeLens, Doku-Generierung) gibt es für **zwei Editoren** — beide über
+**denselben** LSP-Server, ohne zweiten Sprachkern. Marktplatz-Veröffentlichungen
+sind noch offen; bis dahin Installation aus dem Quellcode (Repo-Root einmalig
+`npm install`).
+
+**VS Code / VSCodium** (`apps/vscode`)
+
+```bash
+npm run bundle            # Extension-Bundle bauen (apps/vscode/out/…)
+```
+
+Die Extension aus `apps/vscode` im Extension-Entwicklungshost starten (VS Code:
+„Run Extension") oder als `.vsix` paketieren und installieren.
+
+**JetBrains-IDEs** (IntelliJ IDEA Community & Ultimate u. a.; `apps/intellij`)
+
+Plugin in Kotlin/Gradle, bindet via [LSP4IJ](https://github.com/redhat-developer/lsp4ij)
+denselben LSP-Server ein (Ziel: IntelliJ IDEA Community 2024.2+). **Die
+JetBrains-Marketplace-Veröffentlichung ist in Vorbereitung** — bis dahin aus dem
+Quellcode:
+
+```bash
+npm run binary:lsp                        # natives LSP-Server-Binary bauen
+cd apps/intellij && ./gradlew buildPlugin # Plugin-ZIP → build/distributions/
+```
+
+Das ZIP in der IDE über **Einstellungen → Plugins → ⚙ → Plugin von Datenträger
+installieren…** laden. Sandbox-Start (`runIde`) und Details:
+[`apps/intellij/README.md`](apps/intellij/README.md).
 
 ## Beispieldatei
 

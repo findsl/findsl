@@ -2,6 +2,18 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-06-01 — **Doku: zweiter Editor (IntelliJ/JetBrains)
+im Projektkontext (#246).** `docs/02-repository-struktur.md` um `apps/intellij/`,
+das native LSP-Binary-Artefakt (`packages/lsp/dist/findsl-lsp`) und eine
+**Editor-Matrix** (VS Code = `.cjs`-Bundle / JetBrains = natives SEA-Binary via
+LSP4IJ + Lazy-Download, #243) erweitert; `README.md` um `apps/intellij/` in der
+Struktur, einen Status-Satz und einen neuen Abschnitt **„Editoren &
+Installation"** (VS Code + JetBrains aus dem Quellcode — Marketplace in
+Vorbereitung); `CLAUDE.md`-Index um den „Zwei Editoren, ein Sprachkern"-Hinweis;
+`NOTICE` um **LSP4IJ (Red Hat, EPL-2.0)** als Plugin-Abhängigkeit (über den
+JetBrains-Marketplace aufgelöst, nicht als Quelltext mitverteilt). Reine
+Dokumentation, kein Produktivcode.*
+
 *Letzte Aktualisierung: 2026-06-01 — **`Prozent`-Arithmetik bei `*`/`/`
 → `Dezimal` + Umwandlungs-Methoden `.alsProzent()`/`.alsDezimal()` (§ 11.7).**
 Nutzer-Befund: `(ganzzahl * prozent) * dezimal` schlug mit „Prozent * Dezimal

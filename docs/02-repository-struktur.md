@@ -62,8 +62,11 @@ FinDSL/                                 ← npm-Workspace-Wurzel (privat)
 │   └── editor-react/ @findsl/editor-react — React-<FindslEditor> um
 │                @findsl/editor (Ref-API check/generate)
 ├── apps/
-│   └── vscode/ Extension — src/main.ts + package.json (VS-Code-Manifest)
-│                + language-configuration.json + syntaxes/ (für .vsix)
+│   ├── vscode/   VS-Code-Extension — src/main.ts + package.json (Manifest)
+│   │             + language-configuration.json + syntaxes/ (für .vsix)
+│   └── intellij/ JetBrains-Plugin (Kotlin/Gradle, org.jetbrains.intellij.
+│                 platform 2.x) — bindet via LSP4IJ DENSELBEN LSP-Server;
+│                 Ziel IntelliJ IDEA Community 2024.2 (since-build 242)
 └── runtimes/                          ← als Codegen-Output eingebettet
     ├── java/   Java-Laufzeit (Gradle; FinDslNumber u. a.)
     └── ts/     TypeScript-Laufzeit (Quelle für emit-ts/emit-js)
@@ -77,6 +80,26 @@ language}/main.cjs`; kein TS-Import von core). `language ↔ interpret`,
 in `core` (Variante A); `codegen` wird vom CLI-Subkommando `codegen`
 (`--lang java|ts|js`) konsumiert; die `runtimes/{java,ts}` werden von
 `codegen` als eingebettete Laufzeit-Outputs ausgeliefert.
+
+### Zwei Editoren, ein Sprachkern (LSP-Wiederverwendung)
+
+Beide Editor-Integrationen sind **dünne Präsentationsschichten** über demselben
+LSP-Server (`packages/lsp`); es gibt **keinen** zweiten Sprachkern. Sie
+unterscheiden sich nur darin, wie sie den Server-Prozess beziehen und starten:
+
+| Editor | LSP-Client | Server-Artefakt | Verteilung |
+| --- | --- | --- | --- |
+| **VS Code** (`apps/vscode`) | `vscode-languageclient` | `.cjs`-Bundle in der Extension (`apps/vscode/out/language/main.cjs`, esbuild) | `.vsix` (Bundle enthalten) |
+| **JetBrains** (`apps/intellij`) | LSP4IJ (Red Hat, EPL-2.0) | **natives `findsl-lsp`-SEA-Binary** (`packages/lsp/dist/findsl-lsp`) | Plugin-ZIP + **Lazy-Download** des OS/Arch-Binaries vom versions-gepinnten GitHub-Release (SHA-256-verifiziert, #243) |
+
+- Syntax-**Highlighting** nutzt in beiden Fällen dieselbe TextMate-Grammatik
+  (`packages/core/syntaxes/findsl.tmLanguage.json`).
+- **LSP-Binary-Artefakt:** `packages/lsp/dist/findsl-lsp` entsteht aus
+  `npm run binary:lsp` (bzw. `npm run all`) über `scripts/build-binary.mjs lsp`
+  (Node-SEA aus `findsl-lsp.cjs`). **`npm run bundle` allein baut nur die
+  `.cjs`** — IntelliJ läuft sonst gegen einen veralteten Server. Dev-Override:
+  `FINDSL_LSP_PATH` / System-Property `findsl.lsp.path`. Distributions-Spez:
+  `apps/intellij/docs/binary-distribution.md` (#243).
 
 **Zwei Artefakte halten die Sprache zusammen — bei Sprachänderungen MÜSSEN beide synchron gepflegt werden:**
 

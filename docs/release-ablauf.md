@@ -154,7 +154,7 @@ Lockstep.
 
 ```bash
 npm run version:check                      # sind alle Versionen synchron?
-npm run all                                # langium:generate + build + bundle + test
+npm run all                                # langium:generate + build + bundle + test + native Binaries (LSP+CLI)
 ( cd runtimes/java && ./gradlew check )    # Codegen-Gate + Runtime-Tests
 ```
 

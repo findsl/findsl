@@ -95,6 +95,31 @@ val embedLspServer by tasks.registering(Copy::class) {
     into(layout.buildDirectory.dir("generated-resources/server"))
 }
 
+// CLI-Binary einbetten (#256) — der Test-Runner (FinDslTestRunConfiguration)
+// startet `findsl test … --reporter=teamcity`. Gleiche Strategie wie der
+// LSP-Server: fehlt das Binary, wird der Schritt übersprungen (Dev:
+// `FINDSL_CLI_PATH` als Override, siehe FinDslNativeBinary). Distribution → #243.
+val cliBinaryName =
+    if (org.gradle.internal.os.OperatingSystem.current().isWindows) "findsl.exe" else "findsl"
+val cliBinaryFile = layout.projectDirectory.file("../../packages/cli/dist/$cliBinaryName")
+
+val embedCliBinary by tasks.registering(Copy::class) {
+    description = "Kopiert das native CLI-Binary in die Plugin-Ressourcen (cli/)."
+    val binary = cliBinaryFile.asFile
+    onlyIf {
+        val ok = binary.exists()
+        if (!ok) {
+            logger.warn(
+                "[findsl] CLI-Binary fehlt: ${binary.path} — `npm run binary:cli` im Repo-Root ausführen. "
+                    + "Build läuft weiter; der Test-Runner fehlt zur Laufzeit (oder FINDSL_CLI_PATH setzen).",
+            )
+        }
+        ok
+    }
+    from(binary)
+    into(layout.buildDirectory.dir("generated-resources/cli"))
+}
+
 sourceSets {
     named("main") {
         resources.srcDir(layout.buildDirectory.dir("generated-resources"))
@@ -102,5 +127,5 @@ sourceSets {
 }
 
 tasks.named("processResources") {
-    dependsOn(embedLspServer)
+    dependsOn(embedLspServer, embedCliBinary)
 }

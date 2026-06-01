@@ -47,12 +47,19 @@ Factory extrahiert und startet es dann ohne weiteres Zutun. Fehlt das Binary,
 bleibt der Build grün (der Server fehlt nur zur Laufzeit). Die robuste
 Distributionsstrategie (Bündeln vs. Lazy-Download) ist **#243**.
 
+**Zusätzlich: CLI-Binary für den Test-Runner (#256).** Das Test-Runner-Fenster
+startet das native CLI `findsl` (nicht den LSP-Server). Analog: `npm run
+binary:cli` (→ `packages/cli/dist/findsl`) + Override `FINDSL_CLI_PATH` /
+`findsl.cli.path`, oder Einbettung über den Gradle-Task `embedCliBinary`
+(nach `cli/` in die Plugin-Ressourcen).
+
 ## Entwickeln & Testen
 
 ```bash
 # Plugin in einer Sandbox-IDE starten (lädt beim ersten Mal die IntelliJ-
-# Platform herunter). Mit Binary-Override:
+# Platform herunter). Mit Binary-Overrides (LSP-Server + Test-Runner-CLI):
 FINDSL_LSP_PATH="$(pwd)/../../packages/lsp/dist/findsl-lsp" \
+FINDSL_CLI_PATH="$(pwd)/../../packages/cli/dist/findsl" \
   ./gradlew runIde
 
 # Plugin-ZIP bauen (Artefakt unter build/distributions/):
@@ -71,6 +78,12 @@ Hover, Diagnosen, Gehe-zu-Definition, Rename und Formatierung sind aktiv.
 Beide gehen über das Server-Kommando `findsl.pruefe.run`; das Ergebnis erscheint
 als Notification, fehlgeschlagene Testfälle als Annotation.
 
+- **Test-Runner-Fenster** (#256): Rechtsklick auf eine `.findsl`-Datei →
+  „Run 'FinDSL-Test: …'" (oder eine FinDSL-Test-RunConfiguration anlegen).
+  Startet `findsl test … --reporter=teamcity` und zeigt die `prüfe`-Blöcke als
+  Test-Baum mit Pass/Fail, Re-Run-Failed, Statistiken und Doppelklick-Navigation
+  zur Quelldatei — die zentrale Übersicht analog zum VS-Code-Test-Explorer.
+
 ## Bekannte Einschränkungen
 
 - **Gutter-Icons aktualisieren sich beim Öffnen der Datei:** Werden Testfälle
@@ -82,9 +95,9 @@ als Notification, fehlgeschlagene Testfälle als Annotation.
   documentLinks PSI-gebunden (`ExternalAnnotator` + `GotoDeclarationHandler`);
   bei TextMate-Dateien ohne echtes PSI fehlt daher nur das Hand-Cursor-Feedback
   — die Navigation funktioniert.
-- **Formeln im Hover:** LaTeX-Formeln in der Doku werden (anders als in VS Code)
-  noch nicht gerendert — LSP4IJ kann im Hover-Markdown kein Math. Geplant:
-  server-seitig TeX-freier Unicode-Hover für IntelliJ (#250).
+- **Test-Runner-Navigation:** Doppelklick im Test-Baum öffnet die Quelldatei,
+  springt aber (noch) nicht zur Testfall-Zeile — der `PruefeReport` liefert die
+  Range derzeit nicht, daher zeigt der `locationHint` nur auf die Datei.
 
 ## Status / Roadmap
 
@@ -92,6 +105,7 @@ als Notification, fehlgeschlagene Testfälle als Annotation.
   TextMate-Highlighting, Datei-Icon, Server-Start. ✅
 - **#241**: `prüfe`-Testfälle per CodeLens ausführen. ✅
 - **#255**: Run-Gutter-Icons pro Testfall. ✅
+- **#250**: Formel-Rendering im Hover (file://-SVG, theme-bewusst). ✅
+- **#256**: Test-Runner-Fenster (RunConfiguration + TeamCity-Reporter). ✅
 - **#242**: Action „Dokumentation generieren".
-- **#250**: LaTeX-Hover server-seitig.
 - **#243/#244/#245**: Binary-Distribution, CI/Publishing, Signierung.

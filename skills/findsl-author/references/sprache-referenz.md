@@ -66,11 +66,21 @@ Datei führt das, was beim Schreiben am häufigsten schiefgeht.
   Euro-kanonische Wert, nicht der Tag. Darum sind ein Default-`0,00`
   (intern Dezimal) und ein EuroCent-Ergebnis wertgleich vergleichbar.
 - **Zwischenwerte können mehr als 2 NK tragen:** `Geld * Prozent` rechnet
-  exakt — `21 € * 4,5 % = 0,945`. Ein solcher krummer Zwischenwert lässt
-  sich **nicht** als 2-NK-EuroCent-Literal asserten (`== 0,945` wäre ein
-  3-NK-Literal = Fehler; `== 0,94`/`== 0,95` wären schlicht falsch). In
-  Tests deshalb **bevorzugt die gerundete Endgröße prüfen**, nicht den
-  krummen `Geld*Prozent`-Zwischenwert.
+  exakt — `21 € * 4,5 % = 0,945`. Ein solcher krummer Wert lässt sich **nicht**
+  als `EuroCent` asserten (`EuroCent`-Literale haben genau 2 NK; `== 0,945`
+  wäre 3-NK = Fehler, `== 0,94`/`== 0,95` schlicht falsch). **Zum exakten
+  Prüfen** den krummen Wert als **`Dezimal`** ausgeben (eigenes Ergebnis-Feld
+  oder `… als Dezimal`) und voll-präzise asserten — `Dezimal` erlaubt beliebig
+  viele NK (`einWert == 0,945` ✓). So bleibt die Berechnung exakt nachprüfbar,
+  nicht nur am gerundeten Endbetrag.
+- **Division rundet (Präzisionsfalle):** `/` rechnet mit ~20 signifikanten
+  Stellen (kaufmännisch, ROUND_HALF_UP). Ein rohes Divisionsergebnis ist daher
+  **nicht** gegen einen handgeschriebenen Dezimalbruch assertierbar
+  (`10,0 / 3,0 == 3,333…` schlägt fehl, egal wie viele Dreien). Verlangt die
+  Regel eine Rundung nach der Division, **modelliere sie explizit**
+  (`.abrunden()`/`.aufrunden()` mit Zielkontext, `.abrundenAuf(…)`) und prüfe
+  den gerundeten Wert; sonst über eine exakte Beziehung vergleichen (z. B.
+  `a / b * b == a`).
 
 ## 3. Literale & deutsche Zahl-Notation
 
@@ -166,6 +176,7 @@ Rundung ist **immer explizit** und eine **Methode** auf dem Empfänger:
 
 | Thema | Regel |
 | --- | --- |
+| **Datei-Kopf** | **KEIN** `modul <name>`-Header — eine `.findsl`-Datei beginnt mit dem führenden `--`-Doc-Block; der Modulname ist der **Dateiname**. `modul X` am Anfang = Parse-Fehler (`Expecting EOF but found 'modul'`). |
 | **`konst`-Name** | MUSS `^[A-Z][A-Z0-9_]*$` (ASCII UPPER_SNAKE). Verstoß = Fehler. |
 | **fn/Datensatz/Aufzählung/Enumwert-Name** | MUSS mit **Großbuchstaben** beginnen (UpperCamelCase, führendes `_` erlaubt), SPEC § 2.5. `fn freibetrag` = **Fehler** → `fn Freibetrag`. **Nur** `var`/Parameter/Felder sind lowerCamelCase (nicht erzwungen). Eingebaute Methoden (`.abrunden`, `.zuordnen`) sind eigener lowerCamelCase-Namensraum. |
 | **EuroCent-Literale** | Genau 2 NK Pflicht (`0,00`). Bares `0`/`== 0`/`oder 0` im EuroCent-Kontext = Fehler. |

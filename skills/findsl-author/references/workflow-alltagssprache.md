@@ -70,10 +70,14 @@ Höchstbetrag erreicht, jede ausgeschlossene Konstellation per
 
 ## Schritt 5 — Verifizieren
 
-Mit dem installierten `findsl`-CLI (siehe `SKILL.md` → Verifizieren):
-`findsl parse <verzeichnis>` (0 Diagnosen) und
-`findsl test <name>.test.findsl` (N/N bestanden). Die `@Quelle`-Warnung für
-gesetzlose Konstanten ist hier erwartbar (kein Fehler).
+Mit dem installierten `findsl`-CLI (vollständige Kriterien in `SKILL.md` →
+**Verifizieren**): `findsl parse <verzeichnis>` (0 Diagnosen) und
+`findsl test <name>.test.findsl` (N/N bestanden — und **N = deine
+`testfall`-Zahl**; „keine prüfe-Blöcke"/`0/0` ist trotz Exit 0 **kein**
+Erfolg). Grün heißt nur „Modell = mein Sollwert" — die Sollwerte deshalb
+**unabhängig aus der Beschreibung** herleiten, nicht aus dem Modell ablesen.
+Die `@Quelle`-Warnung für gesetzlose Konstanten ist hier erwartbar (kein
+Fehler).
 
 ---
 

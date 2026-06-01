@@ -40,12 +40,18 @@ npm run binary:lsp        # → packages/lsp/dist/findsl-lsp
 Setze `FINDSL_LSP_PATH` (Umgebung) oder die System-Property `findsl.lsp.path`
 auf das gebaute Binary.
 
-**B. Ins Plugin einbetten (für `buildPlugin`/Distribution):**
+**B. Ins Plugin einbetten (für `buildPlugin`/lokal):**
 Liegt `packages/lsp/dist/findsl-lsp` vor, kopiert der Gradle-Task
 `embedLspServer` es automatisch nach `server/` in die Plugin-Ressourcen; die
 Factory extrahiert und startet es dann ohne weiteres Zutun. Fehlt das Binary,
-bleibt der Build grün (der Server fehlt nur zur Laufzeit). Die robuste
-Distributionsstrategie (Bündeln vs. Lazy-Download) ist **#243**.
+bleibt der Build grün (der Server fehlt nur zur Laufzeit).
+
+> **Release-Distribution** (Marketplace) läuft **nicht** über das Einbetten:
+> Entschieden ist **Lazy-Download** des passenden OS/Arch-Binaries vom
+> versions-gepinnten GitHub-Release (SHA-256-verifiziert, IDE-Cache) mit
+> manuellem Pfad-Fallback für Air-Gap-Netze. Spezifikation:
+> [docs/binary-distribution.md](docs/binary-distribution.md) (#243). Die
+> CI-/Upload-Seite ist #244.
 
 **Zusätzlich: CLI-Binary für den Test-Runner (#256).** Das Test-Runner-Fenster
 startet das native CLI `findsl` (nicht den LSP-Server). Analog: `npm run

@@ -47,11 +47,21 @@ Datei führt das, was beim Schreiben am häufigsten schiefgeht.
 | --- | --- |
 | `Geld ± Geld` | präzisere Seite |
 | `Geld * Ganzzahl` | Geld |
-| `Geld * Dezimal` / `Geld * Prozent` | **EuroCent** |
+| `Geld * Dezimal` / `Geld * Prozent` | **EuroCent** (Betragsanwendung, § 3.2.3) |
 | `Geld / …` | **Dezimal** |
 | `Geld * Geld` | **verboten** |
-| `Prozent * Prozent` | Dezimal — **vermeiden!** Statt `3,5% * 56%` eine vorab berechnete `konst …: Prozent = 1,96%` mit Doc anlegen. |
+| `Prozent ± Prozent` | `Prozent` (Sätze addieren) |
+| `Zahl * Prozent` / `Prozent * Prozent` | **Dezimal** (§ 3.4, s. u.) |
+| `Prozent / Zahl` / `Prozent / Prozent` | **Dezimal** |
 
+- **`Prozent` bei `*`/`/` ist ein dimensionsloser Bruch-Skalar (SPEC § 3.4):**
+  mit reinen Zahlen verhält es sich wie sein Bruchwert → das Ergebnis ist
+  **`Dezimal`** (kein Prozent-Tag). `100 * 10% == 10` (nicht `1000 %`),
+  `9,3% / 2 == 0,0465`, `10% * 10% == 0,01`. **Einzige Ausnahme** ist die
+  Betragsanwendung `Geld × Prozent → EuroCent` (oben). Soll aus dem Ergebnis
+  wieder ein Prozentsatz werden, dient `.alsProzent()` (§ 11.7) oder der
+  `als Prozent`-Cast. Frühere Faustregel „`Prozent * Prozent` meiden" ist
+  damit obsolet — es ist sauber als `Dezimal` definiert.
 - **`==`/Vergleich ist tag-agnostisch:** verglichen wird nur der
   Euro-kanonische Wert, nicht der Tag. Darum sind ein Default-`0,00`
   (intern Dezimal) und ein EuroCent-Ergebnis wertgleich vergleichbar.
@@ -95,6 +105,12 @@ Rundung ist **immer explizit** und eine **Methode** auf dem Empfänger:
 - **§ 11.6 Grenzwert/Stufen (typ-erhaltend, kontextfrei):** `.höchstens(grenze)`
   (Cap nach oben = Minimum), `.mindestens(grenze)` (Floor = Maximum),
   `.abrundenAuf(vielfaches)` / `.aufrundenAuf(vielfaches)`.
+- **§ 11.7 Umwandlung Zahl ↔ Prozent (Methoden-Form des `als`-Casts):**
+  `.alsProzent()` auf `Ganzzahl`/`Dezimal` (Stellenwert als Prozentangabe:
+  `9,3.alsProzent() == 9,3 %`), `.alsDezimal()` auf `Prozent` (Bruchwert:
+  `9,3%.alsDezimal() == 0,093`). Anderer Empfänger = Fehler. Beide sind
+  **nicht** invers (`.alsProzent()` teilt durch 100, `.alsDezimal()` liefert
+  den Bruchwert) — sie spiegeln je die Richtung des `als`-Casts.
 
 ## 5. Ausdrücke & Konstrukte
 
@@ -154,7 +170,7 @@ Rundung ist **immer explizit** und eine **Methode** auf dem Empfänger:
 | **fn/Datensatz/Aufzählung/Enumwert-Name** | MUSS mit **Großbuchstaben** beginnen (UpperCamelCase, führendes `_` erlaubt), SPEC § 2.5. `fn freibetrag` = **Fehler** → `fn Freibetrag`. **Nur** `var`/Parameter/Felder sind lowerCamelCase (nicht erzwungen). Eingebaute Methoden (`.abrunden`, `.zuordnen`) sind eigener lowerCamelCase-Namensraum. |
 | **EuroCent-Literale** | Genau 2 NK Pflicht (`0,00`). Bares `0`/`== 0`/`oder 0` im EuroCent-Kontext = Fehler. |
 | **Euro/Cent-Literale** | Ganzzahlig, kein `,`: `100`, `277.825`. |
-| **Geld-Arithmetik** | Siehe § 2. `Geld*Geld` verboten; `Prozent*Prozent` meiden (vorab-`konst`). |
+| **Geld-Arithmetik** | Siehe § 2. `Geld*Geld` verboten. `Prozent` bei `*`/`/` mit Zahlen = dimensionsloser Bruch → **`Dezimal`** (`100 * 10% == 10`, § 3.4), nur `Geld × Prozent → EuroCent`. Zurück zu Prozent: `.alsProzent()` (§ 11.7). |
 | **Typannotation = Einheit** | `Euro`/`Cent` erzwingen Ganzzahligkeit → fraktional ⇒ Laufzeitfehler, explizit runden. |
 | **Rundung** | Methode, Empfänger typgebunden, Ziel aus Kontext. Siehe § 4. |
 | **Statement-Grenze `)(`** | Block-Zeile endet `)`, nächste beginnt `(` → Parser liest Aufrufkette `f(...)(...)` → Fehler. Fix: an `var` binden, blanken Identifier zurückgeben. Block-Ende idealerweise blanker Identifier oder `Name(...)`-Konstruktor. |

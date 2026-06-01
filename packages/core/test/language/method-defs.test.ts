@@ -23,32 +23,41 @@ import {
 const TListe = (elem: Type): Type => ({ kind: 'list', element: elem });
 
 describe('getMethodDefs — Dispatch nach Empfängertyp', () => {
-    it('EuroCent → § 11.1 Rundung + § 11.6 Grenzwert/Stufen (alle 6 Methoden)', () => {
+    it('EuroCent → § 11.1 Rundung + § 11.6 Grenzwert/Stufen (alle 6 Methoden, keine § 11.7)', () => {
         const names = getMethodDefs(TEuroCent).map((m) => m.name);
         expect(names).toEqual([
             'abrunden', 'aufrunden',
             'höchstens', 'mindestens',
             'abrundenAuf', 'aufrundenAuf',
         ]);
+        // Geld-Typ: keine Zahl↔Prozent-Umwandlung.
+        expect(names).not.toContain('alsProzent');
+        expect(names).not.toContain('alsDezimal');
     });
 
-    it('Dezimal → wie EuroCent (Werte mit Nachkommastellen)', () => {
-        expect(getMethodDefs(TDezimal).map((m) => m.name)).toEqual([
+    it('Dezimal → wie EuroCent + § 11.7 .alsProzent()', () => {
+        const names = getMethodDefs(TDezimal).map((m) => m.name);
+        expect(names).toEqual([
             'abrunden', 'aufrunden',
             'höchstens', 'mindestens',
             'abrundenAuf', 'aufrundenAuf',
+            'alsProzent',
         ]);
+        expect(names).not.toContain('alsDezimal'); // ist bereits Dezimal
     });
 
-    it('Prozent → wie EuroCent', () => {
-        expect(getMethodDefs(TProzent).map((m) => m.name))
-            .toContain('abrunden');
+    it('Prozent → Rundung + Grenzwert/Stufen + § 11.7 .alsDezimal()', () => {
+        const names = getMethodDefs(TProzent).map((m) => m.name);
+        expect(names).toContain('abrunden');
+        expect(names).toContain('alsDezimal');
+        expect(names).not.toContain('alsProzent'); // ist bereits Prozent
     });
 
     it('Euro → nur § 11.6 (keine Rundung — Euro hat keine Nachkommastellen)', () => {
         const names = getMethodDefs(TEuro).map((m) => m.name);
         expect(names).toEqual(['höchstens', 'mindestens', 'abrundenAuf', 'aufrundenAuf']);
         expect(names).not.toContain('abrunden');
+        expect(names).not.toContain('alsProzent');
     });
 
     it('Cent → nur § 11.6 (ganzzahlige Cent)', () => {
@@ -56,9 +65,13 @@ describe('getMethodDefs — Dispatch nach Empfängertyp', () => {
         expect(names).toEqual(['höchstens', 'mindestens', 'abrundenAuf', 'aufrundenAuf']);
     });
 
-    it('Ganzzahl → nur § 11.6', () => {
+    it('Ganzzahl → § 11.6 + § 11.7 .alsProzent()', () => {
         const names = getMethodDefs(TGanzzahl).map((m) => m.name);
-        expect(names).toEqual(['höchstens', 'mindestens', 'abrundenAuf', 'aufrundenAuf']);
+        expect(names).toEqual([
+            'höchstens', 'mindestens', 'abrundenAuf', 'aufrundenAuf',
+            'alsProzent',
+        ]);
+        expect(names).not.toContain('alsDezimal');
     });
 
     it('Liste<Ganzzahl> → § 11.2 Listen-Methoden', () => {

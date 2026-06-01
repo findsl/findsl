@@ -132,7 +132,8 @@ export function numericMul(l: Value, r: Value): NumericValue {
     return new NumericValue(a.value.mul(b.value), combineMul(a.tag, b.tag));
 }
 
-/** SPEC § 3.2.3 / § 3.4: `Geld*Ganzzahl`→Geld; `Geld*{Dezimal,Prozent}`→EuroCent. */
+/** SPEC § 3.2.3 / § 3.4: `Geld*Ganzzahl`→Geld; `Geld*{Dezimal,Prozent}`→EuroCent;
+ *  Prozent mit reinen Zahlen verhält sich wie sein Bruchwert → Dezimal. */
 function combineMul(a: NumericValue['tag'], b: NumericValue['tag']): NumericValue['tag'] {
     const aM = isMoneyTag(a), bM = isMoneyTag(b);
     if (aM && bM) return 'EuroCent';                       // statisch verboten
@@ -142,10 +143,8 @@ function combineMul(a: NumericValue['tag'], b: NumericValue['tag']): NumericValu
         if (other === 'Ganzzahl') return money;            // Geld * Ganzzahl
         return 'EuroCent';                                 // Geld * Dezimal/Prozent
     }
-    if ((a === 'Prozent' && b === 'Ganzzahl') || (a === 'Ganzzahl' && b === 'Prozent')) {
-        return 'Prozent';
-    }
-    if (a === 'Prozent' && b === 'Prozent') return 'Dezimal';
+    // Prozent ist hier ein dimensionsloser Bruch-Skalar (`100 * 10% == 10`,
+    // nicht `1000%`); jede Nicht-Geld-Kombination mit Prozent → Dezimal.
     if (a === 'Ganzzahl' && b === 'Ganzzahl') return 'Ganzzahl';
     return 'Dezimal';
 }
@@ -156,12 +155,13 @@ export function numericDiv(l: Value, r: Value): NumericValue {
     if (b.value.isZero()) {
         throw new InterpretError('Division durch Null.');
     }
-    return new NumericValue(a.value.div(b.value), combineDiv(a.tag, b.tag));
+    return new NumericValue(a.value.div(b.value), combineDiv());
 }
 
-/** SPEC § 3.2.3 / § 3.4: `Geld/…`→Dezimal; `Prozent/Ganzzahl`→Prozent. */
-function combineDiv(a: NumericValue['tag'], b: NumericValue['tag']): NumericValue['tag'] {
-    if (isMoneyTag(a)) return 'Dezimal';
-    if (a === 'Prozent' && b === 'Ganzzahl') return 'Prozent';
+/** SPEC § 3.2.3 / § 3.4: Division ergibt **immer** `Dezimal` — Geld/Geld und
+ *  Geld/Ganzzahl (§ 3.2.3 Anmerkung) genauso wie Prozent mit reinen Zahlen
+ *  (Bruchwert, `9,3% / 2 == 0,0465`). Die Operanden-Tags sind daher irrelevant
+ *  (anders als `combineMul`/`combineAddSub`), die Funktion ist parameterlos. */
+function combineDiv(): NumericValue['tag'] {
     return 'Dezimal';
 }

@@ -38,6 +38,10 @@ verwende {
     AufrundenAufVielfaches,
     AbrundenAufVielfachesDez,
     AufrundenAufVielfachesDez,
+    GanzzahlAlsProzent,
+    DezimalAlsProzent,
+    ProzentAlsDezimal,
+    KetteAlsProzent,
 } aus "./korpus-stdlib"
 
 prüfe "§ 11.1 Rundungs-Methoden (EuroCent → Euro)" {
@@ -125,6 +129,15 @@ prüfe "§ 11.6 Grenzwert-Methoden (.höchstens/.mindestens)" {
     testfall "Clamp greift an der Obergrenze" { BegrenztEuro(50, 0, 40) == 40 }
     testfall "Clamp greift an der Untergrenze" { BegrenztEuro(0, 10, 40) == 10 }
     testfall "Clamp lässt Wert im Intervall durch" { BegrenztEuro(25, 0, 40) == 25 }
+}
+
+prüfe "§ 11.7 Umwandlungs-Methoden (.alsProzent/.alsDezimal)" {
+    testfall "GanzzahlAlsProzent(5) → 5 %"      { GanzzahlAlsProzent(5) == 5% }
+    testfall "DezimalAlsProzent(9,3) → 9,3 %"   { DezimalAlsProzent(9,3) == 9,3% }
+    testfall "ProzentAlsDezimal(9,3%) → 0,093"  { ProzentAlsDezimal(9,3%) == 0,093 }
+    testfall "KetteAlsProzent(100, 10%) → 10 % ((100×10%)=10 → 10 %)" {
+        KetteAlsProzent(100, 10%) == 10%
+    }
 }
 
 prüfe "§ 11.6 Stufen-Methoden (.abrundenAuf/.aufrundenAuf)" {

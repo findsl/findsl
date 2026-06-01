@@ -257,3 +257,41 @@ describe('§11.1/§11.5 — Teil-Parse-Robustheit', () => {
         await expect(diags('konst R: Text = "x".\n')).resolves.toBeDefined();
     });
 });
+
+describe('§3.4 — Prozent bei *,/ mit reinen Zahlen → Dezimal', () => {
+    it('Ganzzahl × Prozent → Dezimal', async () => {
+        expect(await inferType('100 * 10%')).toBe('Dezimal');
+    });
+    it('Dezimal × Prozent → Dezimal', async () => {
+        expect(await inferType('(2,5 als Dezimal) * 10%')).toBe('Dezimal');
+    });
+    it('Prozent × Prozent → Dezimal', async () => {
+        expect(await inferType('10% * 10%')).toBe('Dezimal');
+    });
+    it('Prozent / Ganzzahl → Dezimal', async () => {
+        expect(await inferType('9,3% / 2')).toBe('Dezimal');
+    });
+    it('Geld × Prozent bleibt EuroCent (unverändert)', async () => {
+        expect(await inferType('(100 als Euro) * 42%')).toBe('EuroCent');
+    });
+});
+
+describe('§11.7 — Umwandlungs-Methoden .alsProzent()/.alsDezimal()', () => {
+    it('Dezimal.alsProzent() → Prozent', async () => {
+        expect(await inferType('(9,3 als Dezimal).alsProzent()')).toBe('Prozent');
+    });
+    it('Ganzzahl.alsProzent() → Prozent', async () => {
+        expect(await inferType('(5).alsProzent()')).toBe('Prozent');
+    });
+    it('Prozent.alsDezimal() → Dezimal', async () => {
+        expect(await inferType('(9,3%).alsDezimal()')).toBe('Dezimal');
+    });
+    it('.alsProzent() auf Prozent ist ein Empfänger-Fehler', async () => {
+        const errs = await diags('konst R: Prozent = (9,3%).alsProzent()\n');
+        expect(errs.join(' ')).toMatch(/alsProzent.*nur auf Ganzzahl\/Dezimal/);
+    });
+    it('.alsDezimal() auf Ganzzahl ist ein Empfänger-Fehler', async () => {
+        const errs = await diags('konst R: Dezimal = (5).alsDezimal()\n');
+        expect(errs.join(' ')).toMatch(/alsDezimal.*nur auf Prozent/);
+    });
+});

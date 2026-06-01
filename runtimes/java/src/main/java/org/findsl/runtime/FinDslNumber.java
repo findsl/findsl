@@ -272,26 +272,24 @@ public sealed class FinDslNumber
             if (other == Type.Ganzzahl) return money;   // Geld * Ganzzahl
             return Type.EuroCent;                        // Geld * Dezimal/Prozent
         }
-        if ((a == Type.Prozent && b == Type.Ganzzahl)
-                || (a == Type.Ganzzahl && b == Type.Prozent)) {
-            return Type.Prozent;
-        }
-        if (a == Type.Prozent && b == Type.Prozent) return Type.Dezimal;
+        // Prozent ist hier ein dimensionsloser Bruch-Skalar (SPEC § 3.4):
+        // `100 * 10% == 10`, nicht `1000%`. Jede Nicht-Geld-Kombination mit
+        // Prozent → Dezimal; nur Ganzzahl*Ganzzahl bleibt Ganzzahl.
         if (a == Type.Ganzzahl && b == Type.Ganzzahl) return Type.Ganzzahl;
         return Type.Dezimal;
     }
 
     /**
-     * SPEC § 3.2.3 / § 3.4 — {@code combineDiv} (interpreter.ts:558):
-     * Ergebnis-Art von {@code /}.
+     * SPEC § 3.2.3 / § 3.4 — {@code combineDiv} (interpret-money.ts):
+     * Division ergibt <b>immer</b> {@link Type#Dezimal} — Geld/Geld,
+     * Geld/Ganzzahl (§ 3.2.3 Anmerkung) genauso wie Prozent mit reinen Zahlen
+     * (Bruchwert, {@code 9,3% / 2 == 0,0465}). Die Operanden-Arten sind daher
+     * irrelevant (anders als {@code combineMul}/{@code combineAddSub}),
+     * die Methode ist parameterlos.
      *
-     * @param a Art des Dividenden.
-     * @param b Art des Divisors.
-     * @return die resultierende Zahl-Art.
+     * @return stets {@link Type#Dezimal}.
      */
-    static Type combineDiv(Type a, Type b) {
-        if (isMoneyType(a)) return Type.Dezimal;
-        if (a == Type.Prozent && b == Type.Ganzzahl) return Type.Prozent;
+    static Type combineDiv() {
         return Type.Dezimal;
     }
 
@@ -339,7 +337,7 @@ public sealed class FinDslNumber
         if (b.value.signum() == 0) {
             throw new FinDslRuntimeError("Division durch Null.");
         }
-        return new FinDslNumber(value.divide(b.value, MC_DIV), combineDiv(type, b.type));
+        return new FinDslNumber(value.divide(b.value, MC_DIV), combineDiv());
     }
 
     /**

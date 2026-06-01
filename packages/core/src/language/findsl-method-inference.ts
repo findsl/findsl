@@ -13,6 +13,7 @@ import type { AstNode } from 'langium';
 import { infer } from './findsl-inference.js';
 import { checkAgainstAnnotation } from './findsl-type-check.js';
 import {
+    TDezimal,
     TGanzzahl,
     TProzent,
     TText,
@@ -124,6 +125,32 @@ export function scalarRoundingMethod(
     report(node,
         `\`.${name}()\` nur auf EuroCent, Dezimal oder Prozent (Werte mit `
         + `Nachkommastellen), erhalten ${typeToString(recv)} (SPEC § 11.1).`);
+    return TUnknown;
+}
+
+/**
+ * Umwandlungs-Methoden (SPEC § 11.7) — Methoden-Form des `als`-Casts (§ 4.8):
+ *  - `.alsProzent()` auf `Ganzzahl`/`Dezimal` → `Prozent` (Zahl als Prozentangabe).
+ *  - `.alsDezimal()` auf `Prozent` → `Dezimal` (Bruchwert).
+ *  - sonst → Empfänger-Fehler. `unknown` (Teil-Parse) → `unknown`.
+ */
+export function conversionMethod(
+    recv: Type, name: string, node: AstNode, report: Reporter,
+): Type {
+    if (recv.kind === 'unknown') return TUnknown;
+    const rn = recv.kind === 'primitive' ? recv.name : null;
+    if (name === 'alsProzent') {
+        if (rn === 'Ganzzahl' || rn === 'Dezimal') return TProzent;
+        report(node,
+            `\`.alsProzent()\` nur auf Ganzzahl/Dezimal, erhalten `
+            + `${typeToString(recv)} (SPEC § 11.7).`);
+        return TUnknown;
+    }
+    // name === 'alsDezimal'
+    if (rn === 'Prozent') return TDezimal;
+    report(node,
+        `\`.alsDezimal()\` nur auf Prozent, erhalten ${typeToString(recv)} `
+        + `(SPEC § 11.7).`);
     return TUnknown;
 }
 

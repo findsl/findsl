@@ -35,9 +35,40 @@ describe('Arithmetik', () => {
         expect(v.value.toString()).toBe('0.3');
     });
 
-    it('Multiplikation Prozent · Ganzzahl', async () => {
+    it('Zahl × Prozent → Dezimal (SPEC § 3.4): 42% * 100 == 42 (NICHT 4200%)', async () => {
         const v = await evalExprAsR('42% * 100') as NumericValue;
         expect(v.value.toString()).toBe('42');
+        expect(v.tag).toBe('Dezimal');           // früher fälschlich 'Prozent'
+    });
+
+    it('Ganzzahl × Prozent → Dezimal: 100 * 10% == 10', async () => {
+        const v = await evalExprAsR('100 * 10%') as NumericValue;
+        expect(v.value.toString()).toBe('10');
+        expect(v.tag).toBe('Dezimal');
+    });
+
+    it('Prozent × Prozent → Dezimal: 10% * 10% == 0,01', async () => {
+        const v = await evalExprAsR('10% * 10%') as NumericValue;
+        expect(v.value.toString()).toBe('0.01');
+        expect(v.tag).toBe('Dezimal');
+    });
+
+    it('Prozent / Ganzzahl → Dezimal (Bruchwert): 9,3% / 2 == 0,0465', async () => {
+        const v = await evalExprAsR('9,3% / 2') as NumericValue;
+        expect(v.value.toString()).toBe('0.0465');
+        expect(v.tag).toBe('Dezimal');
+    });
+
+    it('.alsProzent() — Zahl als Prozentangabe (§ 11.7): (9,3).alsProzent() == 9,3 %', async () => {
+        const v = await evalExprAsR('(9,3).alsProzent()') as NumericValue;
+        expect(v.tag).toBe('Prozent');
+        expect(v.value.toString()).toBe('0.093');   // intern Bruch
+    });
+
+    it('.alsDezimal() — Bruchwert (§ 11.7): (9,3%).alsDezimal() == 0,093', async () => {
+        const v = await evalExprAsR('(9,3%).alsDezimal()') as NumericValue;
+        expect(v.tag).toBe('Dezimal');
+        expect(v.value.toString()).toBe('0.093');
     });
 
     it('Division promotet zu Dezimal', async () => {

@@ -109,6 +109,7 @@ import {
     numericMul,
 } from './interpret-money.js';
 import {
+    conversionMethodValue,
     listMethodValue,
     scalarLimitValue,
     scalarRoundToMultipleValue,
@@ -606,6 +607,10 @@ function applyChainOp(base: Value, op: ChainOp, env: Environment): Value {
         if (base.kind === 'numeric'
             && (op.name === 'abrunden' || op.name === 'aufrunden')) {
             return scalarRoundingValue(base, op.name, op);
+        }
+        if (base.kind === 'numeric'
+            && (op.name === 'alsProzent' || op.name === 'alsDezimal')) {
+            return conversionMethodValue(base, op.name);
         }
         if (base.kind === 'numeric'
             && (op.name === 'höchstens' || op.name === 'mindestens')) {

@@ -63,6 +63,26 @@ fn MultiplikationEuroProzent(betrag: Euro, satz: Prozent): EuroCent = betrag * s
 -- Division zweier Dezimalzahlen. --
 fn Division(a: Dezimal, b: Dezimal): Dezimal = a / b
 
+--
+§ 3.4: bei `*`/`/` mit reinen Zahlen verhält sich `Prozent` wie sein
+Bruchwert → das Ergebnis ist `Dezimal` (kein Prozent-Tag). `100 * 10%`
+ist `10`, nicht `1000%`.
+--
+fn ZahlMalProzent(n: Ganzzahl, p: Prozent): Dezimal = n * p
+
+-- Prozent × Prozent → Dezimal (§ 3.4). --
+fn ProzentMalProzent(a: Prozent, b: Prozent): Dezimal = a * b
+
+-- Prozent ÷ Zahl → Dezimal (§ 3.4). --
+fn ProzentDurchZahl(p: Prozent, n: Ganzzahl): Dezimal = p / n
+
+--
+Nutzer-Snippet aus dem Bug-Report: `(Ganzzahl × Prozent) × Dezimal`. Die
+Klammer evaluiert zu `Dezimal`, daher ist die Weiterrechnung mit `Dezimal`
+definiert (früher fälschlich `Prozent * Dezimal` → „nicht definiert"). § 3.4.
+--
+fn ProzentKette(n: Ganzzahl, p: Prozent, d: Dezimal): Dezimal = (n * p) * d
+
 // ===========================================================================
 // § 4.3 Vergleichsoperatoren
 // ===========================================================================

@@ -98,18 +98,17 @@ export class FinDslNumber {
             if (other === 'Ganzzahl') return money;      // Geld * Ganzzahl
             return 'EuroCent';                            // Geld * Dezimal/Prozent
         }
-        if ((a === 'Prozent' && b === 'Ganzzahl') || (a === 'Ganzzahl' && b === 'Prozent')) {
-            return 'Prozent';
-        }
-        if (a === 'Prozent' && b === 'Prozent') return 'Dezimal';
+        // Prozent ist hier ein dimensionsloser Bruch-Skalar (SPEC § 3.4):
+        // `100 * 10% == 10`, nicht `1000%`. Jede Nicht-Geld-Kombination mit
+        // Prozent → Dezimal; nur Ganzzahl*Ganzzahl bleibt Ganzzahl.
         if (a === 'Ganzzahl' && b === 'Ganzzahl') return 'Ganzzahl';
         return 'Dezimal';
     }
 
-    /** SPEC § 3.2.3 / § 3.4 — combineDiv (interpreter.ts:558). */
-    static combineDiv(a: FinDslNumberType, b: FinDslNumberType): FinDslNumberType {
-        if (FinDslNumber.isMoney(a)) return 'Dezimal';
-        if (a === 'Prozent' && b === 'Ganzzahl') return 'Prozent';
+    /** SPEC § 3.2.3 / § 3.4 — combineDiv (interpret-money.ts). Division ergibt
+     *  **immer** `Dezimal` (Geld/Geld, Geld/Ganzzahl, Prozent/Zahl als Bruchwert:
+     *  `9,3% / 2 == 0,0465`) — Operanden-Tags irrelevant, daher parameterlos. */
+    static combineDiv(): FinDslNumberType {
         return 'Dezimal';
     }
 
@@ -126,7 +125,7 @@ export class FinDslNumber {
     }
     div(b: FinDslNumber): FinDslNumber {
         if (b.value.isZero()) throw new FinDslRuntimeError('Division durch Null.');
-        return new FinDslNumber(this.value.div(b.value), FinDslNumber.combineDiv(this.type, b.type));
+        return new FinDslNumber(this.value.div(b.value), FinDslNumber.combineDiv());
     }
     neg(): FinDslNumber {
         return new FinDslNumber(this.value.neg(), this.type);

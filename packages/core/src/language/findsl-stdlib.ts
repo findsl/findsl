@@ -180,10 +180,31 @@ export const LIMIT_STEP_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = withQuell
     { name: 'aufrundenAuf',signature: '(vielfaches: T) -> T',         property: false, doc: 'Rundet **auf** auf das nächstgrößere Vielfache von `vielfaches`. Typ-erhaltend, `vielfaches` > 0.' },
 ], 'SPEC § 11.6');
 
-/** Alle Skalar-Methoden in Doku-Reihenfolge (§ 11.1 dann § 11.6) — für
- *  Empfänger mit Nachkommastellen, die beide Gruppen anbieten. Die
- *  Completion splittet via `ROUNDING_METHOD_DEFS`/`LIMIT_STEP_METHOD_DEFS`,
- *  weil § 11.1 nur auf `EuroCent`/`Dezimal`/`Prozent` gilt. */
+/** § 11.7 Umwandlungs-Methoden — Methoden-Form des `als`-Casts (§ 4.8) für die
+ *  häufige Zahl↔Prozent-Konvertierung. **Receiver-beschränkt** (anders als
+ *  § 11.1/§ 11.6): `.alsProzent()` nur auf `Ganzzahl`/`Dezimal`, `.alsDezimal()`
+ *  nur auf `Prozent`. Deshalb je ein eigener Katalog statt eines gemeinsamen.
+ *  Typ-Logik in `findsl-method-inference.conversionMethod`. */
+export const ALS_PROZENT_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = withQuelle([
+    { name: 'alsProzent', signature: '() -> Prozent', property: false, doc: 'Liest die Zahl als Prozentangabe → `Prozent` (`9,3.alsProzent()` = `9,3 %`). Nur auf `Ganzzahl`/`Dezimal`. Methoden-Form von `… als Prozent` (§ 4.8).' },
+], 'SPEC § 11.7');
+
+export const ALS_DEZIMAL_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = withQuelle([
+    { name: 'alsDezimal', signature: '() -> Dezimal', property: false, doc: 'Liefert den Bruchwert des Prozentsatzes als `Dezimal` (`9,3%.alsDezimal()` = `0,093`). Nur auf `Prozent`. Methoden-Form von `… als Dezimal` (§ 4.8).' },
+], 'SPEC § 11.7');
+
+/** Beide § 11.7-Umwandlungs-Methoden (Doku/Vollständigkeit). Für den
+ *  receiver-präzisen Dispatch nutzt `getMethodDefs` die beiden Einzel-Kataloge
+ *  `ALS_PROZENT_METHOD_DEFS`/`ALS_DEZIMAL_METHOD_DEFS`. */
+export const CONVERSION_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
+    ...ALS_PROZENT_METHOD_DEFS,
+    ...ALS_DEZIMAL_METHOD_DEFS,
+];
+
+/** Skalar-Methoden für Empfänger **mit Nachkommastellen** (`EuroCent`/`Dezimal`/
+ *  `Prozent`): § 11.1 Rundung + § 11.6 Grenzwert/Stufen. Die receiver-beschränkten
+ *  § 11.7-Umwandlungen kommen NICHT hier rein — `getMethodDefs` hängt sie pro
+ *  Empfängertyp an (Zahl → `.alsProzent()`, Prozent → `.alsDezimal()`). */
 export const SCALAR_METHOD_DEFS: ReadonlyArray<BuiltinMethodDef> = [
     ...ROUNDING_METHOD_DEFS,
     ...LIMIT_STEP_METHOD_DEFS,

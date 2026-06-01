@@ -67,7 +67,8 @@ import {
     inferChainPrefix,
 } from './findsl-local-scope.js';
 import { renderDocForHover, type QuelleAnnotation } from './doc-hover-renderer.js';
-import { clientPrefersPlainMath } from './client-math-mode.js';
+import { hoverMathMode, hoverSvgIsDark } from './client-math-mode.js';
+import { getHoverSvgFileWriter } from './hover-svg-writer.js';
 import * as path from 'node:path';
 import {
     BUILTIN_ENUM_DEFS,
@@ -686,7 +687,7 @@ async function formatDocPrefix(prefix?: DeclPrefix, paramOrder?: ReadonlyArray<s
         docRaw: prefix.doc,
         paramOrder,
         quellen: quellenFromPrefix(prefix),
-    }, { plainMath: clientPrefersPlainMath() });
+    }, { mathMode: hoverMathMode(), svgDark: hoverSvgIsDark(), svgFileWriter: getHoverSvgFileWriter() });
 }
 
 function quellenFromPrefix(prefix: DeclPrefix): ReadonlyArray<QuelleAnnotation> {

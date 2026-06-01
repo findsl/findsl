@@ -132,7 +132,8 @@ const HOVER_DOC_TEXT = [
  * Server und der Hover käme nie zurück.
  */
 function lspHoverMarkdown(
-    command: string, args: string[], clientName: string | undefined, timeoutMs = 20_000,
+    command: string, args: string[], clientName: string | undefined,
+    initializationOptions?: unknown, timeoutMs = 20_000,
 ): Promise<string> {
     return new Promise((resolve, reject) => {
         const child = spawn(command, args, { cwd: repoRoot });
@@ -192,9 +193,10 @@ function lspHoverMarkdown(
         child.on('exit', (code) => finish(() => reject(new Error(`Server endete vor Hover (Code ${code}). stderr: ${stderr}`))));
 
         const clientInfo = clientName !== undefined ? { clientInfo: { name: clientName, version: '1.0' } } : {};
+        const initOpts = initializationOptions !== undefined ? { initializationOptions } : {};
         send({
             jsonrpc: '2.0', id: 1, method: 'initialize',
-            params: { processId: null, rootUri: 'file:///tmp/findsl-stdio-smoke', capabilities: {}, ...clientInfo },
+            params: { processId: null, rootUri: 'file:///tmp/findsl-stdio-smoke', capabilities: {}, ...clientInfo, ...initOpts },
         });
     });
 }
@@ -248,30 +250,32 @@ describe.skipIf(!fs.existsSync(lspBinary))('LSP-Binary-stdio-Smoke (nur wenn geb
 
 /**
  * #250: Hover-Formeln werden clientabhängig gerendert. VS Code zeigt das
- * eingebettete MathJax-SVG; IntelliJ/JetBrains (via LSP4IJ) kann kein Bild im
- * Hover-Markdown anzeigen und bekommt deshalb Unicode-Klartext. Diese Naht
- * (`initialize.clientInfo.name` → Server-State → Hover-Output) ist nur
- * end-to-end über stdio prüfbar — die Unit-Tests decken nur die Entscheidung
- * isoliert ab. Läuft gegen das immer vorhandene Bundle.
+ * MathJax-SVG als `data:`-URL-Bild; IntelliJ/JetBrains (via LSP4IJ) kann
+ * `data:`-URLs im Hover nicht laden und bekommt das SVG als `file://`-Datei.
+ * Diese Naht (`initialize.clientInfo.name` + `initializationOptions.theme` →
+ * Server-State → Hover-Output) ist nur end-to-end über stdio prüfbar — die
+ * Unit-Tests decken nur die Entscheidung isoliert ab. Läuft gegen das immer
+ * vorhandene Bundle.
  */
 describe('LSP-stdio Hover-Formel-Rendering nach clientInfo (#250)', () => {
-    it('IntelliJ-Client (clientInfo.name) → Formel als Unicode-Klartext, KEIN SVG', async () => {
+    it('IntelliJ-Client → Formel als file://-SVG-Datei, KEINE data:-URL', async () => {
         const md = await lspHoverMarkdown(
-            process.execPath, [lspBundle, '--stdio'], 'IntelliJ IDEA Community Edition 2024.2',
+            process.execPath, [lspBundle, '--stdio'],
+            'IntelliJ IDEA Community Edition 2024.2', { findsl: { theme: 'dark' } },
         );
-        expect(md).not.toContain('data:image/svg');   // kein eingebettetes Bild
-        expect(md).toContain('zve');                   // Formel als Text vorhanden
-        expect(md).toMatch(/`T\(zve\) = a · zve \+ b`/); // texToPlain-Unicode im Code-Span
+        expect(md).not.toContain('data:image/svg');     // kein data:-URL-Bild (lädt IntelliJ nicht)
+        expect(md).toMatch(/!\[[^\]]*]\(file:\/\/[^)]*\.svg\)/); // Markdown-Bild mit file://…​.svg
     }, 25_000);
 
-    it('VS-Code-Client → Formel als SVG-Bild (Regressionsschutz, unverändert)', async () => {
+    it('VS-Code-Client → Formel als data:-URL-SVG (Regressionsschutz, unverändert)', async () => {
         const md = await lspHoverMarkdown(
             process.execPath, [lspBundle, '--stdio'], 'Visual Studio Code',
         );
         expect(md).toContain('data:image/svg+xml');
+        expect(md).not.toContain('file://');
     }, 25_000);
 
-    it('ohne clientInfo → konservativ SVG (kein Regress für unbekannte Clients)', async () => {
+    it('ohne clientInfo → konservativ data:-URL (kein Regress für unbekannte Clients)', async () => {
         const md = await lspHoverMarkdown(process.execPath, [lspBundle, '--stdio'], undefined);
         expect(md).toContain('data:image/svg+xml');
     }, 25_000);

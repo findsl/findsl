@@ -2,41 +2,61 @@
 // SPDX-License-Identifier: EUPL-1.2
 
 /**
- * Tests für die Client-Erkennung (#250): Welche LSP-Clients bekommen
- * Hover-Formeln als Unicode-Klartext statt als SVG-Bild?
+ * Tests für die Client-Erkennung (#250): Welcher Hover-Formel-Modus gilt je
+ * Client (`svg-data` für VS Code, `svg-file` für IntelliJ), und welches Theme
+ * steuert die feste Formelfarbe im file://-Pfad.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
 import {
     setClientName,
-    clientPrefersPlainMath,
+    setClientTheme,
+    hoverMathMode,
+    hoverSvgIsDark,
     resetClientMathModeForTest,
 } from '../../src/language/client-math-mode.js';
 
-describe('clientPrefersPlainMath (#250)', () => {
+describe('hoverMathMode (#250)', () => {
     afterEach(() => resetClientMathModeForTest());
 
-    it('IntelliJ/JetBrains-Clients bevorzugen Unicode-Klartext (kein SVG-Hover)', () => {
-        setClientName('IntelliJ IDEA Community Edition 2024.2');
-        expect(clientPrefersPlainMath()).toBe(true);
-    });
-
-    it('weitere JetBrains-IDEs ebenso', () => {
-        for (const name of ['PyCharm 2024.2', 'WebStorm 2024.2', 'GoLand 2024.2']) {
+    it('IntelliJ/JetBrains-Clients → file://-SVG (data:-URL wird dort nicht geladen)', () => {
+        for (const name of [
+            'IntelliJ IDEA Community Edition 2024.2',
+            'PyCharm 2024.2', 'WebStorm 2024.2', 'GoLand 2024.2',
+        ]) {
             setClientName(name);
-            expect(clientPrefersPlainMath()).toBe(true);
+            expect(hoverMathMode()).toBe('svg-file');
         }
     });
 
-    it('VS Code (und Verwandte) rendern SVG → kein plainMath', () => {
+    it('VS Code (und Verwandte) → data:-URL-SVG (Webview rendert das Bild)', () => {
         for (const name of ['Visual Studio Code', 'VSCodium', 'Code - OSS']) {
             setClientName(name);
-            expect(clientPrefersPlainMath()).toBe(false);
+            expect(hoverMathMode()).toBe('svg-data');
         }
     });
 
-    it('unbekannter/fehlender Client → konservativ SVG (kein Regress)', () => {
+    it('unbekannter/fehlender Client → konservativ data:-URL (kein Regress)', () => {
         setClientName(undefined);
-        expect(clientPrefersPlainMath()).toBe(false);
+        expect(hoverMathMode()).toBe('svg-data');
+    });
+});
+
+describe('hoverSvgIsDark (#250)', () => {
+    afterEach(() => resetClientMathModeForTest());
+
+    it('Theme "dark" → dunkles Theme erkannt', () => {
+        setClientTheme('dark');
+        expect(hoverSvgIsDark()).toBe(true);
+    });
+
+    it('Theme "light", undefined oder unbekannt → Light-Default', () => {
+        expect(hoverSvgIsDark()).toBe(false);          // nach reset
+        setClientTheme('light');
+        expect(hoverSvgIsDark()).toBe(false);
+        setClientTheme(undefined);
+        expect(hoverSvgIsDark()).toBe(false);
+        setClientTheme('nonsense');
+        expect(hoverSvgIsDark()).toBe(false);
     });
 });

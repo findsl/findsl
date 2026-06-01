@@ -14,6 +14,8 @@ import { startLanguageServer } from 'langium/lsp';
 import { NodeFileSystem } from 'langium/node';
 import { createConnection, ProposedFeatures } from 'vscode-languageserver/node.js';
 import { createFindslServices } from '@findsl/core/language/findsl-module.js';
+import { setHoverSvgFileWriter } from '@findsl/core/language/hover-svg-writer.js';
+import { svgToHoverFileUrl } from '@findsl/core/language/hover-math-svg-file.js';
 
 // Robustheit: Ein langlaufender LSP-Server darf nicht an einer einzelnen
 // unbehandelten Promise-Rejection sterben. Konkreter Fall: Sendet der Server
@@ -30,6 +32,11 @@ process.on('unhandledRejection', (reason) => {
 process.on('uncaughtException', (err) => {
     console.error('[findsl-lsp] Unbehandelte Ausnahme (Server läuft weiter):', err);
 });
+
+// Node-Kontext (#250): den file://-SVG-Writer für Hover-Formeln registrieren.
+// Clients ohne data:-URL-Bild im Hover (IntelliJ/LSP4IJ) bekommen die Formel so
+// als SVG-Datei. Im Browser-LSP-Worker bleibt der Writer ungesetzt (data:-Pfad).
+setHoverSvgFileWriter(svgToHoverFileUrl);
 
 const connection = createConnection(ProposedFeatures.all);
 const { shared } = createFindslServices({ connection, ...NodeFileSystem });

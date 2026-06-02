@@ -2,6 +2,21 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-06-02 — **IntelliJ: Binary-Pfade in den
+Einstellungen konfigurierbar — Air-Gap-Fallback (#275).** Setzt ADR #243 §5 um:
+neue Settings-Seite **Einstellungen → FinDSL** (`FinDslConfigurable`,
+Kotlin-UI-DSL) mit Pfad-Feldern für LSP-Server- und CLI-Binary, persistiert über
+`FinDslSettings` (`PersistentStateComponent`, application-level). In
+abgeschotteten Netzen ohne GitHub-Zugriff trägt der Administrator die lokal
+bereitgestellten Binaries dort ein. `FinDslNativeBinary.resolveOrExtract`
+konsultiert den Pfad als **Stufe 2** (Reihenfolge: `FINDSL_*_PATH`/
+`findsl.*.path`-Override → **Settings-Pfad** → gebündeltes Binary); die
+„nicht gefunden"-Meldung verweist jetzt auf die Einstellungen. Die reine
+Auswahl-Logik liegt IntelliJ-frei in `BinaryPathResolver` (+ JUnit-Test der
+Priorität). **Lazy-Download (ADR §4 Stufe 3/4) bleibt separater Folgeschritt.**
+Apps/intellij: 2 neue Quell- + 1 Testdatei + 4 Edits; Doku (`apps/intellij/
+README.md`, `binary-distribution.md`).*
+
 *Letzte Aktualisierung: 2026-06-01 — **Doku: zweiter Editor (IntelliJ/JetBrains)
 im Projektkontext (#246).** `docs/02-repository-struktur.md` um `apps/intellij/`,
 das native LSP-Binary-Artefakt (`packages/lsp/dist/findsl-lsp`) und eine

@@ -40,6 +40,14 @@
              .findsl-Datei an. -->
         <configurationType implementation="org.findsl.intellij.FinDslTestRunConfigurationType"/>
         <runConfigurationProducer implementation="org.findsl.intellij.FinDslTestRunConfigurationProducer"/>
+
+        <!-- Persistente, anwendungsweite Einstellungen + Settings-Seite „FinDSL":
+             manuell konfigurierte Binary-Pfade (Air-Gap-Fallback, #243 §5). Der
+             Pfad greift als Auflösungs-Stufe 2 in FinDslNativeBinary. -->
+        <applicationService serviceImplementation="org.findsl.intellij.FinDslSettings"/>
+        <applicationConfigurable id="org.findsl.settings"
+                                 displayName="FinDSL"
+                                 instance="org.findsl.intellij.FinDslConfigurable"/>
     </extensions>
 
     <!-- LSP4IJ: Server-Definition + Mapping per Dateiname-Muster (kein eigener

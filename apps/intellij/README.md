@@ -59,6 +59,16 @@ binary:cli` (→ `packages/cli/dist/findsl`) + Override `FINDSL_CLI_PATH` /
 `findsl.cli.path`, oder Einbettung über den Gradle-Task `embedCliBinary`
 (nach `cli/` in die Plugin-Ressourcen).
 
+### Air-Gap: Binary-Pfade in den Einstellungen (#275)
+
+Für abgeschottete Netze ohne GitHub-Zugriff gibt es **Einstellungen → FinDSL**
+mit zwei Pfad-Feldern (LSP-Server-Binary, CLI-Binary). Der Administrator lädt
+die Binaries einmal manuell von der GitHub-Release-Seite und trägt die Pfade
+ein. Die Auflösung in `FinDslNativeBinary` nutzt sie als **Stufe 2** —
+Reihenfolge: `FINDSL_*_PATH`/`findsl.*.path`-Override → **Settings-Pfad** →
+gebündeltes Binary. Nach einer Änderung den LSP-Server (oder die IDE) neu
+starten, damit der neue Pfad greift.
+
 ## Entwickeln & Testen
 
 ```bash

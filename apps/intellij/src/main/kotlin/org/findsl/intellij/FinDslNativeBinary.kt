@@ -20,16 +20,20 @@ import java.nio.file.attribute.PosixFilePermission
  * Auflösungs-/Extraktionsstrategie (und vor allem dieselbe Sicherheits-
  * absicherung), daher hier zentral statt dupliziert.
  *
- * Reihenfolge:
+ * Reihenfolge (ADR #243 §4):
  *  1. Override `<sysProp>` (System-Property) bzw. `<envVar>` (Umgebung) — für
  *     die lokale Entwicklung (zeigt z. B. auf `packages/lsp/dist/findsl-lsp`),
  *     ohne das Binary ins Plugin zu kopieren.
- *  2. Das gebündelte Binary aus `/<resourceDir>/<exe>`, extrahiert in ein
+ *  2. In den Plugin-Einstellungen konfigurierter Pfad (`settingsPath`,
+ *     [FinDslSettings]) — der **Air-Gap-Fallback** (#243 §5): in abgeschotteten
+ *     Netzen ohne GitHub-Zugriff trägt der Administrator hier den lokal
+ *     bereitgestellten Binary-Pfad ein.
+ *  3. Das gebündelte Binary aus `/<resourceDir>/<exe>`, extrahiert in ein
  *     per-User-Cacheverzeichnis und ausführbar gemacht.
  *
  * Die Hash-basierte Cache-Optimierung und die Lazy-Download-Distribution sind
- * #243 vorbehalten — hier bewusst einfach (bei jedem Start neu geschrieben),
- * Korrektheit vor Geschwindigkeit.
+ * ein Folgeschritt (#243 §4 Stufe 3/4) — hier bewusst einfach (bei jedem Start
+ * neu geschrieben), Korrektheit vor Geschwindigkeit.
  */
 object FinDslNativeBinary {
     private val LOG = logger<FinDslNativeBinary>()
@@ -40,6 +44,8 @@ object FinDslNativeBinary {
      * @param cacheSubdir Unterordner im IDE-System-Verzeichnis (`findsl-lsp` / `findsl-cli`).
      * @param sysProp   System-Property-Override (`findsl.lsp.path` / `findsl.cli.path`).
      * @param envVar    Umgebungsvariablen-Override (`FINDSL_LSP_PATH` / `FINDSL_CLI_PATH`).
+     * @param settingsPath In den Plugin-Einstellungen konfigurierter Pfad
+     *   (Air-Gap-Fallback, Stufe 2); `null`/leer = nicht gesetzt.
      */
     fun resolveOrExtract(
         exeBase: String,
@@ -47,21 +53,33 @@ object FinDslNativeBinary {
         cacheSubdir: String,
         sysProp: String,
         envVar: String,
+        settingsPath: String?,
     ): Path {
         val exe = if (SystemInfo.isWindows) "$exeBase.exe" else exeBase
 
+        // Stufe 1: Env/System-Property-Override (Entwicklung/CI).
         val override = System.getProperty(sysProp) ?: System.getenv(envVar)
-        if (!override.isNullOrBlank()) {
-            val path = Path.of(override)
-            if (Files.isExecutable(path)) return path
+        BinaryPathResolver.usable(override)?.let { return it }
+        if (BinaryPathResolver.isSet(override)) {
             LOG.warn("$sysProp/$envVar=$override ist nicht ausführbar — wird ignoriert.")
         }
 
+        // Stufe 2: in den Plugin-Einstellungen konfigurierter Pfad (Air-Gap, #243 §5).
+        BinaryPathResolver.usable(settingsPath)?.let { return it }
+        if (BinaryPathResolver.isSet(settingsPath)) {
+            LOG.warn(
+                "Einstellungen → FinDSL: Binary-Pfad '$settingsPath' ist nicht "
+                    + "ausführbar — wird ignoriert.",
+            )
+        }
+
+        // Stufe 3: ins Plugin gebündeltes Binary (Dev-/buildPlugin-Komfort).
         val resource = "/$resourceDir/$exe"
         val input = FinDslNativeBinary::class.java.getResourceAsStream(resource)
             ?: throw IllegalStateException(
-                "FinDSL-Binary nicht im Plugin gefunden ($resource). Im Dev-Build "
-                    + "`npm run binary` (Repo-Root) ausführen oder $envVar setzen.",
+                "FinDSL-Binary nicht gefunden ($resource). In abgeschotteten Netzen "
+                    + "(Air-Gap) den Pfad unter Einstellungen → FinDSL eintragen, oder "
+                    + "$envVar setzen; im Dev-Build `npm run binary` (Repo-Root) ausführen.",
             )
         // Per-User IDE-System-Verzeichnis — NICHT das welt-schreibbare
         // java.io.tmpdir: dort könnte ein anderer lokaler Nutzer/Prozess das

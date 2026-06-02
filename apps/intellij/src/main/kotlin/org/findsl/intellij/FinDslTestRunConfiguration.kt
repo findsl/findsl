@@ -97,6 +97,7 @@ private class FinDslTestCommandLineState(
             cacheSubdir = "findsl-cli",
             sysProp = "findsl.cli.path",
             envVar = "FINDSL_CLI_PATH",
+            settingsPath = FinDslSettings.getInstance().cliPath(),
         )
         val commandLine = GeneralCommandLine(cli.toString(), "test", config.target, "--reporter=teamcity")
             .withCharset(StandardCharsets.UTF_8)

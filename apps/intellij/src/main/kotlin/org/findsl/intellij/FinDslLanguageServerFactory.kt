@@ -68,6 +68,7 @@ class FinDslStreamConnectionProvider(project: Project) : OSProcessStreamConnecti
                 cacheSubdir = "findsl-lsp",
                 sysProp = "findsl.lsp.path",
                 envVar = "FINDSL_LSP_PATH",
+                settingsPath = FinDslSettings.getInstance().lspPath(),
             )
     }
 }

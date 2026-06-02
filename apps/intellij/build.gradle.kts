@@ -45,6 +45,10 @@ dependencies {
 
         testFramework(TestFrameworkType.Platform)
     }
+
+    // JUnit4 für reine Unit-Tests (z. B. BinaryPathResolverTest) — das
+    // Platform-Test-Framework exponiert es nicht auf dem Compile-Classpath.
+    testImplementation("junit:junit:4.13.2")
 }
 
 kotlin {
@@ -52,6 +56,14 @@ kotlin {
 }
 
 intellijPlatform {
+    // `buildSearchableOptions` startet eine Headless-IDE (`traverseUI`), um die
+    // Settings-Suche vorzuindizieren — bekannt flaky (Sandbox-/Instanz-Kollision,
+    // „External instance command", Boot-Timeouts) und nur eine Optimierung: die
+    // Einstellungen (Settings → FinDSL) bleiben auch ohne Vorindex voll
+    // durchsuchbar. Deaktiviert für robustes `buildPlugin` (auch im #244-Release);
+    // entspricht dem JetBrains-Plugin-Template-Default.
+    buildSearchableOptions = false
+
     pluginConfiguration {
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")

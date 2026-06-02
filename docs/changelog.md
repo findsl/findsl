@@ -2,6 +2,14 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-06-02 — **IntelliJ-Epic #237 abgeschlossen.**
+Alle Sub-Issues (#238–#246, #250, #255/#256, #275, #277) sind gemergt; die
+Epic-Checkliste wurde abgehakt und das Sammel-Issue geschlossen. Doc-Refresh:
+die Editor-Matrix in `docs/02-repository-struktur.md` weist den Lazy-Download
+nun als **umgesetzt (#277)** aus (statt nur „entschieden #243") und nennt die
+vollständige Binary-Auflösungskette (Override → Settings #275 → gebündelt →
+Lazy-Download #277). Reine Doku/Issue-Pflege.*
+
 *Letzte Aktualisierung: 2026-06-02 — **IntelliJ: Lazy-Download der nativen
 Binaries vom Release (#277).** Setzt ADR #243 §4 Stufe 3/4 um (Folge zu #275):
 `FinDslNativeBinary` löst jetzt vollständig auf — Override → Settings → gebündelt

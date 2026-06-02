@@ -90,16 +90,19 @@ unterscheiden sich nur darin, wie sie den Server-Prozess beziehen und starten:
 | Editor | LSP-Client | Server-Artefakt | Verteilung |
 | --- | --- | --- | --- |
 | **VS Code** (`apps/vscode`) | `vscode-languageclient` | `.cjs`-Bundle in der Extension (`apps/vscode/out/language/main.cjs`, esbuild) | `.vsix` (Bundle enthalten) |
-| **JetBrains** (`apps/intellij`) | LSP4IJ (Red Hat, EPL-2.0) | **natives `findsl-lsp`-SEA-Binary** (`packages/lsp/dist/findsl-lsp`) | Plugin-ZIP + **Lazy-Download** des OS/Arch-Binaries vom versions-gepinnten GitHub-Release (SHA-256-verifiziert, #243) |
+| **JetBrains** (`apps/intellij`) | LSP4IJ (Red Hat, EPL-2.0) | **natives `findsl-lsp`-SEA-Binary** (`packages/lsp/dist/findsl-lsp`) | Plugin-ZIP + **Lazy-Download** des OS/Arch-Binaries vom versions-gepinnten GitHub-Release (SHA-256-verifiziert; ADR #243, umgesetzt #277). Air-Gap: manueller Pfad in den Plugin-Einstellungen (#275) |
 
 - Syntax-**Highlighting** nutzt in beiden Fällen dieselbe TextMate-Grammatik
   (`packages/core/syntaxes/findsl.tmLanguage.json`).
 - **LSP-Binary-Artefakt:** `packages/lsp/dist/findsl-lsp` entsteht aus
   `npm run binary:lsp` (bzw. `npm run all`) über `scripts/build-binary.mjs lsp`
   (Node-SEA aus `findsl-lsp.cjs`). **`npm run bundle` allein baut nur die
-  `.cjs`** — IntelliJ läuft sonst gegen einen veralteten Server. Dev-Override:
-  `FINDSL_LSP_PATH` / System-Property `findsl.lsp.path`. Distributions-Spez:
-  `apps/intellij/docs/binary-distribution.md` (#243).
+  `.cjs`** — IntelliJ läuft sonst gegen einen veralteten Server. Die
+  Binary-Auflösung im Plugin (`FinDslNativeBinary`) ist gestaffelt:
+  `FINDSL_LSP_PATH`/`findsl.lsp.path`-Override → Settings-Pfad (Air-Gap, #275) →
+  gebündelt (Dev) → Lazy-Download vom Release (SHA-256-verifiziert, #277) →
+  Fehler. Distributions-Spez: `apps/intellij/docs/binary-distribution.md`
+  (ADR #243).
 
 **Zwei Artefakte halten die Sprache zusammen — bei Sprachänderungen MÜSSEN beide synchron gepflegt werden:**
 

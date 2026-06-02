@@ -112,6 +112,9 @@ mit passendem SHA-256 wird wiederverwendet (kein erneuter Download).
 
 - Eigene **Plugin-Settings-Seite** (`Configurable`): Felder „LSP-Server-Binary"
   und „CLI-Binary" (Pfad). Gesetzt ⇒ Stufe 2 greift, kein Netz nötig.
+  **Umgesetzt (#275):** `FinDslSettings` (`PersistentStateComponent`) +
+  `FinDslConfigurable` (Settings → FinDSL); `FinDslNativeBinary.resolveOrExtract`
+  konsultiert den Pfad als Stufe 2 (Reihenfolge Override → Settings → gebündelt).
 - Dokumentierter manueller Bezug: Binaries von der GitHub-Release-Seite laden,
   Pfad eintragen.
 
@@ -122,5 +125,6 @@ mit passendem SHA-256 wird wiederverwendet (kein erneuter Download).
   Release-Plugin enthält keine Binaries (nur `checksums.json`).
 - **#244** richtet die Multi-Plattform-Binary-Builds + `checksums.json` + den
   Release-Upload ein.
-- Die Download-/Settings-Implementierung in `FinDslNativeBinary` ist ein
-  Folgeschritt (nach #244, sobald Release-Assets + Manifest existieren).
+- Die **Settings-/Air-Gap-Implementierung** in `FinDslNativeBinary` ist mit
+  #275 erfolgt (Stufe 2). Die **Download-Implementierung** (Stufe 3/4) bleibt
+  Folgeschritt (sobald Release-Assets + Manifest existieren).

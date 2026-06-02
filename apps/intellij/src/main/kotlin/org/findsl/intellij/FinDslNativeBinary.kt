@@ -28,12 +28,13 @@ import java.nio.file.attribute.PosixFilePermission
  *     [FinDslSettings]) — der **Air-Gap-Fallback** (#243 §5): in abgeschotteten
  *     Netzen ohne GitHub-Zugriff trägt der Administrator hier den lokal
  *     bereitgestellten Binary-Pfad ein.
- *  3. Das gebündelte Binary aus `/<resourceDir>/<exe>`, extrahiert in ein
- *     per-User-Cacheverzeichnis und ausführbar gemacht.
- *
- * Die Hash-basierte Cache-Optimierung und die Lazy-Download-Distribution sind
- * ein Folgeschritt (#243 §4 Stufe 3/4) — hier bewusst einfach (bei jedem Start
- * neu geschrieben), Korrektheit vor Geschwindigkeit.
+ *  3. Das ins Plugin gebündelte Binary aus `/<resourceDir>/<exe>` (Dev-/
+ *     `buildPlugin`-Komfort), extrahiert in ein per-User-Cacheverzeichnis und
+ *     ausführbar gemacht. Im Release-Plugin fehlt es bewusst (#244).
+ *  4. **Lazy-Download** vom versions-gepinnten Release ([FinDslBinaryDownloader]):
+ *     Cache-Treffer (SHA-256 passt) wiederverwenden, sonst herunterladen und
+ *     gegen das eingebettete `checksums.json` verifizieren (#243 §4 Stufe 3/4).
+ *  5. Schlägt alles fehl → Fehler mit Hinweis auf Einstellungen → FinDSL (#243 §5).
  */
 object FinDslNativeBinary {
     private val LOG = logger<FinDslNativeBinary>()
@@ -74,24 +75,33 @@ object FinDslNativeBinary {
         }
 
         // Stufe 3: ins Plugin gebündeltes Binary (Dev-/buildPlugin-Komfort).
+        // Im Release-Plugin fehlt es bewusst (#244) → dann Stufe 4 (Download).
         val resource = "/$resourceDir/$exe"
-        val input = FinDslNativeBinary::class.java.getResourceAsStream(resource)
-            ?: throw IllegalStateException(
-                "FinDSL-Binary nicht gefunden ($resource). In abgeschotteten Netzen "
-                    + "(Air-Gap) den Pfad unter Einstellungen → FinDSL eintragen, oder "
-                    + "$envVar setzen; im Dev-Build `npm run binary` (Repo-Root) ausführen.",
-            )
-        // Per-User IDE-System-Verzeichnis — NICHT das welt-schreibbare
-        // java.io.tmpdir: dort könnte ein anderer lokaler Nutzer/Prozess das
-        // Binary unterschieben, das die IDE dann ausführt (lokale Code-
-        // Ausführung). Konsistent mit FinDslBundleProvider.
-        val cacheDir = PathManager.getSystemDir().resolve(cacheSubdir)
-        Files.createDirectories(cacheDir)
-        restrictToOwner(cacheDir)
-        val target = cacheDir.resolve(exe)
-        input.use { Files.copy(it, target, StandardCopyOption.REPLACE_EXISTING) }
-        restrictToOwner(target)
-        return target
+        FinDslNativeBinary::class.java.getResourceAsStream(resource)?.let { input ->
+            // Per-User IDE-System-Verzeichnis — NICHT das welt-schreibbare
+            // java.io.tmpdir: dort könnte ein anderer lokaler Nutzer/Prozess das
+            // Binary unterschieben, das die IDE dann ausführt (lokale Code-
+            // Ausführung). Konsistent mit FinDslBundleProvider.
+            val cacheDir = PathManager.getSystemDir().resolve(cacheSubdir)
+            Files.createDirectories(cacheDir)
+            restrictToOwner(cacheDir)
+            val target = cacheDir.resolve(exe)
+            input.use { Files.copy(it, target, StandardCopyOption.REPLACE_EXISTING) }
+            restrictToOwner(target)
+            return target
+        }
+
+        // Stufe 4: Lazy-Download vom versions-gepinnten Release (Cache + SHA-256,
+        // ADR #243 §4). `null` = kein eingebettetes Manifest (Dev-Build) → Stufe 5.
+        FinDslBinaryDownloader.resolveCachedOrDownload(exeBase)?.let { return it }
+
+        // Stufe 5: nichts verfügbar.
+        throw IllegalStateException(
+            "FinDSL-Binary '$exe' nicht verfügbar (weder gebündelt noch ladbar). "
+                + "In abgeschotteten Netzen (Air-Gap) den Pfad unter Einstellungen → "
+                + "FinDSL eintragen oder $envVar setzen; im Dev-Build `npm run binary` "
+                + "(Repo-Root) ausführen.",
+        )
     }
 
     /**
@@ -100,7 +110,7 @@ object FinDslNativeBinary {
      * Binary lesen oder ersetzen kann. No-op auf Windows (kein POSIX). Das
      * Owner-Execute-Bit macht das Binary zugleich lauffähig.
      */
-    private fun restrictToOwner(path: Path) {
+    internal fun restrictToOwner(path: Path) {
         if (SystemInfo.isWindows) return
         runCatching {
             Files.setPosixFilePermissions(

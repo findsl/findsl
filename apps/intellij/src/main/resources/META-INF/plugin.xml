@@ -48,6 +48,10 @@
         <applicationConfigurable id="org.findsl.settings"
                                  displayName="FinDSL"
                                  instance="org.findsl.intellij.FinDslConfigurable"/>
+
+        <!-- Balloon-Notifications für den Lazy-Download (#277): Start/Fehler beim
+             einmaligen Laden des nativen Sprachserver-Binaries vom Release. -->
+        <notificationGroup id="FinDSL" displayType="BALLOON"/>
     </extensions>
 
     <!-- LSP4IJ: Server-Definition + Mapping per Dateiname-Muster (kein eigener

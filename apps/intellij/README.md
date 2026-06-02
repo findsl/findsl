@@ -59,15 +59,23 @@ binary:cli` (→ `packages/cli/dist/findsl`) + Override `FINDSL_CLI_PATH` /
 `findsl.cli.path`, oder Einbettung über den Gradle-Task `embedCliBinary`
 (nach `cli/` in die Plugin-Ressourcen).
 
-### Air-Gap: Binary-Pfade in den Einstellungen (#275)
+### Binary-Auflösung: Lazy-Download (#277) + Air-Gap-Pfad (#275)
 
-Für abgeschottete Netze ohne GitHub-Zugriff gibt es **Einstellungen → FinDSL**
-mit zwei Pfad-Feldern (LSP-Server-Binary, CLI-Binary). Der Administrator lädt
-die Binaries einmal manuell von der GitHub-Release-Seite und trägt die Pfade
-ein. Die Auflösung in `FinDslNativeBinary` nutzt sie als **Stufe 2** —
-Reihenfolge: `FINDSL_*_PATH`/`findsl.*.path`-Override → **Settings-Pfad** →
-gebündeltes Binary. Nach einer Änderung den LSP-Server (oder die IDE) neu
-starten, damit der neue Pfad greift.
+Vollständige Reihenfolge in `FinDslNativeBinary`:
+`FINDSL_*_PATH`/`findsl.*.path`-Override → **Settings-Pfad** → gebündeltes Binary
+(Dev) → **Lazy-Download vom Release** → Fehler.
+
+- **Lazy-Download (#277):** In einer normalen Installation lädt das Plugin das
+  zur Plattform passende Binary (`findsl-lsp-<os>-<arch>`) **einmalig** vom
+  versions-gepinnten GitHub-Release und verifiziert es per SHA-256 gegen das
+  eingebettete `checksums.json` (#244). Der Download nutzt IntelliJs
+  `HttpRequests` (respektiert die **Proxy-Einstellungen** der IDE) und cached
+  versioniert unter `<SystemDir>/findsl-binaries/<version>/`. Ein zweiter Start
+  nutzt den Cache; ein manipuliertes Asset wird abgelehnt.
+- **Air-Gap (#275):** Ohne GitHub-Zugriff trägt der Administrator unter
+  **Einstellungen → FinDSL** die manuell bereitgestellten Binary-Pfade ein
+  (LSP-Server + CLI) — sie greifen als **Stufe 2** noch **vor** dem Download.
+  Nach einer Änderung den LSP-Server (oder die IDE) neu starten.
 
 ## Entwickeln & Testen
 

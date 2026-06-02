@@ -96,17 +96,22 @@ Verzeichnis `0700`, Datei `0600` (wie heute in `FinDslNativeBinary`, kein welt-
 schreibbares `tmp`). Versionierung ⇒ ein Plugin-Update lädt frisch; ein Treffer
 mit passendem SHA-256 wird wiederverwendet (kein erneuter Download).
 
-### 4. Auflösungsreihenfolge (`FinDslNativeBinary` erweitern)
+### 4. Auflösungsreihenfolge (`FinDslNativeBinary`) — umgesetzt (#275 Stufe 2, #277 Stufe 3/4)
 
 1. **Override** `findsl.lsp.path`/`findsl.cli.path` (System-Property) bzw.
    `FINDSL_LSP_PATH`/`FINDSL_CLI_PATH` (Umgebung) — Entwicklung.
-2. **Plugin-Settings:** manuell gesetzter Binary-Pfad — **Air-Gap/Behörde**.
-3. **Cache:** vorhandenes Binary mit passendem SHA-256.
-4. **Download** vom versions-gepinnten Release, SHA-256 gegen das eingebettete
-   Manifest verifiziert, dann in den Cache. Läuft als `Task.Backgroundable` mit
-   Fortschrittsbalken (~118 MB) beim ersten Server-Start.
-5. **Fehlschlag** (kein Netz, kein Pfad) → klare Notification mit Verweis auf den
-   manuellen Pfad in den Einstellungen.
+2. **Plugin-Settings:** manuell gesetzter Binary-Pfad — **Air-Gap/Behörde** (#275).
+3. **Gebündeltes Binary** (`/<server|cli>/<exe>`): nur Dev-/`buildPlugin`-Komfort;
+   im Release-Plugin bewusst nicht enthalten.
+4. **Lazy-Download** ([FinDslBinaryDownloader], #277): erst **Cache** (vorhandenes
+   Binary mit passendem SHA-256 → wiederverwenden), sonst **Download** vom
+   versions-gepinnten Release, SHA-256 gegen das eingebettete `checksums.json`
+   verifiziert, dann in den Cache (0700/0600). Läuft **synchron** im LSP-Start-
+   Thread (nicht EDT) mit `ProgressIndicator` + Balloon-Notification (~118 MB,
+   nur beim ersten Bedarf). `null`/kein Manifest (Dev-Build) ⇒ übersprungen.
+5. **Fehlschlag** (kein Netz, kein Pfad, nicht unterstützte Plattform, SHA-
+   Mismatch) → Fehler + Notification mit Verweis auf den manuellen Pfad in den
+   Einstellungen.
 
 ### 5. Offline-/Air-Gap-Fallback
 
@@ -125,6 +130,7 @@ mit passendem SHA-256 wird wiederverwendet (kein erneuter Download).
   Release-Plugin enthält keine Binaries (nur `checksums.json`).
 - **#244** richtet die Multi-Plattform-Binary-Builds + `checksums.json` + den
   Release-Upload ein.
-- Die **Settings-/Air-Gap-Implementierung** in `FinDslNativeBinary` ist mit
-  #275 erfolgt (Stufe 2). Die **Download-Implementierung** (Stufe 3/4) bleibt
-  Folgeschritt (sobald Release-Assets + Manifest existieren).
+- Die **Settings-/Air-Gap-Implementierung** (Stufe 2) ist mit #275, die
+  **Cache-/Download-Implementierung** (Stufe 3/4) mit #277 erfolgt. In Produktion
+  greift Stufe 4 erst, sobald ein Release die Assets + `checksums.json` bereitstellt
+  (Mechanik via #244); bis dahin bzw. im Air-Gap dienen Stufe 1/2 (Override/Settings).

@@ -2,6 +2,23 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-06-02 — **IntelliJ: Lazy-Download der nativen
+Binaries vom Release (#277).** Setzt ADR #243 §4 Stufe 3/4 um (Folge zu #275):
+`FinDslNativeBinary` löst jetzt vollständig auf — Override → Settings → gebündelt
+(Dev) → **Lazy-Download** → Fehler. Neuer `FinDslBinaryDownloader` lädt das zur
+Plattform passende Asset (`findsl-lsp-<os>-<arch>`, reine Mapping-Logik in
+`BinaryAssets`) **einmalig** vom versions-gepinnten GitHub-Release, verifiziert
+es **SHA-256 gegen das eingebettete `checksums.json`** (#244) und cached es
+versioniert unter `<SystemDir>/findsl-binaries/<version>/` (0700/0600); ein
+Cache-Treffer mit passendem Hash wird ohne Netz wiederverwendet, ein
+manipuliertes Asset abgelehnt. Download via IntelliJ `HttpRequests`
+(Proxy-bewusst), **synchron** im LSP-Start-Thread mit Fortschritt +
+Balloon-Notification (Group „FinDSL"). Kein eingebettetes Manifest (Dev-Build)
+⇒ Download übersprungen; nicht unterstützte Plattform (z. B. `linux-arm64`) ⇒
+klare Meldung → Einstellungen → FinDSL. Unit-Tests: Plattform→Asset-Mapping +
+SHA-256-Vektor. In Produktion greift Stufe 4, sobald ein Release die Assets +
+`checksums.json` bereitstellt.*
+
 *Letzte Aktualisierung: 2026-06-02 — **IntelliJ: Binary-Pfade in den
 Einstellungen konfigurierbar — Air-Gap-Fallback (#275).** Setzt ADR #243 §5 um:
 neue Settings-Seite **Einstellungen → FinDSL** (`FinDslConfigurable`,

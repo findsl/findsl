@@ -33,14 +33,14 @@
     "dompurify": "^3.4.7"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.4",
+    "@eslint/js": "^10.0.0",
     "@types/katex": "0.16.8",
     "@types/markdown-it": "14.1.2",
     "@types/node": "20.19.41",
     "@types/pdfmake": "0.3.3",
     "@vitest/coverage-v8": "^4.1.7",
     "esbuild": "0.28.0",
-    "eslint": "^9.39.4",
+    "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.6.0",
     "mermaid": "11.15.0",

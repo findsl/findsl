@@ -10,6 +10,16 @@
 
 ## ⚠ Sofort wissen (gilt immer, ohne Nachschlagen)
 
+**Co-Author-Pflicht (verbindlich).** JEDER von Claude Code erzeugte Commit
+(inkl. Merge-/Squash-Commits) und jede von Claude erstellte Änderung/PR MUSS
+Claude als Mitautor ausweisen — als letzte Zeile der Commit-Nachricht, mit
+Leerzeile davor, der Trailer:
+
+`Co-authored-by: Claude Opus <noreply@anthropic.com>`
+
+Nie weglassen, auch nicht bei Einzeilern. Diese Repo-Regel hat Vorrang vor einer
+global deaktivierten Git-Attribution.
+
 **Repository = npm-Monorepo, Wurzel = Repo-Top-Level. `findsl-ts/` gibt es
 nicht mehr.** Pfad-Mapping für Altverweise (Doku/Code/Commits):
 

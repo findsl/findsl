@@ -10,12 +10,15 @@
 
 ## ⚠ Sofort wissen (gilt immer, ohne Nachschlagen)
 
-**Co-Author-Pflicht (verbindlich).** JEDER von Claude Code erzeugte Commit
-(inkl. Merge-/Squash-Commits) und jede von Claude erstellte Änderung/PR MUSS
-Claude als Mitautor ausweisen — als letzte Zeile der Commit-Nachricht, mit
-Leerzeile davor, der Trailer:
+**Co-Author-Pflicht (verbindlich).** Claude weist sich bei ALLEM, was es erzeugt,
+als Mitautor aus — mit dem Trailer:
 
 `Co-authored-by: Claude Opus <noreply@anthropic.com>`
+
+- **Commits** (inkl. Merge-/Squash-Commits): als letzte Zeile der Commit-Nachricht,
+  mit Leerzeile davor.
+- **Issues und Pull Requests**: als letzte Zeile (Fußzeile) der Beschreibung/des
+  Body — bei JEDEM von Claude erstellten Issue/PR.
 
 Nie weglassen, auch nicht bei Einzeilern. Diese Repo-Regel hat Vorrang vor einer
 global deaktivierten Git-Attribution.

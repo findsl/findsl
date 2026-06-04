@@ -37,6 +37,6 @@
     "@codingame/monaco-vscode-configuration-service-override": "25.1.2",
     "@codingame/monaco-vscode-editor-api": "25.1.2",
     "@findsl/web": "1.2.0",
-    "monaco-languageclient": "^10.7.0"
+    "monaco-languageclient": "10.7.0"
   }
 }

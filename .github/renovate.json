@@ -56,6 +56,12 @@
       "allowedVersions": "<1.86.0"
     },
     {
+      "description": "vscode-languageserver/-languageclient bleiben im Lockstep mit langium. langium 4.2.4 pinnt vscode-languageserver ~9.0.1 und vscode-languageserver-types ~3.17.5. Ein Major-Bump auf v10 zieht eine zweite, inkompatible vscode-languageserver-types-Kopie (10.x neben langiums 3.17.5) → der tsc-Build bricht (Diagnostic/Command-Typen in findsl-codeaction/-codelens/-commands/-document-validator). vscode-languageclient@10 ändert zudem Export-Pfade (kein /node.js mehr) und spricht das LSP-10-Protokoll, das langium 4.2.4 nicht unterstützt. ERST gemeinsam mit einem langium-Major anheben, der auf LSP v10 baut.",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["vscode-languageserver", "vscode-languageclient"],
+      "allowedVersions": "<10.0.0"
+    },
+    {
       "description": "npm-Versionen exakt pinnen (keine ^/~-Ranges) für dependencies/devDependencies. FinDSL setzt auf exakt reproduzierbare Build-Roundtrips (langium:generate→build→bundle→test, 778 Tests, Bundle-Smoke); Pinning macht package-lock.json ehrlich und jeden Patch zu einem expliziten Renovate-PR mit Changelog statt stillem Lockfile-Drift. Peer-/Bundled-Deps behalten ihre Ranges.",
       "matchManagers": ["npm"],
       "matchDepTypes": ["dependencies", "devDependencies"],

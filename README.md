@@ -66,4 +66,4 @@ und [`CLA.md`](CLA.md).
 **Kooperation / kommerzielle Anfragen:** contact@devtank42.de
 
 <!-- Umami Tracking -->
-![](https://analytics.devtank42.de/p/TS7EtYYoW)
+![](https://analytics.findsl.org/p/TS7EtYYoW)

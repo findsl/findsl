@@ -6,17 +6,13 @@ Eine domänenspezifische Sprache für die deutsche steuerliche Finanzverwaltung.
 
 ## Idee
 
-FinDSL ist eine **funktionale, getypte DSL**, mit der Fachabteilungen und
-erfahrene Sachbearbeiter:innen steuerliche Berechnungen (Lohnsteuer, ESt-Tarif,
-Solidaritätszuschlag, Vorsorgepauschale …) deklarativ beschreiben. Sie ersetzt
-mittelfristig die handgepflegten **Programmablaufpläne (PAPs)** des BMF: aus
-einer FinDSL-Quelle entstehen ein Interpreter-Lauf, **Zielsprachencode** (Java,
-TypeScript, JavaScript), generierte **Dokumentation** (PDF/HTML) und ein
+FinDSL ist eine **funktionale, getypte DSL**, um steuerliche Berechnungen aus den
+Gesetzestexten formal und deklarativ zu beschreiben. Aus einer FinDSL-Quelle
+entstehen ein Interpreter-Lauf, **Zielsprachencode** (Java, TypeScript,
+JavaScript), generierte **Dokumentation** (PDF/HTML) und ein
 **DIN-66001-Diagramm**.
 
-Die Designprinzipien (Lesbarkeit vor Knappheit, reine Funktionen, Einheiten im
-Typsystem, `@Quelle`-Pflicht u. a.) und die vollständige Sprachreferenz stehen in
-[`SPEC.md`](SPEC.md) — Kapitel 1.3 bzw. Anhang A (kanonische EBNF).
+Vollständige Sprachreferenz: [`SPEC.md`](SPEC.md).
 
 ## Editoren & Installation
 
@@ -25,20 +21,20 @@ Sprachunterstützung (Highlighting, Completion, Hover, Diagnostics,
 **denselben** LSP-Server. Bis zur Marktplatz-Veröffentlichung aus dem Quellcode
 (Repo-Root einmalig `npm install`):
 
-**VS Code / VSCodium** (`apps/vscode`)
+**VS Code / VSCodium** (`apps/vscode`) — [Details auf findsl.org](https://findsl.org/werkzeuge/vscode/)
 
 ```bash
 npm run bundle   # Extension-Bundle bauen, dann im Extension-Host starten
 ```
 
-**JetBrains-IDEs** (`apps/intellij`, via [LSP4IJ](https://github.com/redhat-developer/lsp4ij))
+**JetBrains-IDEs** (`apps/intellij`, via [LSP4IJ](https://github.com/redhat-developer/lsp4ij)) — [Details auf findsl.org](https://findsl.org/werkzeuge/intellij/)
 
 ```bash
 npm run binary:lsp                         # natives LSP-Server-Binary
 cd apps/intellij && ./gradlew buildPlugin  # Plugin-ZIP → build/distributions/
 ```
 
-Details zum JetBrains-Plugin: [`apps/intellij/README.md`](apps/intellij/README.md).
+Build-/Sandbox-Details: [`apps/intellij/README.md`](apps/intellij/README.md).
 
 ## Build & Beispiele
 

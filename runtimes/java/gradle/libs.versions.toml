@@ -2,7 +2,7 @@
 
 [versions]
 junit = "6.0.3"
-javaparser = "3.26.4"
+javaparser = "3.28.2"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }

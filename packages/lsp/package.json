@@ -19,6 +19,6 @@
   "dependencies": {
     "@findsl/core": "1.2.0",
     "langium": "4.2.4",
-    "vscode-languageserver": "9.0.1"
+    "vscode-languageserver": "10.0.0"
   }
 }

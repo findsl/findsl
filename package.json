@@ -30,7 +30,7 @@
     "version:check": "node scripts/sync-version.mjs --check"
   },
   "overrides": {
-    "dompurify": "^3.4.7"
+    "dompurify": "3.4.7"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

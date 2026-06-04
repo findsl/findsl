@@ -30,7 +30,10 @@
     "version:check": "node scripts/sync-version.mjs --check"
   },
   "overrides": {
-    "dompurify": "3.4.8"
+    "dompurify": "3.4.8",
+    "@codingame/monaco-vscode-api": {
+      "dompurify": "3.4.8"
+    }
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

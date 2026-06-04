@@ -1,7 +1,7 @@
 # Versionskatalog — alle Versionen zentral gepinnt (Reproduzierbarkeit/Audit, ADR2).
 
 [versions]
-junit = "6.0.3"
+junit = "6.1.0"
 javaparser = "3.28.2"
 
 [libraries]

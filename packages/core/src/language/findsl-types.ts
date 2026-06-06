@@ -358,7 +358,13 @@ export function buildContext(program: Program): TypeContext {
 // und findsl-type-check.ts (checkAgainstAnnotation). Aus findsl-types.ts wird
 // `infer` zur Stabilität der externen API hier re-exportiert (Issue #72).
 
-export type Reporter = (node: AstNode, message: string) => void;
+/** Optionale Diagnose-Metadaten: stabiler `code` + `data` für Quick-Fixes. */
+export interface ReportInfo {
+    readonly code?: string;
+    readonly data?: unknown;
+}
+
+export type Reporter = (node: AstNode, message: string, info?: ReportInfo) => void;
 
 import { infer } from './findsl-inference.js';
 export { infer };

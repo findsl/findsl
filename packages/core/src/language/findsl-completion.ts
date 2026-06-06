@@ -27,6 +27,7 @@
  * falschen.
  */
 
+import * as path from 'node:path';
 import {
     type AstNode,
     type LangiumDocument,
@@ -65,10 +66,12 @@ import { analyzeImports, buildModuleHeader } from './findsl-scope.js';
 import { findModuleInWorkspace } from './findsl-definition.js';
 import {
     isInternalName,
+    isTestFile,
     mayImportInternal,
     programFilePath,
     resolveImportPath,
 } from './import-path.js';
+import { buildAddImportEdit, toImportSource } from './findsl-auto-import.js';
 import {
     BUILTIN_ENUM_DEFS,
     BUILTIN_FUNCTION_DEFS,
@@ -100,6 +103,8 @@ const NAME_RULES = new Set([
 const SORT_LOCAL   = '1';
 const SORT_IMPORT  = '2';
 const SORT_BUILTIN = '3';
+// Auto-Import-Vorschläge (anderes Modul, noch nicht importiert): zuletzt.
+const SORT_AUTOIMPORT = '4';
 
 // ---------------------------------------------------------------------------
 // CompletionProvider
@@ -265,6 +270,12 @@ export class FindslCompletionProvider extends DefaultCompletionProvider {
                 });
             }
         }
+
+        // 6. (#20) Auto-Import: exportierte Symbole anderer Module, die hier
+        // noch nicht verfügbar sind — Auswahl ergänzt den `verwende`-Import.
+        this.completeCrossModuleImports(
+            program, context, acceptor, expressionScopeNames(program, context.node), false,
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -320,6 +331,11 @@ export class FindslCompletionProvider extends DefaultCompletionProvider {
                 sortText: SORT_IMPORT + b.localName,
             });
         }
+
+        // (#20) Auto-Import von Typnamen (Datensatz/Aufzählung) anderer Module.
+        this.completeCrossModuleImports(
+            program, context, acceptor, typeScopeNames(program), true,
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -442,6 +458,52 @@ export class FindslCompletionProvider extends DefaultCompletionProvider {
         const root = findModuleInWorkspace(this.docs, binding.resolvedPath);
         if (!root) return undefined;
         return buildModuleHeader(root).context.globals.lookup(binding.sourceName);
+    }
+
+    // -----------------------------------------------------------------------
+    // (#20) Auto-Import — Cross-Modul-Vorschläge
+    // -----------------------------------------------------------------------
+
+    /**
+     * Schlägt von ANDEREN Workspace-Modulen exportierte Symbole vor, die im
+     * aktuellen Modul noch nicht verfügbar sind (`available`). Die Auswahl
+     * ergänzt den passenden `verwende { … } aus "…"`-Import via
+     * `additionalTextEdits`. Niedrigste Sortier-Priorität (Client filtert per
+     * Prefix). `wantType` beschränkt auf Typ-artige Exporte (Datensatz/
+     * Aufzählung) für die Typ-Position. `_`-Interne und `*.test.findsl`
+     * bleiben aussen vor (SPEC § 4.16).
+     */
+    private completeCrossModuleImports(
+        program: Program,
+        context: CompletionContext,
+        acceptor: CompletionAcceptor,
+        available: ReadonlySet<string>,
+        wantType: boolean,
+    ): void {
+        const self = programFilePath(program);
+        if (!self) return;
+        const selfNorm = path.normalize(self);
+        for (const doc of this.docs.all) {
+            if (!doc.uri.fsPath) continue;   // Nicht-Datei-URI → kein Import-Ziel
+            const targetPath = path.normalize(doc.uri.fsPath);
+            if (targetPath === selfNorm || isTestFile(targetPath)) continue;
+            const other = doc.parseResult?.value as Program | undefined;
+            if (!other) continue;
+            const header = buildModuleHeader(other);
+            const importSource = toImportSource(self, targetPath);
+            for (const name of header.exports) {
+                if (isInternalName(name) || isBuiltinName(name) || available.has(name)) continue;
+                const t = header.context.globals.lookup(name);
+                if (wantType && !isTypeLike(t)) continue;
+                acceptor(context, {
+                    label: name,
+                    kind: importKind(t),
+                    detail: `aus ${importSource} (Auto-Import)`,
+                    sortText: SORT_AUTOIMPORT + name,
+                    additionalTextEdits: buildAddImportEdit(program, name, importSource),
+                });
+            }
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -604,6 +666,46 @@ function asRecord(t: Type | undefined): Extract<Type, { kind: 'record' }> | unde
     if (!t) return undefined;
     const u = t.kind === 'nullable' ? t.inner : t;
     return u.kind === 'record' ? u : undefined;
+}
+
+/** Typ-artiger Export (für Auto-Import in Typ-Position): Datensatz oder
+ *  Aufzählung (auch als Konstruktor-Funktion mit Record-Ergebnis). */
+function isTypeLike(t: Type | undefined): boolean {
+    if (!t) return false;
+    const u = t.kind === 'nullable' ? t.inner : t;
+    if (u.kind === 'enum' || u.kind === 'record') return true;
+    if (u.kind === 'function') return u.result.kind === 'record';
+    return false;
+}
+
+/** Im Ausdruck bereits sichtbare Namen (lokal + Top-Level + Importe +
+ *  Builtins) — Dedup-Basis für Auto-Import-Vorschläge. */
+function expressionScopeNames(program: Program, anchor: AstNode | undefined): Set<string> {
+    const names = new Set<string>();
+    for (const b of collectLocalBindings(anchor)) names.add(b.name);
+    for (const decl of program.decls) {
+        const nm = (decl as { name?: string }).name;
+        if (nm) names.add(nm);
+        if (isAufzaehlungDecl(decl)) for (const v of decl.values) names.add(v);
+    }
+    for (const b of analyzeImports(program).bindings) names.add(b.localName);
+    for (const f of BUILTIN_FUNCTION_DEFS) names.add(f.name);
+    for (const e of BUILTIN_ENUM_DEFS) {
+        names.add(e.name);
+        for (const v of e.values) names.add(v);
+    }
+    return names;
+}
+
+/** In Typ-Position bereits sichtbare Namen — Dedup-Basis für Auto-Import. */
+function typeScopeNames(program: Program): Set<string> {
+    const names = new Set<string>(BUILTIN_PRIMITIVE_TYPES);
+    for (const e of BUILTIN_ENUM_DEFS) names.add(e.name);
+    for (const decl of program.decls) {
+        if (isDatensatzDecl(decl) || isAufzaehlungDecl(decl)) names.add(decl.name);
+    }
+    for (const b of analyzeImports(program).bindings) names.add(b.localName);
+    return names;
 }
 
 function importKind(t: Type | undefined): CompletionItemKind {

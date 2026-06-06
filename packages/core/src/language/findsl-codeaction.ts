@@ -16,6 +16,7 @@
 
 import {
     type LangiumDocument,
+    type LangiumDocuments,
     type MaybePromise,
     type AstNode,
     AstUtils,
@@ -47,25 +48,14 @@ import { collectRefs } from './findsl-validator.js';
 import { collectExpressionTypes, typeToString, type Type } from './findsl-types.js';
 import { analyzeImports } from './findsl-scope.js';
 import { isBuiltinName } from './findsl-stdlib.js';
-
-/** Symbol-Render eines `verwende`-Items: `Foo` bzw. `Foo als bar`. */
-function renderItem(it: { name: string; alias?: string }): string {
-    return it.alias ? `${it.name} als ${it.alias}` : it.name;
-}
-
-/**
- * `verwende { … } aus "…"` in der **Formatter-kanonischen** Form rendern:
- * IMMER mehrzeilig, jedes Item auf eigener, 4-fach eingerückter Zeile mit
- * Trailing-Komma, `}` auf eigener Zeile. Genau das, was der Formatter
- * idempotent erzeugt (empirisch verifiziert) → der Edit übersteht ein
- * nachgelagertes `format` unverändert (AK „Formatter-idempotent").
- */
-function renderVerwende(
-    source: string, items: ReadonlyArray<{ name: string; alias?: string }>,
-): string {
-    const body = items.map((it) => `    ${renderItem(it)},`).join('\n');
-    return `verwende {\n${body}\n} aus "${source}"`;
-}
+import { programFilePath } from './import-path.js';
+import {
+    renderItem,
+    renderVerwende,
+    findExportingModules,
+    buildAddImportEdit,
+} from './findsl-auto-import.js';
+import type { FindslServices } from './findsl-module.js';
 
 /** Deterministischer Code-Unit-Vergleich (locale-unabhängig → stabil über
  *  Umgebungen, wichtig für die Determinismus-/Idempotenz-Garantie). */
@@ -74,6 +64,12 @@ function cmp(a: string, b: string): number {
 }
 
 export class FindslCodeActionProvider implements CodeActionProvider {
+
+    private readonly documents: LangiumDocuments;
+
+    constructor(services: FindslServices) {
+        this.documents = services.shared.workspace.LangiumDocuments;
+    }
 
     getCodeActions(
         document: LangiumDocument, params: CodeActionParams,
@@ -101,6 +97,12 @@ export class FindslCodeActionProvider implements CodeActionProvider {
                     if (a) actions.push(a);
                     break;
                 }
+                case 'findsl.unbekannter-identifier': {
+                    // (#20) Auto-Import: je Workspace-Modul, das das Symbol
+                    // exportiert, eine „importieren"-Aktion anbieten.
+                    for (const a of this.fixAddImport(document, diag)) actions.push(a);
+                    break;
+                }
             }
         }
         // (#90/2) Nicht-diagnose-getrieben: „Importe organisieren" (Refactor
@@ -113,6 +115,41 @@ export class FindslCodeActionProvider implements CodeActionProvider {
         const extract = this.extractConstant(document, params);
         if (extract) actions.push(extract);
         return actions;
+    }
+
+    // --- (#20) Quick-Fix: fehlenden `verwende`-Import ergänzen -----------
+
+    /**
+     * Bietet zur „Unbekannter Identifier"-Diagnose je Workspace-Modul, das
+     * das Symbol exportiert, eine eigene Quick-Fix-Aktion an (mehrere Treffer
+     * ⇒ mehrere Aktionen; der Nutzer wählt). Fügt in einen bestehenden
+     * `verwende`-Block ein bzw. legt einen neuen, Formatter-kanonischen an.
+     */
+    private fixAddImport(
+        document: LangiumDocument, diag: Diagnostic,
+    ): CodeAction[] {
+        const name = (diag.data as { name?: string } | undefined)?.name;
+        if (!name) return [];
+        const program = document.parseResult?.value as Program | undefined;
+        if (!program) return [];
+
+        const modules = findExportingModules(
+            name, this.documents, programFilePath(program),
+        );
+        const uri = document.uri.toString();
+        const out: CodeAction[] = [];
+        for (const m of modules) {
+            const edits = buildAddImportEdit(program, name, m.importSource);
+            if (edits.length === 0) continue;
+            out.push({
+                title: `"${name}" aus "${m.importSource}" importieren`,
+                kind: CodeActionKind.QuickFix,
+                diagnostics: [diag],
+                isPreferred: modules.length === 1,
+                edit: { changes: { [uri]: edits } },
+            });
+        }
+        return out;
     }
 
     // --- Fix: @Quelle("") einfügen ---------------------------------------

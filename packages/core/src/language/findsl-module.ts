@@ -76,7 +76,7 @@ export const FindslModule: Module<FindslServices, PartialLangiumServices & Finds
         DocumentHighlightProvider: (services) => new FindslDocumentHighlightProvider(services),
         FoldingRangeProvider: (services) => new FindslFoldingRangeProvider(services),
         DocumentSymbolProvider: () => new FindslDocumentSymbolProvider(),
-        CodeActionProvider: () => new FindslCodeActionProvider(),
+        CodeActionProvider: (services) => new FindslCodeActionProvider(services),
         CompletionProvider: (services) => new FindslCompletionProvider(services),
         CallHierarchyProvider: (services) => new FindslCallHierarchyProvider(services),
         SemanticTokenProvider: (services) => new FindslSemanticTokenProvider(services),

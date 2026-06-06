@@ -230,8 +230,8 @@ export class FindslValidator {
      * eine Diagnose-Lawine auslöst.
      */
     checkTypes(program: Program, accept: ValidationAcceptor): void {
-        typeCheckProgram(program, (node, message) => {
-            accept('error', message, { node });
+        typeCheckProgram(program, (node, message, info) => {
+            accept('error', message, { node, code: info?.code, data: info?.data });
         });
     }
 

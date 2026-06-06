@@ -640,11 +640,13 @@ export function inferCallChain(
                 report(cc,
                     `Aufrufziel "${cc.name}" ist nicht definiert oder nicht `
                     + `importiert (weder lokale Deklaration noch `
-                    + `\`verwende\`-Import noch Builtin).`);
+                    + `\`verwende\`-Import noch Builtin).`,
+                    { code: 'findsl.unbekannter-identifier', data: { name: cc.name } });
             }
             current = ev ?? TUnknown;
         } else {
-            report(cc, `Unbekannter Identifier: "${cc.name}".`);
+            report(cc, `Unbekannter Identifier: "${cc.name}".`,
+                { code: 'findsl.unbekannter-identifier', data: { name: cc.name } });
             return TUnknown;
         }
     }

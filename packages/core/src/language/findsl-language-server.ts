@@ -42,6 +42,11 @@ export class FindslLanguageServer extends DefaultLanguageServer {
         const initOpts = params.initializationOptions as { findsl?: { theme?: unknown } } | undefined;
         setClientTheme(initOpts?.findsl?.theme);
         const result = super.buildInitializeResult(params);
+        // SelectionRange (#19): Langium meldet die Capability nicht (kein
+        // Default-Service). Der Provider ist in FinDSL immer gebunden und der
+        // Handler wird am Entrypoint registriert (main.ts / worker.ts) →
+        // Capability hier unbedingt ankündigen.
+        result.capabilities.selectionRangeProvider = true;
         // Nur ersetzen, wenn der Provider tatsächlich gebunden ist (Langium
         // setzt dann `true`); sonst die Default-Entscheidung respektieren.
         if (result.capabilities.codeActionProvider) {

@@ -10,10 +10,11 @@
  * separater Prozess gestartet. Spricht LSP über stdin/stdout.
  */
 
-import { startLanguageServer } from 'langium/lsp';
+import { DocumentState } from 'langium';
+import { createRequestHandler, startLanguageServer } from 'langium/lsp';
 import { NodeFileSystem } from 'langium/node';
 import { createConnection, ProposedFeatures } from 'vscode-languageserver/node.js';
-import { createFindslServices } from '@findsl/core/language/findsl-module.js';
+import { createFindslServices, type FindslServices } from '@findsl/core/language/findsl-module.js';
 import { setHoverSvgFileWriter } from '@findsl/core/language/hover-svg-writer.js';
 import { svgToHoverFileUrl } from '@findsl/core/language/hover-math-svg-file.js';
 
@@ -40,4 +41,17 @@ setHoverSvgFileWriter(svgToHoverFileUrl);
 
 const connection = createConnection(ProposedFeatures.all);
 const { shared } = createFindslServices({ connection, ...NodeFileSystem });
+
+// SelectionRange (#19): Langium verdrahtet `textDocument/selectionRange` nicht
+// — Handler hier selbst registrieren, VOR `startLanguageServer` (das ruft
+// intern `connection.listen()`). `createRequestHandler` gibt uns das gleiche
+// Doc-State-Gating wie die Core-Handler.
+connection.onSelectionRanges(createRequestHandler(
+    (services, document, params, cancelToken) =>
+        (services as FindslServices).lsp.SelectionRangeProvider
+            .getSelectionRanges(document, params, cancelToken),
+    shared,
+    DocumentState.Parsed,
+));
+
 startLanguageServer(shared);

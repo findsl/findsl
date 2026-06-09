@@ -15,14 +15,14 @@
  * (siehe esbuild.web.mjs).
  */
 
-import { EmptyFileSystem } from 'langium';
-import { startLanguageServer } from 'langium/lsp';
+import { DocumentState, EmptyFileSystem } from 'langium';
+import { createRequestHandler, startLanguageServer } from 'langium/lsp';
 import {
     BrowserMessageReader,
     BrowserMessageWriter,
     createConnection,
 } from 'vscode-languageserver/browser';
-import { createFindslServices } from '@findsl/core/language/findsl-module.js';
+import { createFindslServices, type FindslServices } from '@findsl/core/language/findsl-module.js';
 import { runCheck } from './check.js';
 import { runGenerate } from './generate.js';
 import { runEval } from './eval.js';
@@ -53,5 +53,15 @@ connection.onRequest(
     (params: { uri: string; expr: string }): Promise<EvalResult> =>
         runEval(shared, params.uri, params.expr),
 );
+
+// SelectionRange (#19): Langium verdrahtet `textDocument/selectionRange` nicht
+// — Handler selbst registrieren, VOR `startLanguageServer` (das listen() ruft).
+connection.onSelectionRanges(createRequestHandler(
+    (services, document, params, cancelToken) =>
+        (services as FindslServices).lsp.SelectionRangeProvider
+            .getSelectionRanges(document, params, cancelToken),
+    shared,
+    DocumentState.Parsed,
+));
 
 startLanguageServer(shared);

@@ -33,6 +33,7 @@ import { FindslReferencesProvider } from './findsl-references.js';
 import { FindslRenameProvider } from './findsl-rename.js';
 import { FindslDocumentHighlightProvider } from './findsl-highlight.js';
 import { FindslFoldingRangeProvider } from './findsl-folding.js';
+import { FindslSelectionRangeProvider } from './findsl-selection-range.js';
 import { FindslDocumentSymbolProvider } from './findsl-symbols.js';
 import { FindslCodeActionProvider } from './findsl-codeaction.js';
 import { FindslCompletionProvider } from './findsl-completion.js';
@@ -48,6 +49,10 @@ import { FindslLanguageServer } from './findsl-language-server.js';
 export type FindslAddedServices = {
     validation: {
         FindslValidator: FindslValidator;
+    };
+    lsp: {
+        // Langium kennt keinen SelectionRange-Service-Slot (#19) → FinDSL-eigen.
+        SelectionRangeProvider: FindslSelectionRangeProvider;
     };
 };
 
@@ -85,6 +90,7 @@ export const FindslModule: Module<FindslServices, PartialLangiumServices & Finds
         SignatureHelp: (services) => new FindslSignatureHelpProvider(services),
         DocumentLinkProvider: (services) => new FindslDocumentLinkProvider(services),
         Formatter: () => new FindslFormatter(),
+        SelectionRangeProvider: () => new FindslSelectionRangeProvider(),
     },
 };
 

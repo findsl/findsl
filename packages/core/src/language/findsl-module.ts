@@ -40,6 +40,7 @@ import { FindslWorkspaceSymbolProvider } from './findsl-workspace-symbols.js';
 import { FindslTokenBuilder } from './findsl-token-builder.js';
 import { FindslDocumentValidator } from './findsl-document-validator.js';
 import { FindslLanguageServer } from './findsl-language-server.js';
+import { FindslLinkedEditingRangeProvider } from './findsl-linked-editing.js';
 
 /**
  * Sprach-spezifische Service-Erweiterungen für FinDSL.
@@ -48,6 +49,12 @@ import { FindslLanguageServer } from './findsl-language-server.js';
 export type FindslAddedServices = {
     validation: {
         FindslValidator: FindslValidator;
+    };
+    lsp: {
+        // Langium kennt keinen LinkedEditingRange-Service-Slot (#21) → FinDSL-eigen.
+        // Der Connection-Handler wird in den Entry-Points via
+        // registerLinkedEditingRangeHandler verdrahtet.
+        LinkedEditingRangeProvider: FindslLinkedEditingRangeProvider;
     };
 };
 
@@ -85,6 +92,7 @@ export const FindslModule: Module<FindslServices, PartialLangiumServices & Finds
         SignatureHelp: (services) => new FindslSignatureHelpProvider(services),
         DocumentLinkProvider: (services) => new FindslDocumentLinkProvider(services),
         Formatter: () => new FindslFormatter(),
+        LinkedEditingRangeProvider: (services) => new FindslLinkedEditingRangeProvider(services),
     },
 };
 

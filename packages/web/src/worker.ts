@@ -23,6 +23,7 @@ import {
     createConnection,
 } from 'vscode-languageserver/browser';
 import { createFindslServices } from '@findsl/core/language/findsl-module.js';
+import { registerLinkedEditingRangeHandler } from '@findsl/core/language/findsl-linked-editing.js';
 import { runCheck } from './check.js';
 import { runGenerate } from './generate.js';
 import { runEval } from './eval.js';
@@ -53,5 +54,8 @@ connection.onRequest(
     (params: { uri: string; expr: string }): Promise<EvalResult> =>
         runEval(shared, params.uri, params.expr),
 );
+
+// Linked Editing (#21): Langium verdrahtet diesen Request nicht selbst.
+registerLinkedEditingRangeHandler(connection, shared);
 
 startLanguageServer(shared);

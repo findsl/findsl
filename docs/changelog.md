@@ -2,6 +2,27 @@
 
 > Teil des FinDSL-Projektkontexts — aus CLAUDE.md aufgeteilt. Gesamtindex: [../CLAUDE.md](../CLAUDE.md)
 
+*Letzte Aktualisierung: 2026-06-09 — **LSP: Linked Editing Range (#21).**
+Neuer `FindslLinkedEditingRangeProvider` (`packages/core/src/language/
+findsl-linked-editing.ts`): steht der Cursor auf einem User-Bezeichner,
+liefert `textDocument/linkedEditingRange` die Range-Gruppe aller Vorkommen
+desselben Symbols **im aktuellen Dokument** (Decl + Verwendungen) samt
+umlautfähigem `wordPattern` — der Editor koppelt sie beim Tippen.
+Mechanik analog `FindslDocumentHighlightProvider` (`resolveTargetForIdToken`
++ `streamAllContents`). **Konservativ:** Builtins/Keywords/unbekannte Tokens
+und importierte (cross-modul) Symbole → keine Ranges (dort bleibt der Rename
+zuständig; Linked Editing ist per Protokoll dokumentlokal). Besonderheit der
+Anbindung: diese Langium-Version kennt **keinen** LinkedEditingRange-Service
+und registriert keinen Handler — daher DI-Binding im `FindslModule.lsp`
+(FinDSL-eigener Slot), Capability `linkedEditingRangeProvider` im
+`FindslLanguageServer` und der Connection-Handler via
+`registerLinkedEditingRangeHandler` an **beiden** Entry-Points
+(`packages/lsp/src/main.ts` + `packages/web/src/worker.ts`, eine Quelle).
+Keine Grammatikänderung. Tests: `test/language/linked-editing.test.ts`
+(11/11; lokales konst/fn/Param/Block-`var`, cross-modul/Builtin/Keyword/
+unbekannt → undefined, Teil-Parse-Robustheit, `wordPattern`-Umlaute). Voller
+Build grün, Suite grün (1414 + 6 Editor-React + 11).*
+
 *Letzte Aktualisierung: 2026-06-02 — **IntelliJ-Epic #237 abgeschlossen.**
 Alle Sub-Issues (#238–#246, #250, #255/#256, #275, #277) sind gemergt; die
 Epic-Checkliste wurde abgehakt und das Sammel-Issue geschlossen. Doc-Refresh:

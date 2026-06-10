@@ -26,14 +26,35 @@ import {
     type LangiumDocument,
     type MaybePromise,
     CstUtils,
+    DocumentState,
 } from 'langium';
+import { createRequestHandler, type LangiumSharedServices } from 'langium/lsp';
 import type {
     CancellationToken,
+    Connection,
     Position,
     Range,
     SelectionRange,
     SelectionRangeParams,
 } from 'vscode-languageserver';
+import type { FindslServices } from './findsl-module.js';
+
+/**
+ * Obergrenze für gleichzeitig angefragte Positionen. VS Code sendet
+ * typischerweise 1–2; ein fehlerhafter oder bösartiger Client könnte das Array
+ * fluten und — jede Position löst eine O(n)-CST-Traversal aus — den Handler-/
+ * Worker-Thread blockieren (im Browser-Worker den UI-Thread). Überzählige
+ * Positionen werden verworfen.
+ */
+const MAX_SELECTION_POSITIONS = 256;
+
+/**
+ * Sicherheitsnetz gegen eine Endlosschleife beim Container-Aufstieg. Langiums
+ * CST ist azyklisch, doch eine harte Obergrenze schützt gegen künftige
+ * CST-Regressionen, ohne korrekte Dokumente zu beeinflussen (reale Tiefen
+ * liegen weit darunter).
+ */
+const MAX_CONTAINER_DEPTH = 1000;
 
 export class FindslSelectionRangeProvider {
 
@@ -44,8 +65,30 @@ export class FindslSelectionRangeProvider {
         _cancelToken?: CancellationToken,
     ): MaybePromise<SelectionRange[]> {
         const root = document.parseResult?.value?.$cstNode;
-        return params.positions.map((pos) => rangeForPosition(document, root, pos));
+        // DoS-Schutz: nur eine begrenzte Zahl Positionen verarbeiten.
+        const positions = params.positions.slice(0, MAX_SELECTION_POSITIONS);
+        return positions.map((pos) => rangeForPosition(document, root, pos));
     }
+}
+
+/**
+ * Registriert den `textDocument/selectionRange`-Handler auf der Connection.
+ * Wird an JEDEM LSP-Entry-Point aufgerufen (Node-Server + Web-Worker), da
+ * Langium den Handler nicht selbst verdrahtet — eine Quelle, damit beide
+ * Surfaces nicht auseinanderlaufen. VOR `startLanguageServer` aufrufen (das
+ * ruft `connection.listen()`). `createRequestHandler` liefert dasselbe
+ * Doc-State-Gating (`DocumentState.Parsed`) wie die Core-Handler.
+ */
+export function registerSelectionRangeHandler(
+    connection: Connection, shared: LangiumSharedServices,
+): void {
+    connection.onSelectionRanges(createRequestHandler(
+        (services, document, params, cancelToken) =>
+            (services as FindslServices).lsp.SelectionRangeProvider
+                .getSelectionRanges(document, params, cancelToken),
+        shared,
+        DocumentState.Parsed,
+    ));
 }
 
 /** Faltet die CST-Container-Kette an `pos` zu einer verschachtelten Range. */
@@ -65,7 +108,8 @@ function rangeForPosition(
     const ranges: Range[] = [];
     let node: CstNode | undefined = leaf;
     let inner: Range | undefined;
-    while (node) {
+    let steps = 0;
+    while (node && steps++ < MAX_CONTAINER_DEPTH) {
         const r = node.range;
         if (!inner || (!rangeEquals(inner, r) && rangeContains(r, inner))) {
             ranges.push(r);
@@ -81,7 +125,9 @@ function rangeForPosition(
     for (let i = ranges.length - 1; i >= 0; i--) {
         sel = { range: ranges[i], parent: sel };
     }
-    return sel!;
+    // ranges.length >= 1 (oben geprüft) → Schleife setzt `sel`; `?? degenerate`
+    // statt Non-null-Assertion macht die Invariante explizit und sicher.
+    return sel ?? degenerate;
 }
 
 function posEquals(a: Position, b: Position): boolean {

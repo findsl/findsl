@@ -57,6 +57,15 @@ function size(r: Range): number {
     return (r.end.line - r.start.line) * 100000 + (r.end.character - r.start.character);
 }
 
+/** Jede äußere Range enthält die nächst-innere und ist echt größer. */
+function expectMonotonic(sel: SelectionRange): void {
+    const links = chain(sel);
+    for (let i = 0; i + 1 < links.length; i++) {
+        expect(contains(links[i + 1], links[i])).toBe(true);
+        expect(size(links[i + 1])).toBeGreaterThan(size(links[i]));
+    }
+}
+
 describe('selection-range', () => {
     it('liefert eine monoton wachsende, verschachtelte Kette', async () => {
         const sel = await rangesAt('@Quelle("§ 1")\nkonst R: Ganzzahl = 1 + ¦2 * 3\n');
@@ -77,19 +86,53 @@ describe('selection-range', () => {
         expect(innermost.end.character - innermost.start.character).toBe(1);
     });
 
-    it('unterstützt mehrere Positionen (eine Range je Position)', async () => {
+    it('unterstützt mehrere Positionen — je Position eine eigene monotone Kette', async () => {
         const source = '@Quelle("§ 1")\nkonst R: Ganzzahl = 1 + 2\n';
         const doc = await buildDoc(source);
         const res = await services.lsp.SelectionRangeProvider.getSelectionRanges(doc, {
             textDocument: { uri: doc.uri.toString() },
             positions: [
-                doc.textDocument.positionAt(source.indexOf('R')),
-                doc.textDocument.positionAt(source.indexOf('1 + 2')),
+                doc.textDocument.positionAt(source.indexOf('R')),     // Bezeichner
+                doc.textDocument.positionAt(source.indexOf('2\n')),   // Token im Ausdruck
             ],
         });
         expect(res).toHaveLength(2);
+        // Jede Position bekommt ihre eigene, korrekt monoton wachsende Kette.
+        expectMonotonic(res[0]);
+        expectMonotonic(res[1]);
+        // Cursor im Teilausdruck (`2`) erzeugt eine echt tiefere Kette als der
+        // Decl-Name (`R`) — beweist, dass je Position separat gefaltet wird.
+        expect(chain(res[1]).length).toBeGreaterThan(chain(res[0]).length);
+    });
+
+    it('Position jenseits EOF → eine gültige Range, kein Absturz', async () => {
+        const doc = await buildDoc('konst R: Ganzzahl = 1\n');
+        const pos: Position = { line: 999, character: 0 };
+        const res = await services.lsp.SelectionRangeProvider.getSelectionRanges(
+            doc, { textDocument: { uri: doc.uri.toString() }, positions: [pos] },
+        );
+        expect(res).toHaveLength(1);
         expect(res[0].range).toBeDefined();
-        expect(res[1].range).toBeDefined();
+        expectMonotonic(res[0]); // egal ob degeneriert oder Kette: stets monoton.
+    });
+
+    it('Cursor auf Whitespace zwischen Tokens → gültige, monotone Range', async () => {
+        // Leerzeichen zwischen `+` und `2`.
+        const sel = await rangesAt('konst R: Ganzzahl = 1 +¦ 2\n');
+        expect(sel.range).toBeDefined();
+        expectMonotonic(sel);
+    });
+
+    it('verschachtelter Block: Cursor tief im inneren Ausdruck → Kette bis zur Deklaration', async () => {
+        const sel = await rangesAt(
+            'fn f(x: Ganzzahl): Ganzzahl = {\n  var y: Ganzzahl = x + ¦1\n  y * 2\n}\n',
+        );
+        const links = chain(sel);
+        // Token `1` → `x + 1` → var-Decl → Block → fn-Decl: deutlich tiefer als flach.
+        expect(links.length).toBeGreaterThanOrEqual(4);
+        expectMonotonic(sel);
+        // Äußerste Range umfasst die innerste vollständig.
+        expect(contains(links[links.length - 1], links[0])).toBe(true);
     });
 
     it('ist Teil-Parse-robust: leeres Dokument → degenerierte Range', async () => {

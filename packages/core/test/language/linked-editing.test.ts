@@ -58,6 +58,16 @@ konst B: Euro = GFB * 2 als Euro
         expect(result!.ranges).toHaveLength(3); // Decl + 2 Verwendungen
     });
 
+    it('Cursor auf der Decl selbst — Decl + alle Verwendungen', async () => {
+        const src = `konst GFB: Euro = 12.096 als Euro
+konst A: Euro = GFB + 1
+`;
+        // Cursor direkt auf der Decl-Stelle (nicht auf einer Use-Site).
+        const result = await linkedAt(src, 'GFB:');
+        expect(result).toBeDefined();
+        expect(result!.ranges).toHaveLength(2); // Decl + 1 Verwendung
+    });
+
     it('Funktion — Decl + alle Aufrufstellen', async () => {
         const src = `fn doppel(x: Euro): Euro = x * 2
 konst A: Euro = doppel(50 als Euro)
@@ -75,6 +85,19 @@ fn g(zve: Euro): Euro = zve * 2 als Euro
         const result = await linkedAt(src, 'zve + zve');
         expect(result).toBeDefined();
         expect(result!.ranges).toHaveLength(3); // Param-Decl + 2 Use-Sites in f
+    });
+
+    it('Field-Access — Field-Decl + alle Punkt-Zugriffe', async () => {
+        const src = `datensatz Pt(x: Ganzzahl, y: Ganzzahl)
+konst P: Pt = Pt(1, 2)
+konst A: Ganzzahl = P.x
+konst B: Ganzzahl = P.x + P.x
+`;
+        // Cursor auf der Field-Decl `x: Ganzzahl`.
+        const result = await linkedAt(src, 'x: Ganzzahl');
+        expect(result).toBeDefined();
+        // Field-Decl x + drei P.x-Use-Sites.
+        expect(result!.ranges.length).toBeGreaterThanOrEqual(4);
     });
 
     it('Block-lokales `var` — Decl + Verwendungen im Block', async () => {

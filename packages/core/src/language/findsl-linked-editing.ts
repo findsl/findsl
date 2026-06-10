@@ -61,6 +61,16 @@ import type { FindslServices } from './findsl-module.js';
  */
 const WORD_PATTERN = '[A-Za-zäöüÄÖÜß_][A-Za-z0-9äöüÄÖÜß_]*';
 
+/**
+ * Obergrenze für gekoppelte Ranges. `streamAllContents` läuft synchron auf
+ * dem LSP-Handler-/Worker-Thread und ruft pro Treffer erneut die
+ * Symbol-Auflösung auf. Ein pathologisch großes Dokument (Tausende
+ * gleichnamiger Vorkommen) würde den Thread sonst blockieren. Ein lokal
+ * gekoppeltes Sofort-Umbenennen mit >1000 Stellen ist praktisch bedeutungslos
+ * — wir brechen ab und überlassen solche Fälle dem vollständigen Rename.
+ */
+const MAX_LINKED_RANGES = 1000;
+
 export class FindslLinkedEditingRangeProvider {
 
     protected readonly documents: LangiumDocuments;
@@ -100,6 +110,11 @@ export class FindslLinkedEditingRangeProvider {
 
         // Verwendungsstellen im aktuellen Dokument.
         for (const node of AstUtils.streamAllContents(program)) {
+            // DoS-Schutz: pathologisch große Dokumente nicht unbeschränkt
+            // durchlaufen — der teure resolveTargetForIdToken-Pfad blockiert
+            // sonst den Handler-/Worker-Thread.
+            if (ranges.length >= MAX_LINKED_RANGES) break;
+
             let name: string | undefined;
             if      (isCallChain(node)       && node.name) name = node.name;
             else if (isFieldAccess(node)     && node.name) name = node.name;
@@ -135,7 +150,7 @@ export function registerLinkedEditingRangeHandler(
         const services = shared.ServiceRegistry.getServices(uri) as FindslServices;
         const provider = services.lsp?.LinkedEditingRangeProvider;
         if (!provider) return undefined;
-        return (await provider.getLinkedEditingRanges(document, params)) ?? undefined;
+        return await provider.getLinkedEditingRanges(document, params);
     });
 }
 

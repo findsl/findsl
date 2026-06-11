@@ -30,16 +30,16 @@
     "version:check": "node scripts/sync-version.mjs --check"
   },
   "overrides": {
-    "dompurify": "3.4.8",
+    "dompurify": "3.4.9",
     "@codingame/monaco-vscode-api": {
-      "dompurify": "3.4.8"
+      "dompurify": "3.4.9"
     }
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/katex": "0.16.8",
     "@types/markdown-it": "14.1.2",
-    "@types/node": "24.13.1",
+    "@types/node": "24.13.2",
     "@types/pdfmake": "0.3.3",
     "@vitest/coverage-v8": "4.1.8",
     "esbuild": "0.28.0",

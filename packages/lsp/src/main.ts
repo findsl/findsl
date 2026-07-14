@@ -14,6 +14,7 @@ import { startLanguageServer } from 'langium/lsp';
 import { NodeFileSystem } from 'langium/node';
 import { createConnection, ProposedFeatures } from 'vscode-languageserver/node.js';
 import { createFindslServices } from '@findsl/core/language/findsl-module.js';
+import { registerSelectionRangeHandler } from '@findsl/core/language/findsl-selection-range.js';
 import { registerLinkedEditingRangeHandler } from '@findsl/core/language/findsl-linked-editing.js';
 import { setHoverSvgFileWriter } from '@findsl/core/language/hover-svg-writer.js';
 import { svgToHoverFileUrl } from '@findsl/core/language/hover-math-svg-file.js';
@@ -41,6 +42,13 @@ setHoverSvgFileWriter(svgToHoverFileUrl);
 
 const connection = createConnection(ProposedFeatures.all);
 const { shared } = createFindslServices({ connection, ...NodeFileSystem });
+
+// SelectionRange (#19): Langium verdrahtet `textDocument/selectionRange` nicht
+// — Handler zentral aus `@findsl/core` registrieren, VOR `startLanguageServer`
+// (das ruft intern `connection.listen()`). Eine Quelle für Node + Web-Worker.
+registerSelectionRangeHandler(connection, shared);
+
 // Linked Editing (#21): Langium verdrahtet diesen Request nicht selbst.
 registerLinkedEditingRangeHandler(connection, shared);
+
 startLanguageServer(shared);

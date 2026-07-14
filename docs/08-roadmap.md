@@ -98,7 +98,10 @@ breitere Methoden-/Syntax-Frage bleibt davon unberührt offen.
   IR/Lowering/Emitter-Architektur aus (a) wiederverwenden). **Issue #41.**
 - **Restliche LSP-Politur**: SelectionRange, Refactoring-CodeActions
   (Konstante extrahieren, Importe organisieren, ungenutzten Import
-  entfernen), LinkedEditing.
+  entfernen). ~~LinkedEditing~~ → **erledigt (#21)**: `textDocument/
+  linkedEditingRange` koppelt gleich benannte Vorkommen eines lokalen
+  Symbols im selben Dokument; importierte (cross-modul) Symbole bleiben dem
+  Rename überlassen.
 - **Lokale Gesetzestexte**: das Repo enthält `gesetze/<Gesetz>/*.xml`
   (z. B. `gesetze/KStG/`). DocumentLink/Hover könnten optional auf diese
   lokalen Dateien statt gesetze-im-internet verweisen (offline-/audit-

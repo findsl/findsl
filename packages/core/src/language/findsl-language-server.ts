@@ -54,6 +54,10 @@ export class FindslLanguageServer extends DefaultLanguageServer {
                 codeActionKinds: [...FINDSL_CODE_ACTION_KINDS],
             };
         }
+        // Linked Editing (#21): Capability selbst ankündigen — Langium kennt
+        // den Service nicht, der Handler wird in den Entry-Points verdrahtet
+        // (registerLinkedEditingRangeHandler).
+        result.capabilities.linkedEditingRangeProvider = true;
         return result;
     }
 }

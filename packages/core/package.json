@@ -28,7 +28,7 @@
     "decimal.js": "10.6.0",
     "katex": "0.17.0",
     "langium": "4.2.4",
-    "markdown-it": "14.2.0",
+    "markdown-it": "15.0.1",
     "mathjax-full": "3.2.2",
     "pdfmake": "0.3.10",
     "vscode-languageserver": "9.0.1"

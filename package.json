@@ -30,9 +30,9 @@
     "version:check": "node scripts/sync-version.mjs --check"
   },
   "overrides": {
-    "dompurify": "3.4.12",
+    "dompurify": "3.4.13",
     "@codingame/monaco-vscode-api": {
-      "dompurify": "3.4.12"
+      "dompurify": "3.4.13"
     }
   },
   "devDependencies": {
